@@ -6,6 +6,9 @@ import com.teamtrading.engine.Order;
 import com.teamtrading.engine.OrderType;
 import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
+import com.teamtrading.ledger.Journal;
+import com.teamtrading.ledger.Ledger;
+import com.teamtrading.ledger.Reconciliation;
 import com.teamtrading.team.Team;
 import com.teamtrading.team.TeamCatalog;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +43,8 @@ class TradingServiceTest {
     @Autowired TradeStore tradeStore;
     @Autowired TransactionTemplate tx;
     @Autowired JdbcTemplate jdbc;
+    @Autowired Ledger ledger;
+    @Autowired Reconciliation reconciliation;
 
     private String buyer;
     private String seller;
@@ -48,7 +53,7 @@ class TradingServiceTest {
     void setUp() {
         buyer = trading.openAccount("buyer").id();
         seller = trading.openAccount("seller").id();
-        accountStore.grantShares(seller, "lg", 100, 18_450);
+        trading.grantShares(seller, "lg", 100, 18_450);
     }
 
     private OrderReceipt place(String account, Side side, OrderType type, long price, long qty) {
@@ -150,7 +155,7 @@ class TradingServiceTest {
         assertThatThrownBy(() -> trading.place(buyer, "c-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 1))
                 .isInstanceOf(TradingException.class);
 
-        accountStore.grantShares(buyer, "lg", 1, 18_450);
+        trading.grantShares(buyer, "lg", 1, 18_450);
         OrderReceipt r = trading.place(buyer, "c-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 1);
         assertThat(r.restingQuantity()).isEqualTo(1);
     }
@@ -178,7 +183,7 @@ class TradingServiceTest {
         place(buyer, Side.BUY, OrderType.LIMIT, 18_300, 7);
         var before = trading.orderBook("lg", 10);
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, tx, Clock.systemUTC());
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC());
         restarted.recover();
 
         assertThat(restarted.orderBook("lg", 10)).isEqualTo(before);
@@ -196,15 +201,17 @@ class TradingServiceTest {
         tx.executeWithoutResult(s -> {
             accountStore.lockPoints(buyer, 180_000);
             orderStore.insertPending(order, "crashed", 18_000);
+            ledger.post(Journal.lock(9_999, buyer, Journal.POINT, 180_000), order.createdAt());
         });
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, tx, Clock.systemUTC());
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC());
         restarted.recover();
 
         assertThat(orderStore.find(9_999).orElseThrow().status()).isEqualTo(StoredOrder.Status.CANCELED);
         assertThat(account(buyer).lockedPoints()).isZero();
         assertThat(account(buyer).availablePoints()).isEqualTo(TradingService.START_POINTS);
         assertThat(restarted.orderBook("lg", 5).bids()).isEmpty();
+        assertThat(reconciliation.run().balanced()).isTrue();
     }
 
     @Test
@@ -215,7 +222,7 @@ class TradingServiceTest {
                 throw new IllegalStateException("db down");
             }
         };
-        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, tx, Clock.systemUTC());
+        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, tx, Clock.systemUTC());
         service.recover();
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
 
@@ -228,6 +235,7 @@ class TradingServiceTest {
         assertThat(account(buyer).lockedPoints()).isZero();
         assertThat(service.orderBook("lg", 5).asks().getFirst().quantity()).isEqualTo(10);
         assertThat(service.orderBook("lg", 5).bids()).isEmpty();
+        assertThat(reconciliation.run().balanced()).isTrue();
     }
 
     /** 여러 스레드가 동시에 주문·취소해도 포인트와 주식 총량이 보존되고 호가가 교차하지 않아야 한다 */
@@ -236,7 +244,7 @@ class TradingServiceTest {
         List<String> accounts = new ArrayList<>(List.of(buyer, seller));
         for (int i = 0; i < 10; i++) accounts.add(trading.openAccount("u" + i).id());
         List<Team> teams = catalog.all().subList(0, 3);
-        for (String a : accounts) for (Team t : teams) accountStore.grantShares(a, t.id(), 200, t.basePrice());
+        for (String a : accounts) for (Team t : teams) trading.grantShares(a, t.id(), 200, t.basePrice());
         long pointsBefore = totalPoints();
         List<Long> sharesBefore = teams.stream().map(this::totalShares).toList();
 
@@ -264,6 +272,58 @@ class TradingServiceTest {
                         Long.class));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM trades", Long.class)).isPositive();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE status = 'PENDING'", Long.class)).isZero();
+        Reconciliation.Report report = reconciliation.run();
+        assertThat(report.mismatches()).isEmpty();
+        assertThat(report.unbalancedJournals()).isEmpty();
+    }
+
+    @Test
+    void ledgerRecordsEveryMoveOfATrade() {
+        place(seller, Side.SELL, OrderType.LIMIT, 18_400, 10);
+        place(buyer, Side.BUY, OrderType.MARKET, 0, 4);
+
+        // 시장가 매수는 상한가(23,950)로 묶였다가 18,400에 체결되고 차액을 돌려받는다
+        assertThat(jdbc.queryForList(
+                "SELECT kind FROM ledger_journals WHERE kind <> 'OPEN_ACCOUNT' AND kind <> 'GRANT' ORDER BY id", String.class))
+                .containsExactly("LOCK", "LOCK", "TRADE");
+        Long tradeJournal = jdbc.queryForObject("SELECT id FROM ledger_journals WHERE kind = 'TRADE'", Long.class);
+        assertThat(jdbc.queryForList("SELECT owner_id, asset, bucket, amount FROM ledger_entries WHERE journal_id = ? ORDER BY id",
+                tradeJournal)).extracting(m -> List.of(m.get("owner_id"), m.get("asset"), m.get("bucket"), m.get("amount")))
+                .containsExactly(
+                        List.of(buyer, "POINT", "LOCKED", -4L * 23_950),
+                        List.of(buyer, "POINT", "AVAILABLE", 4L * (23_950 - 18_400)),
+                        List.of(seller, "POINT", "AVAILABLE", 4L * 18_400),
+                        List.of(seller, "lg", "LOCKED", -4L),
+                        List.of(buyer, "lg", "AVAILABLE", 4L));
+        assertThat(reconciliation.run().balanced()).isTrue();
+    }
+
+    @Test
+    void reconciliationFindsBalanceChangedOutsideTheLedger() {
+        place(buyer, Side.BUY, OrderType.LIMIT, 18_000, 10);
+        jdbc.update("UPDATE accounts SET available_points = available_points + 5000 WHERE id = ?", buyer);
+
+        Reconciliation.Report report = reconciliation.run();
+
+        assertThat(report.balanced()).isFalse();
+        assertThat(report.mismatches()).containsExactly(new Reconciliation.Mismatch(
+                buyer, "POINT", Journal.Bucket.AVAILABLE, TradingService.START_POINTS - 180_000,
+                TradingService.START_POINTS - 175_000));
+    }
+
+    @Test
+    void reconciliationFindsUnbalancedJournal() {
+        Long journal = jdbc.queryForObject("SELECT MIN(id) FROM ledger_journals", Long.class);
+        jdbc.update("UPDATE ledger_entries SET amount = amount + 1 WHERE journal_id = ? AND owner_id = 'SYSTEM'", journal);
+
+        assertThat(reconciliation.run().unbalancedJournals()).containsExactly(journal);
+    }
+
+    @Test
+    void journalMustBalancePerAsset() {
+        assertThatThrownBy(() -> new Journal(Journal.Kind.GRANT, null, null, List.of(
+                new Journal.Entry(buyer, "lg", Journal.Bucket.AVAILABLE, 10))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private void randomTrading(Random rnd, List<String> accounts, List<Team> teams, int steps) {

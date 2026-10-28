@@ -103,9 +103,4 @@ public class AccountStore {
                 availableDelta, lockedDelta, average, accountId, teamId, availableDelta, lockedDelta);
         if (updated != 1) throw new IllegalStateException("share balance invariant broken: " + accountId);
     }
-
-    /** 시즌 시작 시 지급하는 초기 보유분. 거래 중에는 쓰지 않는다 */
-    public void grantShares(String accountId, String teamId, long qty, long price) {
-        applyShares(accountId, teamId, qty, 0, qty, qty * price);
-    }
 }

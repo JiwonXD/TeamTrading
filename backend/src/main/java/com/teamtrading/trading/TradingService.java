@@ -12,6 +12,8 @@ import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.fds.Alert;
 import com.teamtrading.fds.FdsDetector;
+import com.teamtrading.ledger.Journal;
+import com.teamtrading.ledger.Ledger;
 import com.teamtrading.team.Team;
 import com.teamtrading.team.TeamCatalog;
 import com.teamtrading.trading.StoredOrder.Status;
@@ -47,6 +49,9 @@ import java.util.function.Function;
  * </ol>
  * 정산이 실패하면 DB는 접수 직후 상태로 남으므로 그 주문을 취소하고 호가창을 DB에서 다시 쌓는다.
  * 서버가 두 트랜잭션 사이에 죽으면 재시작 때 PENDING 주문을 같은 방식으로 취소한다.
+ *
+ * <p>잔고를 바꾸는 트랜잭션은 같은 이동을 원장에도 전표로 남긴다. 잔고 갱신과 전표는 따로 계산하므로
+ * 대사({@link com.teamtrading.ledger.Reconciliation})로 둘이 맞는지 확인할 수 있다.
  */
 @Service
 public class TradingService {
@@ -58,6 +63,7 @@ public class TradingService {
     private final AccountStore accounts;
     private final OrderStore orders;
     private final TradeStore trades;
+    private final Ledger ledger;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final Map<String, Market> markets = new LinkedHashMap<>();
@@ -65,10 +71,11 @@ public class TradingService {
     private final AtomicLong ids = new AtomicLong();
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
-                          TransactionTemplate tx, Clock clock) {
+                          Ledger ledger, TransactionTemplate tx, Clock clock) {
         this.accounts = accounts;
         this.orders = orders;
         this.trades = trades;
+        this.ledger = ledger;
         this.tx = tx;
         this.clock = clock;
         for (Team team : catalog.all()) markets.put(team.id(), new Market(team));
@@ -87,7 +94,25 @@ public class TradingService {
     }
 
     public Account openAccount(String nickname) {
-        return accounts.create(UUID.randomUUID().toString(), nickname, START_POINTS, clock.instant());
+        return tx.execute(s -> {
+            Account account = accounts.create(UUID.randomUUID().toString(), nickname, START_POINTS, clock.instant());
+            ledger.post(Journal.openAccount(account.id(), START_POINTS), clock.instant());
+            return account;
+        });
+    }
+
+    /** 시즌 시작 시 지급하는 초기 보유분. 거래 중에는 쓰지 않는다 */
+    public void grantShares(String accountId, String teamId, long qty, long price) {
+        Market market = market(teamId);
+        market.lock.lock();
+        try {
+            tx.executeWithoutResult(s -> {
+                accounts.applyShares(accountId, teamId, qty, 0, qty, qty * price);
+                ledger.post(Journal.grant(accountId, teamId, qty), clock.instant());
+            });
+        } finally {
+            market.lock.unlock();
+        }
     }
 
     /**
@@ -153,7 +178,7 @@ public class TradingService {
                     .orElseThrow(() -> new NotFoundException("대기 중인 주문이 아니에요"));
             tx.executeWithoutResult(s -> {
                 if (!orders.cancel(orderId, Status.OPEN)) throw new NotFoundException("대기 중인 주문이 아니에요");
-                release(stored.accountId(), stored.teamId(), stored.side(), stored.reservePerShare(), order.remaining());
+                release(stored, order.remaining());
             });
             market.book.cancel(orderId);
         } finally {
@@ -164,12 +189,15 @@ public class TradingService {
     // ---------- 트랜잭션 본문 ----------
 
     private void accept(Order order, String clientOrderId, long reservePerShare) {
-        boolean locked = order.side() == Side.BUY
-                ? accounts.lockPoints(order.accountId(), reservePerShare * order.quantity())
-                : accounts.lockShares(order.accountId(), order.teamId(), order.quantity());
-        if (!locked) throw new TradingException(order.side() == Side.BUY
-                ? "주문 가능 포인트가 부족해요" : "판매 가능 수량이 부족해요");
+        boolean buy = order.side() == Side.BUY;
+        long amount = buy ? reservePerShare * order.quantity() : order.quantity();
+        boolean locked = buy
+                ? accounts.lockPoints(order.accountId(), amount)
+                : accounts.lockShares(order.accountId(), order.teamId(), amount);
+        if (!locked) throw new TradingException(buy ? "주문 가능 포인트가 부족해요" : "판매 가능 수량이 부족해요");
         orders.insertPending(order, clientOrderId, reservePerShare);
+        ledger.post(Journal.lock(order.id(), order.accountId(), buy ? Journal.POINT : order.teamId(), amount),
+                order.createdAt());
     }
 
     /**
@@ -191,12 +219,17 @@ public class TradingService {
             add(shares, t.sellerId(), 0, -q, 0, 0);
             add(points, t.sellerId(), t.price() * q, 0);
             trades.insert(t);
+            ledger.post(Journal.trade(t, buyerReserve), t.executedAt());
             counterparts.add(t.buyOrderId() == order.id() ? t.sellOrderId() : t.buyOrderId());
         }
         long canceled = result.canceledQuantity();
         if (canceled > 0) {
-            if (order.side() == Side.BUY) add(points, order.accountId(), reservePerShare * canceled, -reservePerShare * canceled);
-            else add(shares, order.accountId(), canceled, -canceled, 0, 0);
+            boolean buy = order.side() == Side.BUY;
+            long amount = buy ? reservePerShare * canceled : canceled;
+            if (buy) add(points, order.accountId(), amount, -amount);
+            else add(shares, order.accountId(), amount, -amount, 0, 0);
+            ledger.post(Journal.release(order.id(), order.accountId(), buy ? Journal.POINT : teamId, amount),
+                    clock.instant());
         }
 
         points.forEach((id, d) -> accounts.applyPoints(id, d[0], d[1]));
@@ -209,9 +242,12 @@ public class TradingService {
         orders.finish(order.id(), order.remaining(), status, receipt);
     }
 
-    private void release(String accountId, String teamId, Side side, long reservePerShare, long qty) {
-        if (side == Side.BUY) accounts.applyPoints(accountId, reservePerShare * qty, -reservePerShare * qty);
-        else accounts.applyShares(accountId, teamId, qty, -qty, 0, 0);
+    private void release(StoredOrder o, long qty) {
+        boolean buy = o.side() == Side.BUY;
+        long amount = buy ? o.reservePerShare() * qty : qty;
+        if (buy) accounts.applyPoints(o.accountId(), amount, -amount);
+        else accounts.applyShares(o.accountId(), o.teamId(), amount, -amount, 0, 0);
+        ledger.post(Journal.release(o.id(), o.accountId(), buy ? Journal.POINT : o.teamId(), amount), clock.instant());
     }
 
     // ---------- 복구 ----------
@@ -219,7 +255,7 @@ public class TradingService {
     private void cancelPending(StoredOrder o) {
         tx.executeWithoutResult(s -> {
             if (orders.cancel(o.id(), Status.PENDING))
-                release(o.accountId(), o.teamId(), o.side(), o.reservePerShare(), o.quantity());
+                release(o, o.quantity());
         });
         log.warn("canceled order {} left pending before settlement", o.id());
     }
