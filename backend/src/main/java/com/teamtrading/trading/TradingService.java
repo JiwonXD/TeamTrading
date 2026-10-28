@@ -20,6 +20,7 @@ import com.teamtrading.trading.StoredOrder.Status;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,6 +37,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -52,6 +54,9 @@ import java.util.function.Function;
  *
  * <p>잔고를 바꾸는 트랜잭션은 같은 이동을 원장에도 전표로 남긴다. 잔고 갱신과 전표는 따로 계산하므로
  * 대사({@link com.teamtrading.ledger.Reconciliation})로 둘이 맞는지 확인할 수 있다.
+ *
+ * <p>호가창이 바뀔 때마다 종목 락 안에서 {@link MarketUpdate}를 발행한다. 락 안에서 번호를 매기고 보내므로
+ * 같은 종목의 업데이트는 번호 순서대로 나간다.
  */
 @Service
 public class TradingService {
@@ -66,18 +71,22 @@ public class TradingService {
     private final Ledger ledger;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
+    private final long epoch;
     private final Map<String, Market> markets = new LinkedHashMap<>();
     private final Deque<Alert> alerts = new ConcurrentLinkedDeque<>();
     private final AtomicLong ids = new AtomicLong();
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
-                          Ledger ledger, TransactionTemplate tx, Clock clock) {
+                          Ledger ledger, TransactionTemplate tx, Clock clock, ApplicationEventPublisher events) {
         this.accounts = accounts;
         this.orders = orders;
         this.trades = trades;
         this.ledger = ledger;
         this.tx = tx;
         this.clock = clock;
+        this.events = events;
+        this.epoch = clock.millis();
         for (Team team : catalog.all()) markets.put(team.id(), new Market(team));
     }
 
@@ -161,6 +170,7 @@ public class TradingService {
                 recordAlerts(FdsDetector.detect(trade, market.lastPrice(), market.recentTrades(Integer.MAX_VALUE)));
                 market.record(trade);
             }
+            events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
             return receipt;
         } finally {
             market.lock.unlock();
@@ -181,6 +191,7 @@ public class TradingService {
                 release(stored, order.remaining());
             });
             market.book.cancel(orderId);
+            events.publishEvent(market.nextUpdate(epoch, List.of()));
         } finally {
             market.lock.unlock();
         }
@@ -264,6 +275,7 @@ public class TradingService {
         try {
             orders.find(orderId).filter(o -> o.status() == Status.PENDING).ifPresent(this::cancelPending);
             rebuildBook(market);
+            events.publishEvent(market.nextUpdate(epoch, List.of()));
         } catch (RuntimeException e) {
             market.halted = true;
             log.error("could not recover market {}, halting it", market.team.id(), e);
@@ -294,7 +306,22 @@ public class TradingService {
 
     public OrderBookSnapshot orderBook(String teamId, int depth) {
         return locked(market(teamId), m -> new OrderBookSnapshot(
-                m.book.levels(Side.SELL, depth), m.book.levels(Side.BUY, depth), m.lastPrice()));
+                m.book.levels(Side.SELL, depth), m.book.levels(Side.BUY, depth), m.lastPrice(),
+                epoch, m.seq()));
+    }
+
+    /**
+     * 현재 시세를 종목 락 안에서 넘긴다. 실시간 구독 등록을 onSnapshot 안에서 하면
+     * 스냅숏과 그 뒤 첫 업데이트 사이에 다른 업데이트가 끼거나 빠지지 않는다.
+     */
+    public void subscribe(String teamId, int recentTrades, Consumer<MarketUpdate> onSnapshot) {
+        Market market = market(teamId);
+        market.lock.lock();
+        try {
+            onSnapshot.accept(market.snapshot(epoch, market.recentTrades(recentTrades)));
+        } finally {
+            market.lock.unlock();
+        }
     }
 
     public List<Trade> trades(String teamId, int limit) {
@@ -354,6 +381,6 @@ public class TradingService {
         }
     }
 
-    public record OrderBookSnapshot(List<Level> asks, List<Level> bids, long lastPrice) {
+    public record OrderBookSnapshot(List<Level> asks, List<Level> bids, long lastPrice, long epoch, long seq) {
     }
 }

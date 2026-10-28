@@ -2,6 +2,7 @@ package com.teamtrading.trading;
 
 import com.teamtrading.engine.OrderBook;
 import com.teamtrading.engine.PriceRules;
+import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.team.Team;
 
@@ -15,6 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
 final class Market {
 
     static final int RECENT_TRADES = 500;
+    static final int FEED_DEPTH = 10;
 
     final Team team;
     OrderBook book;
@@ -26,6 +28,8 @@ final class Market {
     private long high;
     private long low;
     private long volume;
+    /** 이 종목에서 내보낸 마지막 업데이트 번호 */
+    private long seq;
 
     Market(Team team) {
         this.team = team;
@@ -63,8 +67,23 @@ final class Market {
         return lastPrice;
     }
 
+    long seq() {
+        return seq;
+    }
+
     List<Trade> recentTrades(int limit) {
         return new ArrayList<>(recent).subList(0, Math.min(limit, recent.size()));
+    }
+
+    /** 호가창이나 시세가 바뀌었을 때 번호를 하나 올려 업데이트를 만든다 */
+    MarketUpdate nextUpdate(long epoch, List<Trade> newTrades) {
+        seq++;
+        return snapshot(epoch, newTrades);
+    }
+
+    MarketUpdate snapshot(long epoch, List<Trade> trades) {
+        return new MarketUpdate(team.id(), epoch, seq, quote(), book.levels(Side.SELL, FEED_DEPTH),
+                book.levels(Side.BUY, FEED_DEPTH), trades);
     }
 
     Quote quote() {

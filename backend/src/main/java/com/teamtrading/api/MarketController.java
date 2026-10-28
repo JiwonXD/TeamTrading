@@ -35,7 +35,7 @@ class MarketController {
     @GetMapping("/{teamId}/orderbook")
     OrderBookResponse orderBook(@PathVariable String teamId, @RequestParam(defaultValue = "10") int depth) {
         var s = trading.orderBook(teamId, Math.min(depth, 20));
-        return new OrderBookResponse(s.asks(), s.bids(), s.lastPrice());
+        return new OrderBookResponse(s.asks(), s.bids(), s.lastPrice(), s.epoch(), s.seq());
     }
 
     @GetMapping("/{teamId}/trades")

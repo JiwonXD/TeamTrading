@@ -6,6 +6,7 @@ import com.teamtrading.engine.OrderType;
 import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.fds.Alert;
+import com.teamtrading.trading.MarketUpdate;
 import com.teamtrading.trading.Quote;
 import com.teamtrading.trading.StoredOrder;
 import jakarta.validation.constraints.NotBlank;
@@ -53,7 +54,17 @@ final class ApiDtos {
         }
     }
 
-    record OrderBookResponse(List<Level> asks, List<Level> bids, long lastPrice) {
+    /** epoch·seq는 실시간 시세의 번호와 같아서, 이 응답 뒤에 받은 업데이트 중 어디부터 이어 붙일지 알 수 있다 */
+    record OrderBookResponse(List<Level> asks, List<Level> bids, long lastPrice, long epoch, long seq) {
+    }
+
+    /** 실시간 시세 메시지. 접속하면 snapshot 한 번, 그 뒤로 바뀔 때마다 update */
+    record FeedMessage(String type, String teamId, long epoch, long seq, QuoteResponse quote,
+                       List<Level> asks, List<Level> bids, List<TradeResponse> trades) {
+        static FeedMessage of(String type, MarketUpdate u) {
+            return new FeedMessage(type, u.teamId(), u.epoch(), u.seq(), QuoteResponse.of(u.quote()), u.asks(),
+                    u.bids(), u.trades().stream().map(TradeResponse::of).toList());
+        }
     }
 
     /** 익명 체결 내역: 매수·매도 계정은 보여주지 않는다 */

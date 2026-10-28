@@ -48,7 +48,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 | --- | --- | --- |
 | GET | `/api/teams` | 구단 시세 목록 |
 | GET | `/api/teams/{teamId}` | 구단 시세, 상·하한가 |
-| GET | `/api/teams/{teamId}/orderbook?depth=10` | 호가창 |
+| GET | `/api/teams/{teamId}/orderbook?depth=10` | 호가창. 실시간 시세와 같은 `epoch`·`seq`를 함께 준다 |
 | GET | `/api/teams/{teamId}/trades?limit=30` | 최근 체결 (익명) |
 | POST | `/api/accounts` | 계정 만들기 (100만P 지급) |
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |
@@ -58,6 +58,14 @@ docker compose up -d     # 로컬 MySQL 8.4
 | GET | `/api/rankings` | 수익률 랭킹 |
 | GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (운영자용) |
 | GET | `/api/surveillance/reconciliation` | 원장과 잔고 대사 결과 (운영자용) |
+
+### 실시간 시세
+
+`ws://localhost:8080/ws/teams/{teamId}`에 접속하면 `snapshot` 메시지를 한 번 받고, 그 뒤로 호가창이 바뀔 때마다 `update`를 받는다. 두 메시지 모두 시세(`quote`), 위아래 10단계 호가(`asks`, `bids`), 체결(`trades`, 최신이 앞)을 담는다. `snapshot`의 체결은 최근 30건, `update`의 체결은 이번에 새로 난 것만이다.
+
+- `seq`는 구단마다 1씩 늘어난다. 받은 번호가 건너뛰면 다시 접속해 새 스냅숏부터 받는다. `epoch`은 서버가 뜰 때마다 바뀐다.
+- 구독 등록과 스냅숏은 종목 락 안에서 함께 처리해서, 스냅숏과 첫 업데이트 사이에 빠지거나 앞서는 업데이트가 없다.
+- 업데이트는 매칭 스레드에서 세션별 큐에 넣기만 하고 전송은 세션마다 둔 가상 스레드가 한다. 큐(256건)가 넘친 느린 클라이언트는 연결을 끊는다.
 
 ## 프론트엔드
 

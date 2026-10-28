@@ -2,6 +2,7 @@ package com.teamtrading.trading;
 
 import com.teamtrading.account.Account;
 import com.teamtrading.account.AccountStore;
+import com.teamtrading.engine.Level;
 import com.teamtrading.engine.Order;
 import com.teamtrading.engine.OrderType;
 import com.teamtrading.engine.Side;
@@ -31,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
@@ -183,10 +185,13 @@ class TradingServiceTest {
         place(buyer, Side.BUY, OrderType.LIMIT, 18_300, 7);
         var before = trading.orderBook("lg", 10);
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC());
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC(), e -> {});
         restarted.recover();
 
-        assertThat(restarted.orderBook("lg", 10)).isEqualTo(before);
+        var after = restarted.orderBook("lg", 10);
+        assertThat(after.asks()).isEqualTo(before.asks());
+        assertThat(after.bids()).isEqualTo(before.bids());
+        assertThat(after.lastPrice()).isEqualTo(before.lastPrice());
         assertThat(restarted.quote("lg").lastPrice()).isEqualTo(18_500);
         assertThat(restarted.quote("lg").volume()).isEqualTo(4);
         // 복구된 호가창에서 매칭을 이어가도 같은 결과가 나온다
@@ -204,7 +209,7 @@ class TradingServiceTest {
             ledger.post(Journal.lock(9_999, buyer, Journal.POINT, 180_000), order.createdAt());
         });
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC());
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC(), e -> {});
         restarted.recover();
 
         assertThat(orderStore.find(9_999).orElseThrow().status()).isEqualTo(StoredOrder.Status.CANCELED);
@@ -222,7 +227,7 @@ class TradingServiceTest {
                 throw new IllegalStateException("db down");
             }
         };
-        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, tx, Clock.systemUTC());
+        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, tx, Clock.systemUTC(), e -> {});
         service.recover();
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
 
@@ -275,6 +280,29 @@ class TradingServiceTest {
         Reconciliation.Report report = reconciliation.run();
         assertThat(report.mismatches()).isEmpty();
         assertThat(report.unbalancedJournals()).isEmpty();
+    }
+
+    @Test
+    void publishesNumberedUpdatesPerTeam() {
+        List<MarketUpdate> updates = new ArrayList<>();
+        TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx,
+                Clock.systemUTC(), e -> updates.add((MarketUpdate) e));
+        service.recover();
+
+        service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
+        service.place(buyer, "b-1", "lg", Side.BUY, OrderType.LIMIT, 18_500, 3);
+        service.place(buyer, "b-2", "kt", Side.BUY, OrderType.LIMIT, 12_000, 1);
+        long resting = service.openOrders(seller).getFirst().id();
+        service.cancel(seller, resting);
+
+        assertThat(updates).extracting(MarketUpdate::teamId, MarketUpdate::seq)
+                .containsExactly(tuple("lg", 1L), tuple("lg", 2L), tuple("kt", 1L), tuple("lg", 3L));
+        assertThat(updates.get(1).trades()).extracting(Trade::quantity).containsExactly(3L);
+        assertThat(updates.get(1).asks()).containsExactly(new Level(18_500, 7));
+        assertThat(updates.get(3).asks()).isEmpty();
+        assertThat(service.orderBook("lg", 5).seq()).isEqualTo(3);
+        // 재시작하면 epoch이 바뀌어 받는 쪽이 번호를 처음부터 다시 센다
+        assertThat(updates).extracting(MarketUpdate::epoch).containsOnly(service.orderBook("lg", 1).epoch());
     }
 
     @Test
