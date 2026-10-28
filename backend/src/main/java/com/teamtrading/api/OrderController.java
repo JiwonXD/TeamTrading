@@ -29,7 +29,8 @@ class OrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     OrderReceipt place(@RequestHeader(ACCOUNT_HEADER) String accountId, @Valid @RequestBody PlaceOrderRequest req) {
-        return trading.place(accountId, req.teamId(), req.side(), req.type(), req.price(), req.quantity());
+        return trading.placeOnce(accountId, req.clientOrderId(), req.teamId(), req.side(), req.type(),
+                req.price(), req.quantity());
     }
 
     @DeleteMapping("/{orderId}")

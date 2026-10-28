@@ -30,7 +30,8 @@ final class ApiDtos {
                            long totalValue, double returnRate, List<Holding> holdings) {
     }
 
-    record PlaceOrderRequest(@NotBlank String teamId, @NotNull Side side, @NotNull OrderType type,
+    record PlaceOrderRequest(@NotBlank @Size(max = 64) String clientOrderId, @NotBlank String teamId,
+                             @NotNull Side side, @NotNull OrderType type,
                              @PositiveOrZero long price, @Positive long quantity) {
     }
 

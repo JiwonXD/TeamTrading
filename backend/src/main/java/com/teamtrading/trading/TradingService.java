@@ -24,6 +24,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,6 +48,14 @@ public class TradingService {
     private final Map<Long, String> orderTeams = new ConcurrentHashMap<>();
     private final Deque<Alert> alerts = new ConcurrentLinkedDeque<>();
     private final AtomicLong ids = new AtomicLong();
+    // 첫 버전은 메모리에 둔다. DB 단계에서 orders 테이블의 UNIQUE (account_id, client_order_id)로 옮긴다
+    private final Map<String, IdempotentOrder> placedOrders = new ConcurrentHashMap<>();
+
+    private record OrderRequest(String teamId, Side side, OrderType type, long price, long quantity) {
+    }
+
+    private record IdempotentOrder(OrderRequest request, CompletableFuture<OrderReceipt> receipt) {
+    }
 
     public TradingService(TeamCatalog catalog, AccountRepository accounts, Clock clock) {
         this.accounts = accounts;
@@ -55,6 +65,37 @@ public class TradingService {
 
     public Account openAccount(String nickname) {
         return accounts.save(new Account(UUID.randomUUID().toString(), nickname, START_POINTS));
+    }
+
+    /**
+     * 클라이언트가 정한 주문 번호로 한 번만 접수한다. 응답을 못 받아 같은 번호로 다시 보내면
+     * 주문을 새로 넣지 않고 처음 결과를 그대로 돌려준다. 동시에 들어온 재시도는 첫 요청이 끝날 때까지 기다린다.
+     * 접수 전에 거절된 주문은 기록하지 않아 같은 번호로 고쳐서 다시 보낼 수 있다.
+     */
+    public OrderReceipt placeOnce(String accountId, String clientOrderId, String teamId, Side side, OrderType type,
+                                  long price, long quantity) {
+        OrderRequest request = new OrderRequest(teamId, side, type, type == OrderType.MARKET ? 0 : price, quantity);
+        String key = accountId + ":" + clientOrderId;
+        IdempotentOrder mine = new IdempotentOrder(request, new CompletableFuture<>());
+        IdempotentOrder existing = placedOrders.putIfAbsent(key, mine);
+        if (existing != null) {
+            if (!existing.request().equals(request))
+                throw new IdempotencyConflictException("이미 다른 주문에 쓴 주문 번호예요");
+            try {
+                return existing.receipt().join();
+            } catch (CompletionException e) {
+                throw (RuntimeException) e.getCause();
+            }
+        }
+        try {
+            OrderReceipt receipt = place(accountId, teamId, side, type, price, quantity);
+            mine.receipt().complete(receipt);
+            return receipt;
+        } catch (RuntimeException e) {
+            placedOrders.remove(key, mine);
+            mine.receipt().completeExceptionally(e);
+            throw e;
+        }
     }
 
     public OrderReceipt place(String accountId, String teamId, Side side, OrderType type, long price, long quantity) {

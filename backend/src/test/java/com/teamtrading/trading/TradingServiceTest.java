@@ -93,6 +93,52 @@ class TradingServiceTest {
         assertThatThrownBy(() -> trading.cancel(buyer.id(), r.orderId())).isInstanceOf(NotFoundException.class);
     }
 
+    @Test
+    void retryWithSameClientOrderIdReturnsFirstReceipt() {
+        OrderReceipt first = trading.placeOnce(buyer.id(), "c-1", "lg", Side.BUY, OrderType.LIMIT, 18_000, 10);
+        OrderReceipt retry = trading.placeOnce(buyer.id(), "c-1", "lg", Side.BUY, OrderType.LIMIT, 18_000, 10);
+
+        assertThat(retry).isEqualTo(first);
+        assertThat(trading.openOrders(buyer.id())).hasSize(1);
+        assertThat(buyer.lockedPoints()).isEqualTo(180_000);
+    }
+
+    @Test
+    void sameClientOrderIdForDifferentOrderIsConflict() {
+        trading.placeOnce(buyer.id(), "c-1", "lg", Side.BUY, OrderType.LIMIT, 18_000, 10);
+
+        assertThatThrownBy(() -> trading.placeOnce(buyer.id(), "c-1", "lg", Side.BUY, OrderType.LIMIT, 18_000, 11))
+                .isInstanceOf(IdempotencyConflictException.class);
+        // 다른 계정은 같은 번호를 써도 별개 주문이다
+        trading.placeOnce(seller.id(), "c-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 1);
+        assertThat(trading.openOrders(seller.id())).hasSize(1);
+    }
+
+    @Test
+    void rejectedOrderCanBeRetriedWithSameClientOrderId() {
+        assertThatThrownBy(() -> trading.placeOnce(buyer.id(), "c-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 1))
+                .isInstanceOf(TradingException.class);
+
+        buyer.grantShares("lg", 1, 18_450);
+        OrderReceipt r = trading.placeOnce(buyer.id(), "c-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 1);
+        assertThat(r.restingQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentRetriesPlaceOrderOnce() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        List<Future<OrderReceipt>> calls = new ArrayList<>();
+        for (int i = 0; i < 8; i++)
+            calls.add(pool.submit(() -> trading.placeOnce(buyer.id(), "same", "lg", Side.BUY, OrderType.LIMIT, 18_000, 5)));
+        List<Long> orderIds = new ArrayList<>();
+        for (Future<OrderReceipt> f : calls) orderIds.add(f.get(10, TimeUnit.SECONDS).orderId());
+        pool.shutdown();
+
+        assertThat(orderIds).containsOnly(orderIds.getFirst());
+        assertThat(trading.openOrders(buyer.id())).hasSize(1);
+        assertThat(buyer.lockedPoints()).isEqualTo(90_000);
+    }
+
     /** 여러 스레드가 동시에 주문·취소해도 포인트와 주식 총량이 보존되고 호가가 교차하지 않아야 한다 */
     @Test
     void concurrentTradingConservesPointsAndShares() throws Exception {
