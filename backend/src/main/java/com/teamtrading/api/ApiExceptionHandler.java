@@ -1,6 +1,7 @@
 package com.teamtrading.api;
 
 import com.teamtrading.api.ApiDtos.ErrorResponse;
+import com.teamtrading.trading.IdempotencyConflictException;
 import com.teamtrading.trading.NotFoundException;
 import com.teamtrading.trading.TradingException;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,12 @@ class ApiExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     ErrorResponse notFound(NotFoundException e) {
+        return new ErrorResponse(e.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    ErrorResponse conflict(IdempotencyConflictException e) {
         return new ErrorResponse(e.getMessage());
     }
 

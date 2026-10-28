@@ -40,7 +40,7 @@ cd backend
 | POST | `/api/accounts` | 계정 만들기 (100만P 지급) |
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |
 | GET | `/api/accounts/me/orders` | 내 대기 주문 |
-| POST | `/api/orders` | 주문 |
+| POST | `/api/orders` | 주문. `clientOrderId`가 같은 재시도는 처음 결과를 그대로 돌려주고, 같은 번호로 다른 주문을 보내면 409 |
 | DELETE | `/api/orders/{orderId}` | 주문 취소 |
 | GET | `/api/rankings` | 수익률 랭킹 |
 | GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (운영자용) |

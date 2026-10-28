@@ -44,7 +44,7 @@ class TradingApiTest {
 
         String receipt = mvc.perform(post("/api/orders").header("X-Account-Id", me)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"teamId\":\"t1\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":32000,\"quantity\":3}"))
+                        .content("{\"clientOrderId\":\"o-1\",\"teamId\":\"t1\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":32000,\"quantity\":3}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.restingQuantity").value(3))
                 .andReturn().getResponse().getContentAsString();
@@ -66,9 +66,28 @@ class TradingApiTest {
         String me = openAccount("band");
         mvc.perform(post("/api/orders").header("X-Account-Id", me)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"teamId\":\"lg\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":30000,\"quantity\":1}"))
+                        .content("{\"clientOrderId\":\"o-2\",\"teamId\":\"lg\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":30000,\"quantity\":1}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.message").value("상한가(23,950)보다 높게 주문할 수 없어요"));
+    }
+
+    @Test
+    void retriedOrderReturnsSameReceiptAndReusedIdIsConflict() throws Exception {
+        String me = openAccount("retry");
+        String order = "{\"clientOrderId\":\"r-1\",\"teamId\":\"kt\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":12000,\"quantity\":2}";
+        String first = mvc.perform(post("/api/orders").header("X-Account-Id", me)
+                        .contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String retry = mvc.perform(post("/api/orders").header("X-Account-Id", me)
+                        .contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(retry).isEqualTo(first);
+
+        mvc.perform(post("/api/orders").header("X-Account-Id", me)
+                        .contentType(MediaType.APPLICATION_JSON).content(order.replace("\"quantity\":2", "\"quantity\":3")))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/accounts/me/orders").header("X-Account-Id", me))
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     @Test
