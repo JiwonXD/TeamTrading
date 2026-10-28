@@ -94,4 +94,15 @@ class OrderBookTest {
         assertThat(book.levels(Side.BUY, 5)).containsExactly(new Level(9_900, 10));
         assertThat(book.cancel(mine.id())).isEmpty();
     }
+
+    @Test
+    void restoreRebuildsRestingOrdersAndRejectsCrossingOnes() {
+        book.restore(Order.restored(1, "a", "t", Side.BUY, 9_900, 10, 4, now));
+        book.restore(Order.restored(2, "b", "t", Side.SELL, 10_000, 5, 5, now));
+        assertThat(book.levels(Side.BUY, 5)).containsExactly(new Level(9_900, 4));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> book.restore(Order.restored(3, "c", "t", Side.BUY, 10_000, 1, 1, now)))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

@@ -2,12 +2,12 @@ package com.teamtrading.api;
 
 import com.teamtrading.account.Holding;
 import com.teamtrading.engine.Level;
-import com.teamtrading.engine.Order;
 import com.teamtrading.engine.OrderType;
 import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.fds.Alert;
 import com.teamtrading.trading.Quote;
+import com.teamtrading.trading.StoredOrder;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -37,7 +37,7 @@ final class ApiDtos {
 
     record OrderResponse(long id, String teamId, Side side, OrderType type, long price,
                          long quantity, long remaining, Instant createdAt) {
-        static OrderResponse of(Order o) {
+        static OrderResponse of(StoredOrder o) {
             return new OrderResponse(o.id(), o.teamId(), o.side(), o.type(), o.price(),
                     o.quantity(), o.remaining(), o.createdAt());
         }

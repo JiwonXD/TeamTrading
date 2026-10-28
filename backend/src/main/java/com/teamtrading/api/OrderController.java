@@ -29,7 +29,7 @@ class OrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     OrderReceipt place(@RequestHeader(ACCOUNT_HEADER) String accountId, @Valid @RequestBody PlaceOrderRequest req) {
-        return trading.placeOnce(accountId, req.clientOrderId(), req.teamId(), req.side(), req.type(),
+        return trading.place(accountId, req.clientOrderId(), req.teamId(), req.side(), req.type(),
                 req.price(), req.quantity());
     }
 

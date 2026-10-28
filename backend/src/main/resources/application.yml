@@ -1,5 +1,9 @@
 spring:
   application:
     name: teamtrading
+  datasource:
+    url: jdbc:mysql://localhost:3306/teamtrading
+    username: teamtrading
+    password: teamtrading
 server:
   port: 8080
