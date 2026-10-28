@@ -28,6 +28,14 @@ public final class Order {
         this.createdAt = createdAt;
     }
 
+    /** DB에서 다시 읽은 대기 주문. 일부 체결된 경우 remaining이 quantity보다 작다 */
+    public static Order restored(long id, String accountId, String teamId, Side side, long price,
+                                 long quantity, long remaining, Instant createdAt) {
+        Order o = new Order(id, accountId, teamId, side, OrderType.LIMIT, price, quantity, createdAt);
+        o.remaining = remaining;
+        return o;
+    }
+
     void fill(long qty) {
         if (qty <= 0 || qty > remaining) throw new IllegalArgumentException("invalid fill " + qty);
         remaining -= qty;

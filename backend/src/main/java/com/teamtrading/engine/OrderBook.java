@@ -74,6 +74,16 @@ public final class OrderBook {
         return new MatchResult(List.copyOf(trades), rested, canceled, selfTradePrevented);
     }
 
+    /** 재시작 복구용: 매칭 없이 대기 주문을 접수 순서대로 다시 쌓는다. 호가가 교차하면 거부한다 */
+    public void restore(Order order) {
+        if (order.type() != OrderType.LIMIT || order.remaining() == 0) throw new IllegalArgumentException("not resting");
+        Optional<Long> opposite = bestPrice(order.side().opposite());
+        if (opposite.isPresent() && crosses(order, opposite.get()))
+            throw new IllegalStateException("restored order crosses the book: " + order.id());
+        book(order.side()).computeIfAbsent(order.price(), p -> new ArrayDeque<>()).addLast(order);
+        byId.put(order.id(), order);
+    }
+
     public Optional<Order> cancel(long orderId) {
         Order order = byId.remove(orderId);
         if (order == null) return Optional.empty();

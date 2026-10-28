@@ -69,6 +69,6 @@ class AccountController {
     private AccountResponse view(Account a) {
         long value = trading.totalValue(a);
         return new AccountResponse(a.id(), a.nickname(), a.availablePoints(), a.lockedPoints(),
-                value, (double) value / a.initialPoints() - 1, a.holdings());
+                value, (double) value / a.initialPoints() - 1, trading.holdings(a.id()));
     }
 }
