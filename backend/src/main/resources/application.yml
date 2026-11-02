@@ -2,7 +2,9 @@ spring:
   application:
     name: teamtrading
   datasource:
-    url: jdbc:mysql://localhost:3306/teamtrading
+    # 세션 상태를 드라이버가 기억해 트랜잭션마다 도는 SET autocommit 왕복을 줄이고, 원장 분개 일괄 저장을 한 문장으로 보낸다.
+    # 서버 측 준비문을 캐시한다. 측정과 근거는 docs/performance.md
+    url: jdbc:mysql://localhost:3306/teamtrading?useLocalSessionState=true&rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true&prepStmtCacheSize=250
     username: teamtrading
     password: teamtrading
 server:
