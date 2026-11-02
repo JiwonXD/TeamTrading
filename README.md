@@ -57,6 +57,8 @@ docker compose up -d     # 로컬 MySQL 8.4
 - 관측성: 관리 포트(8081)에서 health와 Prometheus 지표를 연다. 5분마다 대사를 돌려 결과를 지표로 남기고, 체결·거래 정지·실시간 시세 세션도 지표로 낸다. 경보 규칙과 대응 절차는 [docs/operations.md](docs/operations.md).
 - 성능: HTTP 주문 부하 테스트(`./gradlew loadTest`)를 CI의 MySQL 작업에서 매번 돌리고, 끝난 뒤 대사 일치를 확인한다. 측정 결과와 병목 분석은 [docs/performance.md](docs/performance.md).
 
+- 배포: `deploy/`의 docker compose 묶음(MySQL, 서버, nginx, Prometheus)으로 서버 한 대 또는 집 PC(Cloudflare Tunnel)에 올린다. 절차는 [docs/deploy.md](docs/deploy.md).
+
 이상거래 탐지 기록은 아직 메모리에만 있다. 그래서 재시작하면 리더보드의 이상거래 제외 대상도 비워진다.
 
 | 메서드 | 경로 | 설명 |

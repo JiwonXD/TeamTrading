@@ -40,33 +40,14 @@ curl -s localhost:8081/actuator/prometheus | grep '^teamtrading_'
 
 ## 경보 규칙
 
-```yaml
-groups:
-  - name: teamtrading
-    rules:
-      - alert: LedgerOutOfBalance
-        expr: teamtrading_reconciliation_balanced == 0
-        labels: { severity: critical }
-        annotations:
-          summary: 원장과 잔고가 어긋났다
-      - alert: ReconciliationStale
-        expr: time() - teamtrading_reconciliation_last_run > 900
-        labels: { severity: warning }
-        annotations:
-          summary: 대사가 15분 넘게 돌지 않았다
-      - alert: MarketHalted
-        expr: teamtrading_markets_halted > 0
-        labels: { severity: critical }
-        annotations:
-          summary: 거래가 멈춘 구단이 있다
-      - alert: SlowOrders
-        expr: |
-          histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri="/api/orders",method="POST"}[5m]))) > 0.25
-        for: 5m
-        labels: { severity: warning }
-        annotations:
-          summary: 주문 p99 지연이 250ms를 넘었다
-```
+규칙 파일은 [deploy/prometheus/alerts.yml](../deploy/prometheus/alerts.yml)이다. 배포 묶음(docker compose)의 Prometheus가 이 파일을 읽는다.
+
+| 경보 | 조건 | 등급 |
+| --- | --- | --- |
+| LedgerOutOfBalance | `teamtrading_reconciliation_balanced == 0` | critical |
+| ReconciliationStale | 마지막 대사가 15분 넘게 지남 | warning |
+| MarketHalted | `teamtrading_markets_halted > 0` | critical |
+| SlowOrders | 주문 API p99가 5분 동안 250ms 초과 | warning |
 
 ## 경보가 울리면
 

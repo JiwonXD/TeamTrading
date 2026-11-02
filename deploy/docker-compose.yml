@@ -1,0 +1,90 @@
+# 한 대의 서버에 올리는 배포 묶음: MySQL, 서버, 화면(nginx), Prometheus.
+#   cp .env.example .env   # 값 채우기
+#   ./build.sh             # jar·화면 빌드 후 이미지 생성
+#   docker compose up -d
+name: teamtrading
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: teamtrading
+      MYSQL_USER: teamtrading
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD를 .env에 넣어 주세요}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD를 .env에 넣어 주세요}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    build: ../backend
+    image: teamtrading-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-oauth}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/teamtrading?useLocalSessionState=true&rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true&prepStmtCacheSize=250
+      SPRING_DATASOURCE_USERNAME: teamtrading
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      # nginx가 넘기는 X-Forwarded-* 를 믿어 소셜 로그인 콜백 주소와 쿠키 Secure를 바깥 주소 기준으로 만든다
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      TEAMTRADING_AUTH_ADMINS: ${ADMIN_ACCOUNT_IDS:-}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    # 종료 신호를 받으면 처리 중인 요청을 끝내고 내려간다
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    # 서버 안에서만 연다. 밖에서 보려면 SSH 터널을 쓴다
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  # 집 PC에서 베타를 열 때: 공유기 포트를 열지 않고 Cloudflare Tunnel로 바깥 주소를 붙인다.
+  #   docker compose --profile tunnel up -d   (CLOUDFLARE_TUNNEL_TOKEN 필요, docs/deploy.md)
+  tunnel:
+    image: cloudflare/cloudflared:2025.1.0
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
+    profiles: [tunnel]
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  prometheus-data:

@@ -35,6 +35,11 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// 이미지에는 실행 가능한 bootJar 하나만 담는다
+tasks.named('jar') {
+    enabled = false
+}
+
 tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'load'
