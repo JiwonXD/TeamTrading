@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
-import { ME, addPost, cancel, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
+import { ME, addPost, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
+import { OfferingCard } from '../components/Offering'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 type Period = '1d' | '1w' | '1m' | '3m'
@@ -24,6 +25,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
   const myQty = totalShares(ME, teamId)
   const myAvg = s.users[ME].holdings[teamId]?.avgPrice ?? 0
   const myOrders = openOrders(ME).filter((o) => o.teamId === teamId)
+  // 이 구단의 가장 최근 공모. 청약 중이거나 내가 청약한 공모면 보여준다
+  const offering = getOfferings()?.find((o) => o.teamId === teamId && o.status !== 'CANCELED')
 
   return (
     <>
@@ -52,6 +55,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
           ]}
         />
       </div>
+
+      {offering && <OfferingCard offering={offering} />}
 
       {myQty > 0 && (
         <section className="card">

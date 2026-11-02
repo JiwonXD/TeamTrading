@@ -117,3 +117,23 @@ test('leaderboard ranks demo traders by period with my own row', async ({ page }
   await page.getByRole('button', { name: '손익' }).click()
   await expect(page.locator('.rank-hero')).toContainText('마감 기준')
 })
+
+test('a user subscribes to an open offering from the home list', async ({ page }) => {
+  // demo 프로필은 기동 15초 뒤 구단 하나에 4분짜리 추가 공모를 연다
+  await signIn(page)
+  const row = page.locator('.offering-row').first()
+  await expect(row).toBeVisible({ timeout: 40_000 })
+  await row.click()
+
+  const card = page.locator('.offering-card')
+  await expect(card).toBeVisible()
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await card.getByLabel('청약 수량').fill('2')
+  await card.getByRole('button', { name: /P 청약/ }).click()
+  await expect(page.locator('.toast')).toContainText('2주 청약했어요')
+  await expect(card).toContainText('2주 청약')
+  await card.getByRole('button', { name: '청약 취소' }).click()
+  await expect(card.getByLabel('청약 수량')).toBeVisible()
+})

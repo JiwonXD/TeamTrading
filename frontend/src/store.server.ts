@@ -25,6 +25,12 @@ export interface MatchDto {
   status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
   dividendStatus: 'NONE' | 'PAID' | 'VOID' | 'REVIEW'
 }
+export interface OfferingDto {
+  id: number; teamId: string; teamName: string; round: number; firstListing: boolean; price: number; totalShares: number
+  maxPerAccount: number; subscribeFrom: string; subscribeTo: string; listingAt: string
+  status: 'SUBSCRIBING' | 'ALLOCATED' | 'CANCELED'; allocatedShares: number; subscribers: number; requested: number
+}
+export interface SubscriptionDto { offeringId: number; quantity: number; deposit: number; allocated: number | null; createdAt: string }
 export type LeaderboardPeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'SEASON'
 export type LeaderboardSort = 'RETURN' | 'PNL'
 export interface LeaderboardDto {
@@ -44,6 +50,8 @@ let rankings: RankingDto[] = []
 let alerts: AlertDto[] = []
 let matches: MatchDto[] = []
 let myDividends: MyDividendDto[] = []
+let offerings: OfferingDto[] = []
+let mySubscriptions: SubscriptionDto[] = []
 const feeds: Record<string, TeamFeed> = {}
 const posts: Post[] = SEED_POSTS.map((p, i) => ({
   id: `p${i}`, teamId: p.teamId, userId: 'seed', author: p.author, body: p.body, ts: Date.now() - p.minutesAgo * 60_000,
@@ -94,7 +102,7 @@ async function ensureLogin(): Promise<boolean> {
 }
 
 async function refresh() {
-  const [q, a, o, t, r, al, m, d] = await Promise.all([
+  const [q, a, o, t, r, al, m, d, of, sub] = await Promise.all([
     api<QuoteDto[]>('GET', '/api/teams'),
     api<AccountDto>('GET', '/api/accounts/me'),
     api<OrderDto[]>('GET', '/api/accounts/me/orders'),
@@ -103,6 +111,8 @@ async function refresh() {
     api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50'),
     api<MatchDto[]>('GET', '/api/matches?limit=9'),
     api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
+    api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
+    api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
   ])
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
   account = a
@@ -112,6 +122,8 @@ async function refresh() {
   alerts = al
   matches = m
   myDividends = d
+  offerings = of
+  mySubscriptions = sub
   update()
 }
 
@@ -292,6 +304,29 @@ export const settleMatches = () => '경기 배당은 아직 서버에 없어요'
 
 export const getLogin = () => login
 export const getMatches = () => matches
+export const getOfferings = () => offerings
+export const getMySubscriptions = () => mySubscriptions
+
+/** 공모 청약. 같은 수량으로 다시 보내면 서버가 처음 청약을 돌려준다 */
+export async function subscribeOffering(offeringId: number, quantity: number): Promise<OrderResult> {
+  try {
+    await api('POST', `/api/offerings/${offeringId}/subscriptions`, { quantity })
+    await refresh()
+    return { ok: true, message: `${quantity}주 청약했어요` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '청약하지 못했어요' }
+  }
+}
+
+export async function cancelSubscription(offeringId: number): Promise<OrderResult> {
+  try {
+    await api('DELETE', `/api/offerings/${offeringId}/subscriptions/me`)
+    await refresh()
+    return { ok: true, message: '청약을 취소했어요' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '취소하지 못했어요' }
+  }
+}
 
 /** 개발·시연 서버에서만 열려 있는 닉네임 로그인 */
 export async function devLogin(nickname: string): Promise<string | null> {

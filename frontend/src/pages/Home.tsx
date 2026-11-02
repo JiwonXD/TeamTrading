@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
-import { ME, type MatchDto, START_POINTS, getMatches, mode, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, mode, settleMatches, showToast, totalValue, useStore } from '../store'
+import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 
 type Sort = 'volume' | 'up' | 'down'
@@ -19,6 +20,7 @@ export default function Home() {
     )
   const allSettled = TODAY_MATCHES.every((m) => s.settled.includes(m.id))
   const serverMatches = getMatches()
+  const offerings = getOfferings()
 
   return (
     <>
@@ -34,6 +36,8 @@ export default function Home() {
           <span className="strong">{fmt(s.users[ME].points)}P</span>
         </div>
       </section>
+
+      {offerings && <OfferingList offerings={offerings} />}
 
       {serverMatches ? <ServerMatches matches={serverMatches} /> : (
         <section className="card">

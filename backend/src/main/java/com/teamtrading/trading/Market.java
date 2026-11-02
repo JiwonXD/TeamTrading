@@ -6,6 +6,7 @@ import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.team.Team;
 
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -22,6 +23,8 @@ final class Market {
     OrderBook book;
     /** 정산 실패를 복구하지 못하면 DB와 호가창이 어긋났을 수 있어 그 종목 거래를 멈춘다 */
     boolean halted;
+    /** 첫 상장 전이면 거래를 시작할 시각. 공모 배정 전이면 Instant.MAX, 거래 중이면 null */
+    volatile Instant listingAt;
     final ReentrantLock lock = new ReentrantLock(true);
     private final Deque<Trade> recent = new ArrayDeque<>();
     private long lastPrice;
