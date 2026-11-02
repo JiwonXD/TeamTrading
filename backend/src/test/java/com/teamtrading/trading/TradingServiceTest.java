@@ -229,14 +229,11 @@ class TradingServiceTest {
     void fdsAlertsAreStoredWithTheirTradesAndSurviveARestart() {
         trading.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 5);
         for (int i = 0; i < 5; i++) trading.place(buyer, "b-" + i, "lg", Side.BUY, OrderType.LIMIT, 18_450, 1);
-        // 직전 체결가보다 10% 넘게 높은 가격
-        trading.place(seller, "s-2", "lg", Side.SELL, OrderType.LIMIT, 20_300, 1);
-        trading.place(buyer, "b-far", "lg", Side.BUY, OrderType.LIMIT, 20_300, 1);
+        // 가격 괴리 탐지는 연속 매매에서는 VI가 먼저 막으므로 VI 단일가 체결에서 확인한다(VolatilityInterruptionTest)
 
         trading.recover();
         var alerts = trading.alerts(10);
-        assertThat(alerts).extracting(Alert::kind)
-                .containsExactly(AlertKind.PRICE_DEVIATION, AlertKind.REPEATED_COUNTERPARTY);
+        assertThat(alerts).extracting(Alert::kind).containsExactly(AlertKind.REPEATED_COUNTERPARTY);
         // 탐지 기록이 가리키는 체결은 실제로 있다
         for (Alert a : alerts)
             assertThat(tradeStore.recent("lg", 100)).extracting(Trade::id).contains(a.tradeId());
@@ -254,11 +251,13 @@ class TradingServiceTest {
         TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx,
                 Clock.systemUTC(), e -> {}, listings, failing);
         service.recover();
-        service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 20_300, 1);
-        assertThatThrownBy(() -> service.place(buyer, "b-1", "lg", Side.BUY, OrderType.LIMIT, 20_300, 1))
+        service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 5);
+        // 같은 상대와 다섯 번째 체결에서 탐지 기록이 생긴다
+        for (int i = 0; i < 4; i++) service.place(buyer, "b-" + i, "lg", Side.BUY, OrderType.LIMIT, 18_450, 1);
+        assertThatThrownBy(() -> service.place(buyer, "b-5", "lg", Side.BUY, OrderType.LIMIT, 18_450, 1))
                 .isInstanceOf(TradingException.class);
-        assertThat(tradeStore.recent("lg", 10)).isEmpty();
-        assertThat(account(buyer).availablePoints()).isEqualTo(TradingService.START_POINTS);
+        assertThat(tradeStore.recent("lg", 10)).hasSize(4);
+        assertThat(account(buyer).availablePoints()).isEqualTo(TradingService.START_POINTS - 4 * 18_450);
         assertThat(reconciliation.run().balanced()).isTrue();
     }
 

@@ -50,11 +50,13 @@ class DailyBasePriceTest {
         return trading.place(account, UUID.randomUUID().toString(), TEAM, side, OrderType.LIMIT, price, qty).orderId();
     }
 
-    /** 23:30 KST에 23,900에 체결하고 자정을 넘겨 일 마감한다 */
+    /** 23:30 KST에 23,900에 주문을 내 VI 단일가 매매로 체결하고, 자정을 넘겨 일 마감한다 */
     private void tradeNearUpperLimitAndCloseTheDay() {
         order(seller, Side.SELL, 23_900, 5);
         order(buyer, Side.BUY, 23_900, 5);
-        clock.advance(Duration.ofMinutes(31));
+        clock.advance(TradingService.VI_DURATION);
+        trading.openDueAuctions();
+        clock.advance(Duration.ofMinutes(29));
         closes.scheduled();
     }
 

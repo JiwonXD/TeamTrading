@@ -198,4 +198,64 @@ class OrderBookTest {
         assertThat(r.price()).isEqualTo(10_050);
         assertThat(submit(limit("b2", Side.BUY, 10_100, 2)).trades()).hasSize(1);
     }
+
+    @Test
+    void stopsAtTheVolatilityBandAndSwitchesToAnAuctionWithTheLimitRemainderResting() {
+        submit(limit("s1", Side.SELL, 10_000, 3));
+        submit(limit("s2", Side.SELL, 10_700, 5));
+
+        MatchResult r = book.submit(limit("b", Side.BUY, 10_700, 6), ids::incrementAndGet, now, 9_410, 10_590);
+
+        // 범위 안 10,000은 체결하고, 범위 밖 10,700에서 멈춘다
+        assertThat(r.trades()).extracting(Trade::price, Trade::quantity).containsExactly(tuple(10_000L, 3L));
+        assertThat(r.interrupted()).isTrue();
+        assertThat(r.resting().remaining()).isEqualTo(3);
+        assertThat(book.isCollecting()).isTrue();
+        // 교차한 채 단일가 매매를 기다린다
+        assertThat(book.bestPrice(Side.BUY)).contains(10_700L);
+        assertThat(book.bestPrice(Side.SELL)).contains(10_700L);
+
+        OrderBook.AuctionResult auction = book.uncross(ids::incrementAndGet, now, 10_000);
+        assertThat(auction.trades()).extracting(Trade::price, Trade::quantity).containsExactly(tuple(10_700L, 3L));
+        assertThat(book.isCollecting()).isFalse();
+    }
+
+    @Test
+    void aMarketOrderStoppedByTheBandCancelsItsRemainderButStillStartsTheAuction() {
+        submit(limit("s1", Side.SELL, 10_000, 1));
+        submit(limit("s2", Side.SELL, 11_000, 5));
+
+        MatchResult r = book.submit(new Order(ids.incrementAndGet(), "b", "t", Side.BUY, OrderType.MARKET, 0, 4, now),
+                ids::incrementAndGet, now, 9_410, 10_590);
+
+        assertThat(r.filledQuantity()).isEqualTo(1);
+        assertThat(r.canceledQuantity()).isEqualTo(3);
+        assertThat(r.resting()).isNull();
+        assertThat(r.interrupted()).isTrue();
+        assertThat(book.isCollecting()).isTrue();
+    }
+
+    @Test
+    void tradesInsideTheBandDoNotInterrupt() {
+        submit(limit("s1", Side.SELL, 10_590, 2));
+        MatchResult r = book.submit(limit("b", Side.BUY, 10_590, 2), ids::incrementAndGet, now, 9_410, 10_590);
+        assertThat(r.filledQuantity()).isEqualTo(2);
+        assertThat(r.interrupted()).isFalse();
+        assertThat(book.isCollecting()).isFalse();
+    }
+
+    @Test
+    void anInterruptedRemainderThatWouldCrossMyOwnOrderIsCanceledSoTheAuctionHasNoSelfTrade() {
+        submit(limit("s1", Side.SELL, 10_000, 1));
+        submit(limit("me", Side.SELL, 10_700, 2));
+
+        MatchResult r = book.submit(limit("me", Side.BUY, 10_700, 3), ids::incrementAndGet, now, 9_410, 10_590);
+
+        assertThat(r.filledQuantity()).isEqualTo(1);
+        assertThat(r.interrupted()).isTrue();
+        assertThat(r.selfTradePrevented()).isTrue();
+        assertThat(r.resting()).isNull();
+        assertThat(r.canceledQuantity()).isEqualTo(2);
+        assertThat(book.uncross(ids::incrementAndGet, now, 10_000).trades()).isEmpty();
+    }
 }

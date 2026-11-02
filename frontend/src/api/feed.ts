@@ -18,6 +18,7 @@ export interface FeedQuote {
   basePrice: number
   indicativePrice?: number | null
   indicativeVolume?: number
+  viUntil?: string | null
   lastPrice: number
   high: number
   low: number

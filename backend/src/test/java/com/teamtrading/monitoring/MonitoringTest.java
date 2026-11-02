@@ -45,16 +45,16 @@ class MonitoringTest {
     void recordsTradingAndReconciliationMetricsAndServesHealthOnlyOnTheManagementPort() throws Exception {
         String seller = trading.openAccount("m-seller").id();
         String buyer = trading.openAccount("m-buyer").id();
-        trading.grantShares(seller, "nc", 5, 13_000);
-        trading.place(seller, "m-s", "nc", Side.SELL, OrderType.LIMIT, 13_000, 2);
-        trading.place(buyer, "m-b", "nc", Side.BUY, OrderType.LIMIT, 13_000, 2);
+        trading.grantShares(seller, "nc", 5, 11_600);
+        trading.place(seller, "m-s", "nc", Side.SELL, OrderType.LIMIT, 11_600, 2);
+        trading.place(buyer, "m-b", "nc", Side.BUY, OrderType.LIMIT, 11_600, 2);
         monitor.run();
 
         assertThat(balanced()).isEqualTo(1.0);
         assertThat(registry.get("teamtrading.reconciliation.mismatches").gauge().value()).isZero();
         assertThat(registry.get("teamtrading.trades").tag("team", "nc").counter().count()).isEqualTo(1.0);
         assertThat(registry.get("teamtrading.trade.shares").tag("team", "nc").counter().count()).isEqualTo(2.0);
-        assertThat(registry.get("teamtrading.trade.points").tag("team", "nc").counter().count()).isEqualTo(26_000.0);
+        assertThat(registry.get("teamtrading.trade.points").tag("team", "nc").counter().count()).isEqualTo(23_200.0);
         assertThat(registry.get("teamtrading.markets.halted").gauge().value()).isZero();
         assertThat(registry.get("teamtrading.feed.sessions").gauge().value()).isZero();
 

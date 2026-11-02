@@ -24,8 +24,10 @@ export interface Market {
   base: number
   /** 거래 중인지. 서버 모드에서 첫 상장 공모 전이거나 상장 동시호가를 기다리면 false */
   listed: boolean
-  /** 상장 동시호가 중 예상 체결가와 수량. 지금 단일가 매매를 하면 이 가격에 이만큼 체결된다 */
+  /** 단일가 매매(상장 동시호가, VI) 중 예상 체결가와 수량. 지금 단일가 매매를 하면 이 가격에 이만큼 체결된다 */
   indicative?: { price: number; volume: number }
+  /** 서버 모드: 변동성 완화장치(VI)가 발동해 단일가 매매 중이면 끝나는 시각(ms) */
+  viUntil?: number
   last: number
   high: number
   low: number

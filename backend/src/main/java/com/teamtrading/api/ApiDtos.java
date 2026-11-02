@@ -45,13 +45,14 @@ final class ApiDtos {
     /** @param listed 거래 중인지. 첫 상장 공모 전이거나 상장 동시호가를 기다리면 false */
     record QuoteResponse(String id, String name, String shortName, String league, String color, boolean listed,
                          long basePrice, long lastPrice, double changeRate, long high, long low, long volume,
-                         long upperLimit, long lowerLimit, Long indicativePrice, long indicativeVolume) {
+                         long upperLimit, long lowerLimit, Long indicativePrice, long indicativeVolume,
+                         Instant viUntil) {
         static QuoteResponse of(Quote q) {
             var t = q.team();
             return new QuoteResponse(t.id(), t.name(), t.shortName(), t.league().name(), t.color(), q.listed(),
                     q.basePrice(),
                     q.lastPrice(), q.changeRate(), q.high(), q.low(), q.volume(), q.upperLimit(), q.lowerLimit(),
-                    q.indicativePrice(), q.indicativeVolume());
+                    q.indicativePrice(), q.indicativeVolume(), q.viUntil());
         }
     }
 
