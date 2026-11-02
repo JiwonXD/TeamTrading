@@ -181,7 +181,9 @@ public class OfferingService {
         String teamId = store.find(offeringId).orElseThrow(() -> new NotFoundException("없는 공모예요")).teamId();
         return trading.underMarketLock(teamId, () -> {
             Offering o = tx.execute(s -> cancelLocked(offeringId));
-            if (o.firstListing()) trading.holdUntil(teamId, null);
+            // 운영자가 등록한 구단은 첫 상장 공모가 취소되면 다시 공모할 때까지 거래하지 않는다
+            if (o.firstListing())
+                trading.holdUntil(teamId, catalog.find(teamId).filter(Team::ipoRequired).isPresent() ? Instant.MAX : null);
             return o;
         });
     }

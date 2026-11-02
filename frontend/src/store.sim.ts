@@ -269,7 +269,7 @@ function freshState(): SimState {
       daily.unshift(Math.round(prev * (1 + (r() - 0.5) * 0.05)))
     }
     markets[t.id] = {
-      base: t.basePrice, last: t.basePrice, high: t.basePrice, low: t.basePrice, volume: 0, daily,
+      base: t.basePrice, listed: true, last: t.basePrice, high: t.basePrice, low: t.basePrice, volume: 0, daily,
       intraday: [{ ts: now - 60_000, price: t.basePrice }],
     }
     bias[t.id] = (r() - 0.5) * 1.2

@@ -5,6 +5,8 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -19,6 +21,19 @@ class ListingStore {
 
     ListingStore(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /**
+     * 운영자가 등록했지만 아직 주식이 없고 첫 상장 공모도 진행 중이 아닌 구단. 공모 전까지 거래를 막는다.
+     * 공모가 청약 중이거나 배정됐으면 holds()가 정한다
+     */
+    Set<String> awaitingFirstListing() {
+        return new HashSet<>(jdbc.queryForList("""
+                SELECT t.id FROM teams t
+                WHERE t.ipo_required = TRUE
+                  AND NOT EXISTS (SELECT 1 FROM positions p WHERE p.team_id = t.id AND p.available + p.locked > 0)
+                  AND NOT EXISTS (SELECT 1 FROM offerings o WHERE o.team_id = t.id AND o.first_listing = TRUE
+                                  AND o.status IN ('SUBSCRIBING', 'ALLOCATED'))""", String.class));
     }
 
     Map<String, Instant> holds() {

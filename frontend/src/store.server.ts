@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { TEAMS } from './data/teams'
+import { type League, TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -11,7 +11,7 @@ import { ME, START_POINTS, type Market, type OrderResult, type Post, type State,
 
 const POLL_MS = 3000
 
-interface QuoteDto { id: string; basePrice: number; lastPrice: number; high: number; low: number; volume: number }
+interface QuoteDto { id: string; name: string; shortName: string; league: string; color: string; listed: boolean; basePrice: number; lastPrice: number; high: number; low: number; volume: number }
 interface HoldingDto { teamId: string; available: number; locked: number; averagePrice: number }
 interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[] }
 interface OrderDto { id: number; teamId: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; price: number; quantity: number; remaining: number; createdAt: string }
@@ -110,6 +110,18 @@ async function ensureLogin(): Promise<boolean> {
   }
 }
 
+const LEAGUES: Record<string, League> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
+
+/** 구단 목록은 서버가 정한다(운영자가 리그 구단을 등록할 수 있다). 목록이 바뀌었을 때만 바꿔 끼운다 */
+function syncTeams(list: QuoteDto[]) {
+  const same = list.length === TEAMS.length && list.every((q, i) => q.id === TEAMS[i].id && q.name === TEAMS[i].name)
+  if (same) return
+  const next = list.filter((q) => LEAGUES[q.league]).map((q) => ({
+    id: q.id, name: q.name, short: q.shortName, league: LEAGUES[q.league], color: q.color, basePrice: q.basePrice,
+  }))
+  TEAMS.splice(0, TEAMS.length, ...next)
+}
+
 async function refresh() {
   const [q, a, o, t, r, al, m, d, of, sub] = await Promise.all([
     api<QuoteDto[]>('GET', '/api/teams'),
@@ -124,6 +136,7 @@ async function refresh() {
     api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
   ])
   await Promise.all(Object.keys(sockets).map(loadPosts))
+  syncTeams(q)
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
   account = a
   orders = o
@@ -231,7 +244,7 @@ function build(): State {
     const last = q?.lastPrice ?? team.basePrice
     const intraday = (feed?.trades ?? []).map((t) => ({ ts: Date.parse(t.executedAt), price: t.price })).reverse()
     markets[team.id] = {
-      base: q?.basePrice ?? team.basePrice, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
+      base: q?.basePrice ?? team.basePrice, listed: quotes[team.id]?.listed ?? true, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
       daily: [], intraday: intraday.length ? intraday : [{ ts: Date.now(), price: last }],
     }
     books[team.id] = toBook(team.id, feed)
