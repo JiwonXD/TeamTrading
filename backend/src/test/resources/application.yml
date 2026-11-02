@@ -16,3 +16,5 @@ teamtrading:
     auto-reward: false
   monitoring:
     reconcile: false
+  match-feed:
+    auto-sync: false

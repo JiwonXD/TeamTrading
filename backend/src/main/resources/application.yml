@@ -27,3 +27,15 @@ management:
         http.server.requests: true
       slo:
         http.server.requests: [50ms, 100ms, 250ms, 500ms, 1s]
+# 경기 일정·결과 수집(API-Sports). 키가 없으면 수집하지 않는다. 리그 번호는 제공처의 /leagues로 확인한다(docs/operations.md)
+teamtrading:
+  match-feed:
+    api-key: ${MATCH_FEED_API_KEY:}
+    daily-request-limit: 90
+    leagues:
+      - source: api-baseball
+        league: KBO
+        league-id: 5
+      - source: api-football
+        league: K_LEAGUE
+        league-id: 292
