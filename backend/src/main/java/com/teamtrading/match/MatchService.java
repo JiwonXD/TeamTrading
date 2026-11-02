@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 경기 일정·결과와 배당 지급.
@@ -158,6 +159,11 @@ public class MatchService {
         for (Payee p : payees)
             points.grantDividend(p.accountId(), m.id() + ":" + p.teamId() + ":" + p.accountId(), p.amount());
         log.info("match {} dividend paid: {} {} DPS {} to {} holdings", m.id(), kind, teams, dps, payees.size());
+    }
+
+    /** 출처의 경기 번호로 찾는다 */
+    public Optional<Match> findBySource(String source, String sourceRef) {
+        return store.findBySource(source, sourceRef);
     }
 
     public Match match(long id) {

@@ -93,3 +93,30 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 3. 청약이 마감되면 배정되고, 상장 시각까지 동시호가로 지정가 주문을 모은다. 상장 시각에 단일가로 체결한 뒤 연속 매매로 넘어간다.
 
 공모를 취소하면 그 구단은 다시 공모할 때까지 거래하지 않는다. 사용자가 적을 때 구단을 늘리면 호가가 얇아지므로 사용자 수를 보고 늘린다(ADR 0019).
+
+## 경기 데이터 수집
+
+KBO·K리그 일정과 결과는 API-Sports에서 받는다(ADR 0024). 키가 없으면 수집하지 않고, 운영자가 `/api/admin/matches`로 넣는다.
+
+1. https://dashboard.api-sports.io 에서 무료 계정을 만들고 키를 `.env`의 `MATCH_FEED_API_KEY`에 넣은 뒤 다시 띄운다. 같은 키로 API-Baseball과 API-Football을 둘 다 쓴다(각각 하루 100회).
+2. 리그 번호와 시즌을 확인한다. 기본값은 KBO 5, K리그1 292다. 다르면 `teamtrading.match-feed.leagues`를 고친다. 무료 요금제에서 올해 시즌이 막혀 있으면 응답의 `errors`에 이유가 온다.
+   ```
+   curl -H "x-apisports-key: $KEY" "https://v1.baseball.api-sports.io/leagues?country=South-Korea"
+   curl -H "x-apisports-key: $KEY" "https://v3.football.api-sports.io/leagues?country=South-Korea"
+   ```
+3. 운영자 세션으로 지금 바로 받아 본다. 연결하지 않은 팀은 `unmappedTeams`에 "팀 번호 이름"으로 나온다.
+   ```
+   POST /api/admin/match-feed/sync
+   ```
+4. 구단마다 제공처 팀 번호를 잇고 3을 다시 한다. 한 팀 번호는 한 구단에만 이을 수 있다.
+   ```
+   PUT /api/admin/teams/lg/feed
+   {"source":"api-baseball","externalId":"<팀 번호>"}
+   ```
+
+그 뒤에는 6시간마다 시즌 일정을, 15분마다 끝났을 경기의 결과를 받는다. 로그에서 `match feed`로 찾는다. 확인할 것:
+
+- `conflicts`: 끝난 경기의 취소, 취소한 경기의 결과, 팀이 바뀐 경기 번호. 자동으로 바꾸지 않았으니 사실을 확인하고 운영자 API로 고친다.
+- `moved later ... keeping`: 경기 중에 시작 시각을 늦춘 변경을 받지 않았다. 실제로 늦게 시작했는지 확인한다.
+- 시작하고 48시간이 지나도 결과가 없는 경기는 더 묻지 않는다. `GET /api/matches`에서 SCHEDULED로 남은 지난 경기를 보고 결과를 넣거나 취소한다.
+- `daily request limit reached`: 그날 요청을 다 썼다. 한국 시간 자정에 다시 센다.

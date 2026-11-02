@@ -23,6 +23,7 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 
 - 키 없이 먼저 시험하려면 `.env`에서 `SPRING_PROFILES_ACTIVE=demo`로 둔다. 닉네임 로그인과 시연용 가상 매매·경기가 켜진다. 운영에서는 `oauth`로 둔다.
 - 운영자 지정: 운영할 계정으로 로그인한 뒤 `/api/accounts/me`의 `id`를 `ADMIN_ACCOUNT_IDS`에 넣고 `docker compose up -d backend`로 다시 띄운다.
+- 실제 경기 일정·결과(KBO·K리그)를 받으려면 API-Sports 무료 키를 `MATCH_FEED_API_KEY`에 넣고 구단과 제공처 팀 번호를 잇는다([운영 점검](operations.md#경기-데이터-수집)). 비워 두면 운영자가 경기를 직접 넣는다.
 - 소셜 로그인 콜백 주소는 `https://{도메인}/login/oauth2/code/{kakao|naver|google}`이다. 서버는 nginx가 넘기는 `X-Forwarded-*`를 믿는다(`SERVER_FORWARD_HEADERS_STRATEGY=native`). 그래서 콜백 주소와 쿠키의 Secure 속성이 바깥 주소 기준으로 정해진다.
 
 ## 베타: 집 PC에서 돌리기
