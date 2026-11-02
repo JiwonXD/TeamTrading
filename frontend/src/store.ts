@@ -11,7 +11,7 @@ export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
 export type { ReportReason } from './store.server'
-export type { LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
+export type { Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
@@ -43,6 +43,10 @@ export const settleMatches = impl.settleMatches
 /** 서버 모드에서 로그인이 필요하면 로그인 방법, 아니면 null */
 export const getLogin = (): server.LoginOptions | null => (mode === 'server' ? server.getLogin() : null)
 export const devLogin = server.devLogin
+
+/** 서버 모드의 연결 상태. 시뮬레이션 모드는 늘 live */
+export const getConnection = (): server.Connection =>
+  mode === 'server' ? server.getConnection() : { status: 'live', lastSync: null }
 
 /** 서버 모드의 최근 경기(실제 또는 시연용). 시뮬레이션 모드는 null */
 export const getMatches = (): server.MatchDto[] | null => (mode === 'server' ? server.getMatches() : null)
