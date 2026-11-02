@@ -122,6 +122,45 @@ jobs:
             backend.log
             frontend.log
 
+  chaos:
+    name: Kill -9 during trading and recover (MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: teamtrading
+          MYSQL_USER: teamtrading
+          MYSQL_PASSWORD: teamtrading
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 주문을 받는 중에 서버를 세 번 강제 종료하고, 재시작할 때마다 응답받은 주문 보존·재시도 멱등성·대사 일치를 확인한다
+      - run: tools/chaos/run.sh
+        env:
+          ROUNDS: 3
+          USERS: 10
+          WORK: chaos-work
+          MYSQL_ROOT: mysql -h127.0.0.1 -uroot -proot
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: chaos-work
+          path: chaos-work
+
   frontend:
     name: Frontend lint, test, build
     runs-on: ubuntu-latest
