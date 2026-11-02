@@ -4,6 +4,9 @@ import com.teamtrading.api.ApiDtos.FeedMessage;
 import com.teamtrading.trading.MarketUpdate;
 import com.teamtrading.trading.NotFoundException;
 import com.teamtrading.trading.TradingService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -35,9 +38,16 @@ class MarketFeedHandler extends TextWebSocketHandler {
     /** teamId → (세션 id → 구독자) */
     private final Map<String, Map<String, Subscriber>> subscribers = new ConcurrentHashMap<>();
 
-    MarketFeedHandler(TradingService trading, ObjectMapper json) {
+    private final Counter dropped;
+
+    MarketFeedHandler(TradingService trading, ObjectMapper json, MeterRegistry registry) {
         this.trading = trading;
         this.json = json;
+        this.dropped = Counter.builder("teamtrading.feed.dropped")
+                .description("큐가 넘쳐 끊은 느린 실시간 시세 세션 수").register(registry);
+        Gauge.builder("teamtrading.feed.sessions", subscribers,
+                        m -> m.values().stream().mapToInt(Map::size).sum())
+                .description("실시간 시세 구독 세션 수").register(registry);
     }
 
     @Override
@@ -47,7 +57,7 @@ class MarketFeedHandler extends TextWebSocketHandler {
         session.getAttributes().put("teamId", teamId);
         try {
             trading.subscribe(teamId, SNAPSHOT_TRADES, snapshot -> {
-                Subscriber subscriber = new Subscriber(session);
+                Subscriber subscriber = new Subscriber(session, dropped);
                 subscribers.computeIfAbsent(teamId, k -> new ConcurrentHashMap<>()).put(session.getId(), subscriber);
                 subscriber.offer(json.writeValueAsString(FeedMessage.of("snapshot", snapshot)));
             });
@@ -77,15 +87,20 @@ class MarketFeedHandler extends TextWebSocketHandler {
         final WebSocketSession session;
         final BlockingQueue<String> queue = new ArrayBlockingQueue<>(QUEUE_LIMIT);
         final Thread sender;
+        private final Counter dropped;
 
-        Subscriber(WebSocketSession session) {
+        Subscriber(WebSocketSession session, Counter dropped) {
             this.session = session;
+            this.dropped = dropped;
             this.sender = Thread.ofVirtual().start(this::drain);
         }
 
         /** 락 안에서 불리므로 막히는 일(전송, 연결 닫기)은 하지 않고 전송 스레드에 맡긴다 */
         void offer(String message) {
-            if (!queue.offer(message)) sender.interrupt();
+            if (!queue.offer(message)) {
+                dropped.increment();
+                sender.interrupt();
+            }
         }
 
         private void drain() {
