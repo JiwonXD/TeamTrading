@@ -54,7 +54,7 @@ export default function Portfolio() {
           <div key={o.id} className="order-row">
             <span className={o.side === 'buy' ? 'up' : 'down'}>{teamById(o.teamId).short} {o.side === 'buy' ? '구매' : '판매'}</span>
             <span>{fmt(o.price)}P · {o.remaining}/{o.qty}주</span>
-            <button className="chip-btn" onClick={() => { cancel(ME, o.teamId, o.id); showToast('주문을 취소했어요') }}>취소</button>
+            <button className="chip-btn" onClick={() => cancel(ME, o.teamId, o.id).then(() => showToast('주문을 취소했어요'))}>취소</button>
           </div>
         ))}
       </section>

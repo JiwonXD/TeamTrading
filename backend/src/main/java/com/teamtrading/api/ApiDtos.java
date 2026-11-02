@@ -17,6 +17,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Function;
 
 /** API 요청·응답 형식. 도메인 객체를 그대로 내보내지 않고, 상대 계정 정보는 빼고 내보낸다 */
 final class ApiDtos {
@@ -74,14 +75,24 @@ final class ApiDtos {
         }
     }
 
-    record RankingEntry(int rank, String nickname, long totalValue, double returnRate) {
+    /** me: 요청한 계정의 행인지. 계정 id는 지금 인증 수단이라 내보내지 않는다 */
+    record RankingEntry(int rank, String nickname, long totalValue, double returnRate, boolean me) {
     }
 
-    record AlertResponse(String kind, String teamId, long tradeId, String accountA, String accountB,
+    /** 내 체결. side는 내가 산 쪽인지 판 쪽인지 */
+    record MyTradeResponse(long id, String teamId, Side side, long price, long quantity, Instant executedAt) {
+        static MyTradeResponse of(Trade t, String accountId) {
+            return new MyTradeResponse(t.id(), t.teamId(), t.buyerId().equals(accountId) ? Side.BUY : Side.SELL,
+                    t.price(), t.quantity(), t.executedAt());
+        }
+    }
+
+    /** 계정은 닉네임으로 보여준다. 계정 id는 지금 인증 수단이라 내보내면 그 계정으로 주문할 수 있다 */
+    record AlertResponse(String kind, String teamId, long tradeId, String nicknameA, String nicknameB,
                          String message, Instant detectedAt) {
-        static AlertResponse of(Alert a) {
-            return new AlertResponse(a.kind().name(), a.teamId(), a.tradeId(), a.accountA(), a.accountB(),
-                    a.message(), a.detectedAt());
+        static AlertResponse of(Alert a, Function<String, String> nickname) {
+            return new AlertResponse(a.kind().name(), a.teamId(), a.tradeId(), nickname.apply(a.accountA()),
+                    nickname.apply(a.accountB()), a.message(), a.detectedAt());
         }
     }
 

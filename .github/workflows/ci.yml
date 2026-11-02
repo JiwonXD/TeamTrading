@@ -60,6 +60,61 @@ jobs:
       # 같은 DB를 공유하므로 데이터를 직접 조작하는 테스트는 빼고, 동시 매매 후 총량 보존·대사 일치만 실제 InnoDB에서 확인한다
       - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares'
 
+  e2e:
+    name: End-to-end (server mode, MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: teamtrading
+          MYSQL_USER: teamtrading
+          MYSQL_PASSWORD: teamtrading
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Start backend with demo traders
+        working-directory: backend
+        run: |
+          SPRING_PROFILES_ACTIVE=demo nohup ./gradlew bootRun > ../backend.log 2>&1 &
+          for i in $(seq 90); do curl -sf localhost:8080/api/teams > /dev/null && exit 0; sleep 2; done
+          cat ../backend.log; exit 1
+      - name: Start frontend in server mode
+        working-directory: frontend
+        run: |
+          npm ci
+          nohup npm run dev:server -- --port 5173 --strictPort > ../frontend.log 2>&1 &
+          for i in $(seq 30); do curl -sf localhost:5173 > /dev/null && exit 0; sleep 1; done
+          cat ../frontend.log; exit 1
+      - name: Run Playwright
+        working-directory: frontend
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            frontend/playwright-report
+            backend.log
+            frontend.log
+
   frontend:
     name: Frontend lint, test, build
     runs-on: ubuntu-latest

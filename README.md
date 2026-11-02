@@ -58,9 +58,10 @@ docker compose up -d     # 로컬 MySQL 8.4
 | POST | `/api/accounts` | 계정 만들기 (100만P 지급) |
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |
 | GET | `/api/accounts/me/orders` | 내 대기 주문 |
+| GET | `/api/accounts/me/trades?limit=20` | 내 체결 내역 |
 | POST | `/api/orders` | 주문. `clientOrderId`가 같은 재시도는 처음 결과를 그대로 돌려주고, 같은 번호로 다른 주문을 보내면 409 |
 | DELETE | `/api/orders/{orderId}` | 주문 취소 |
-| GET | `/api/rankings` | 수익률 랭킹 |
+| GET | `/api/rankings` | 수익률 랭킹. 헤더를 보내면 내 행에 `me: true` (계정 id는 내보내지 않음) |
 | GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (운영자용) |
 | GET | `/api/surveillance/reconciliation` | 원장과 잔고 대사 결과 (운영자용) |
 
@@ -77,7 +78,21 @@ docker compose up -d     # 로컬 MySQL 8.4
 ```bash
 cd frontend
 npm install
-npm run dev     # 개발 서버
-npm test        # 매칭 엔진 테스트
-npm run build   # dist/index.html 한 파일로 빌드
+npm run dev          # 브라우저 안 시뮬레이션 모드 (서버 없이)
+npm run dev:server   # 서버 모드: /api, /ws를 localhost:8080 백엔드로 넘긴다
+npm test             # 매칭 엔진, 실시간 시세 처리 테스트
+npm run build        # dist/index.html 한 파일로 빌드 (시뮬레이션 모드, 미리보기용)
 ```
+
+서버 모드로 전체를 띄우는 순서:
+
+```bash
+cd backend && docker compose up -d
+SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun   # demo: 시뮬레이션 계정 20개가 주문 API로 함께 거래
+cd frontend && npm run dev:server
+npm run e2e                                     # Playwright E2E + axe 접근성 검사 (위 두 개가 떠 있어야 함)
+```
+
+- 서버 모드 화면은 시세 목록·내 계좌·랭킹·감시 기록을 3초마다 받아오고, 보고 있는 구단의 호가와 체결은 WebSocket으로 받는다. 받은 `seq`가 건너뛰면 다시 접속해 스냅숏부터 받는다.
+- 주문은 `clientOrderId`를 먼저 정해 보내고, 응답을 못 받으면 같은 번호로 한 번 더 보낸다.
+- 토론 글과 경기 배당은 아직 서버에 없다. 서버 모드에서 토론 글은 새로고침하면 사라지고 배당 정산은 비활성화된다.

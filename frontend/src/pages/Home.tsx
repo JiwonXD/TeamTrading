@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
-import { ME, START_POINTS, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, START_POINTS, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 
 type Sort = 'volume' | 'up' | 'down'
@@ -37,8 +37,8 @@ export default function Home() {
       <section className="card">
         <div className="row-between">
           <h2>오늘의 경기</h2>
-          <button className="chip-btn" disabled={allSettled} onClick={() => showToast(settleMatches())}>
-            {allSettled ? '정산 완료' : '배당 정산하기'}
+          <button className="chip-btn" disabled={allSettled || mode === 'server'} onClick={() => showToast(settleMatches())}>
+            {mode === 'server' ? '준비 중' : allSettled ? '정산 완료' : '배당 정산하기'}
           </button>
         </div>
         <div className="match-list">
@@ -95,7 +95,7 @@ export default function Home() {
       </section>
       <p className="footnote">
         팀트레이딩(팀트)은 무료 포인트로 즐기는 모의투자 서비스예요. 포인트는 현금으로 바꾸거나 다른 계정에 보낼 수 없어요.
-        이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.
+        {mode === 'server' ? ' 데모 서버에서는 시뮬레이션 계정도 일반 유저와 같은 방식으로 함께 거래해요.' : ' 이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.'}
       </p>
     </>
   )

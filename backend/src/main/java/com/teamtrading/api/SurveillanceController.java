@@ -23,7 +23,8 @@ class SurveillanceController {
 
     @GetMapping("/api/surveillance/alerts")
     List<AlertResponse> alerts(@RequestParam(defaultValue = "50") int limit) {
-        return trading.alerts(Math.min(limit, 200)).stream().map(AlertResponse::of).toList();
+        return trading.alerts(Math.min(limit, 200)).stream()
+                .map(a -> AlertResponse.of(a, id -> trading.account(id).nickname())).toList();
     }
 
     @GetMapping("/api/surveillance/reconciliation")

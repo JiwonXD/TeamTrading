@@ -4,11 +4,11 @@
   --surface-2: #f2f4f6;
   --text: #191f28;
   --text-2: #4e5968;
-  --text-3: #8b95a1;
+  --text-3: #636d7a;
   --line: #e5e8eb;
-  --blue: #3182f6;
+  --blue: #1b64da;
   --blue-bg: #e8f3ff;
-  --red: #f04452;
+  --red: #d22030;
   --red-bg: #ffeeee;
   --warn: #ff9f0a;
   --backdrop: rgba(0, 0, 0, 0.4);
@@ -21,7 +21,7 @@
     --surface-2: #26262d;
     --text: #e4e4e5;
     --text-2: #b0b0b8;
-    --text-3: #7e7e87;
+    --text-3: #9a9aa3;
     --line: #2c2c35;
     --blue: #4c97ff;
     --blue-bg: #1b2a40;
@@ -37,7 +37,7 @@
   --surface-2: #26262d;
   --text: #e4e4e5;
   --text-2: #b0b0b8;
-  --text-3: #7e7e87;
+  --text-3: #9a9aa3;
   --line: #2c2c35;
   --blue: #4c97ff;
   --blue-bg: #1b2a40;
@@ -92,8 +92,8 @@ main.with-cta { padding-bottom: 96px; }
   height: 56px; padding: 0 16px;
   background: var(--bg);
 }
-.brand { font-size: 20px; font-weight: 800; color: var(--blue); }
-.topbar-title { font-weight: 700; font-size: 17px; }
+.brand { margin: 0; font-size: 20px; font-weight: 800; color: var(--blue); }
+.topbar-title { margin: 0; font-weight: 700; font-size: 17px; }
 .topbar-right { margin-left: auto; }
 .icon-btn { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -6px; }
 .text-btn { color: var(--text-3); font-size: 14px; }
@@ -179,7 +179,7 @@ main.with-cta { padding-bottom: 96px; }
   display: flex; flex-direction: column; justify-content: center; align-items: center;
   font-weight: 700; font-variant-numeric: tabular-nums; border: 1.5px solid transparent; position: relative;
 }
-.ob-price small { font-size: 11px; font-weight: 400; opacity: 0.8; }
+.ob-price small { font-size: 11px; font-weight: 400; }
 .ob-price em { position: absolute; right: 4px; top: 2px; font-style: normal; font-size: 9px; color: var(--text-3); }
 .ob-row.current .ob-price { border-color: var(--text); }
 .ob-total { display: flex; justify-content: space-between; padding: 12px 20px 0; font-size: 13px; color: var(--text-2); }

@@ -19,7 +19,9 @@ export function timeAgo(ts: number) {
 
 export function Logo({ team, size = 40 }: { team: Team; size?: number }) {
   return (
+    // 구단 이름이 항상 옆에 있으므로 로고는 장식으로 둔다
     <span
+      aria-hidden="true"
       className="logo"
       style={{ background: team.color, width: size, height: size, fontSize: size * (team.short.length > 2 ? 0.28 : 0.34) }}
     >
@@ -36,9 +38,9 @@ export function Header({ title, onBack, right }: { title?: string; onBack?: () =
           <svg width="24" height="24" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       ) : (
-        <span className="brand">팀트</span>
+        title ? <span className="brand">팀트</span> : <h1 className="brand">팀트</h1>
       )}
-      {title && <span className="topbar-title">{title}</span>}
+      {title && <h1 className="topbar-title">{title}</h1>}
       <span className="topbar-right">{right}</span>
     </header>
   )

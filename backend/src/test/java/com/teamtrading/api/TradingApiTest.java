@@ -1,6 +1,9 @@
 package com.teamtrading.api;
 
 import com.jayway.jsonpath.JsonPath;
+import com.teamtrading.engine.OrderType;
+import com.teamtrading.engine.Side;
+import com.teamtrading.trading.TradingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +23,9 @@ class TradingApiTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    TradingService trading;
 
     private String openAccount(String nickname) throws Exception {
         String body = mvc.perform(post("/api/accounts").contentType(MediaType.APPLICATION_JSON)
@@ -88,6 +94,41 @@ class TradingApiTest {
                 .andExpect(status().isConflict());
         mvc.perform(get("/api/accounts/me/orders").header("X-Account-Id", me))
                 .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void showsMyTradesAndMarksMeInRankingWithoutExposingAccountIds() throws Exception {
+        String seller = openAccount("my-seller");
+        String buyer = openAccount("my-buyer");
+        trading.grantShares(seller, "ssg", 5, 13_750);
+        trading.place(seller, "s-1", "ssg", Side.SELL, OrderType.LIMIT, 13_750, 5);
+        trading.place(buyer, "b-1", "ssg", Side.BUY, OrderType.LIMIT, 13_750, 2);
+
+        mvc.perform(get("/api/accounts/me/trades").header("X-Account-Id", buyer))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].side").value("BUY"))
+                .andExpect(jsonPath("$[0].quantity").value(2));
+        mvc.perform(get("/api/accounts/me/trades").header("X-Account-Id", seller))
+                .andExpect(jsonPath("$[0].side").value("SELL"));
+
+        String ranking = mvc.perform(get("/api/rankings").header("X-Account-Id", buyer))
+                .andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(ranking).doesNotContain(buyer).doesNotContain(seller);
+        java.util.List<String> mine = JsonPath.read(ranking, "$[?(@.me == true)].nickname");
+        org.assertj.core.api.Assertions.assertThat(mine).containsExactly("my-buyer");
+    }
+
+    @Test
+    void surveillanceAlertsShowNicknamesNotAccountIds() throws Exception {
+        String a = openAccount("pair-a");
+        String b = openAccount("pair-b");
+        trading.grantShares(a, "nc", 10, 11_600);
+        for (int i = 0; i < 5; i++) {
+            trading.place(a, "a-" + i, "nc", Side.SELL, OrderType.LIMIT, 11_600, 1);
+            trading.place(b, "b-" + i, "nc", Side.BUY, OrderType.LIMIT, 11_600, 1);
+        }
+        String alerts = mvc.perform(get("/api/surveillance/alerts")).andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(alerts).contains("pair-a", "pair-b").doesNotContain(a).doesNotContain(b);
     }
 
     @Test
