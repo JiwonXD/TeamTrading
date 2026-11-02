@@ -14,6 +14,8 @@ import com.teamtrading.fds.Alert;
 import com.teamtrading.fds.FdsDetector;
 import com.teamtrading.ledger.Journal;
 import com.teamtrading.ledger.Ledger;
+import com.teamtrading.points.PointIssuer;
+import com.teamtrading.points.PointSource;
 import com.teamtrading.team.Team;
 import com.teamtrading.team.TeamCatalog;
 import com.teamtrading.trading.StoredOrder.Status;
@@ -61,7 +63,7 @@ import java.util.function.Function;
 @Service
 public class TradingService {
 
-    public static final long START_POINTS = 1_000_000;
+    public static final long START_POINTS = PointSource.SIGNUP.amount();
     private static final int MAX_ALERTS = 200;
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
 
@@ -69,6 +71,7 @@ public class TradingService {
     private final OrderStore orders;
     private final TradeStore trades;
     private final Ledger ledger;
+    private final PointIssuer points;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final ApplicationEventPublisher events;
@@ -78,11 +81,13 @@ public class TradingService {
     private final AtomicLong ids = new AtomicLong();
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
-                          Ledger ledger, TransactionTemplate tx, Clock clock, ApplicationEventPublisher events) {
+                          Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
+                          ApplicationEventPublisher events) {
         this.accounts = accounts;
         this.orders = orders;
         this.trades = trades;
         this.ledger = ledger;
+        this.points = points;
         this.tx = tx;
         this.clock = clock;
         this.events = events;
@@ -104,9 +109,10 @@ public class TradingService {
 
     public Account openAccount(String nickname) {
         return tx.execute(s -> {
-            Account account = accounts.create(UUID.randomUUID().toString(), nickname, START_POINTS, clock.instant());
-            ledger.post(Journal.openAccount(account.id(), START_POINTS), clock.instant());
-            return account;
+            String id = UUID.randomUUID().toString();
+            accounts.create(id, nickname, clock.instant());
+            points.grantSignup(id);
+            return accounts.find(id).orElseThrow();
         });
     }
 

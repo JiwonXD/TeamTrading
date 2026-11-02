@@ -25,7 +25,8 @@ public class Ledger {
         this.jdbc = jdbc;
     }
 
-    public void post(Journal journal, Instant at) {
+    /** 전표를 남기고 전표 번호를 돌려준다 */
+    public long post(Journal journal, Instant at) {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
@@ -46,6 +47,7 @@ public class Ledger {
                     ps.setString(4, e.bucket().name());
                     ps.setLong(5, e.amount());
                 });
+        return journalId;
     }
 
     /** 계정별 칸마다 원장 합계. 발행처는 빼고 0인 칸도 뺀다 */

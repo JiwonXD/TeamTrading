@@ -46,6 +46,7 @@ class TradingServiceTest {
     @Autowired TransactionTemplate tx;
     @Autowired JdbcTemplate jdbc;
     @Autowired Ledger ledger;
+    @Autowired com.teamtrading.points.PointIssuer points;
     @Autowired Reconciliation reconciliation;
 
     private String buyer;
@@ -185,7 +186,7 @@ class TradingServiceTest {
         place(buyer, Side.BUY, OrderType.LIMIT, 18_300, 7);
         var before = trading.orderBook("lg", 10);
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC(), e -> {});
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {});
         restarted.recover();
 
         var after = restarted.orderBook("lg", 10);
@@ -209,7 +210,7 @@ class TradingServiceTest {
             ledger.post(Journal.lock(9_999, buyer, Journal.POINT, 180_000), order.createdAt());
         });
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx, Clock.systemUTC(), e -> {});
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {});
         restarted.recover();
 
         assertThat(orderStore.find(9_999).orElseThrow().status()).isEqualTo(StoredOrder.Status.CANCELED);
@@ -227,7 +228,7 @@ class TradingServiceTest {
                 throw new IllegalStateException("db down");
             }
         };
-        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, tx, Clock.systemUTC(), e -> {});
+        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, points, tx, Clock.systemUTC(), e -> {});
         service.recover();
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
 
@@ -285,7 +286,7 @@ class TradingServiceTest {
     @Test
     void publishesNumberedUpdatesPerTeam() {
         List<MarketUpdate> updates = new ArrayList<>();
-        TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, tx,
+        TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx,
                 Clock.systemUTC(), e -> updates.add((MarketUpdate) e));
         service.recover();
 
@@ -312,7 +313,7 @@ class TradingServiceTest {
 
         // 시장가 매수는 상한가(23,950)로 묶였다가 18,400에 체결되고 차액을 돌려받는다
         assertThat(jdbc.queryForList(
-                "SELECT kind FROM ledger_journals WHERE kind <> 'OPEN_ACCOUNT' AND kind <> 'GRANT' ORDER BY id", String.class))
+                "SELECT kind FROM ledger_journals WHERE kind NOT IN ('ISSUE', 'GRANT') ORDER BY id", String.class))
                 .containsExactly("LOCK", "LOCK", "TRADE");
         Long tradeJournal = jdbc.queryForObject("SELECT id FROM ledger_journals WHERE kind = 'TRADE'", Long.class);
         assertThat(jdbc.queryForList("SELECT owner_id, asset, bucket, amount FROM ledger_entries WHERE journal_id = ? ORDER BY id",
