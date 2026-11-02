@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 로그인 수단으로 계정을 찾거나 처음이면 만들고, 세션에 로그인 상태를 남긴다.
@@ -43,7 +42,7 @@ public class AccountLogin {
         if (existing.isPresent()) return existing.get();
         try {
             return tx.execute(s -> {
-                String id = trading.openAccount(randomNickname()).id();
+                String id = trading.openAccount().id();
                 identities.link(provider, subject, id, clock.instant());
                 return id;
             });
@@ -59,9 +58,5 @@ public class AccountLogin {
         context.setAuthentication(new AccountAuthentication(accountId, props.admins().contains(accountId)));
         SecurityContextHolder.setContext(context);
         contexts.saveContext(context, req, res);
-    }
-
-    private static String randomNickname() {
-        return "투자자" + ThreadLocalRandom.current().nextInt(1000, 10000);
     }
 }

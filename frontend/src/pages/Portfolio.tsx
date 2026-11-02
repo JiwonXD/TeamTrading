@@ -1,6 +1,7 @@
 import { TEAMS, teamById } from '../data/teams'
 import { ME, START_POINTS, cancel, lockedPoints, mode, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
 import AdReward from '../components/AdReward'
+import Nickname from '../components/Nickname'
 import { Header, Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 export default function Portfolio() {
@@ -30,6 +31,7 @@ export default function Portfolio() {
         </div>
       </section>
 
+      <Nickname />
       <AdReward />
 
       <section className="card list-card">

@@ -188,6 +188,32 @@ test('a demo ad pays points only after the server confirms the watch', async ({ 
   await expect(page.locator('.split b').first()).not.toHaveText(before!)
 })
 
+test('changing my nickname follows the server rules and locks it for a week', async ({ page }) => {
+  await signIn(page, '#portfolio')
+  const card = page.locator('.profile-card')
+  await expect(card).toContainText(/투자자\d{6}/)
+
+  await card.getByRole('button', { name: '바꾸기' }).click()
+  const dialog = page.getByRole('dialog', { name: '닉네임 바꾸기' })
+  await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  const input = dialog.getByLabel(/2~12자/)
+  await input.fill('팀트운영자')
+  await dialog.getByRole('button', { name: '바꾸기' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('운영자')
+
+  const name = `닉${Date.now() % 1_000_000}`
+  await input.fill(name)
+  await dialog.getByRole('button', { name: '바꾸기' }).click()
+  await expect(page.locator('.toast')).toContainText(`${name}(으)로 바꿨어요`)
+  await expect(dialog).toBeHidden()
+  await expect(card.locator('h2')).toHaveText(name)
+  await expect(card).toContainText('부터 다시 바꿀 수 있어요')
+  await expect(card.getByRole('button', { name: '바꾸기' })).toBeDisabled()
+})
+
 // 개발 서버의 /src/api/ 모듈은 막지 않도록 경로로 고른다
 const serverApi = (url: URL) => url.pathname.startsWith('/api/')
 
