@@ -5,6 +5,7 @@ import com.teamtrading.leaderboard.DailyCloseStore.Snapshot;
 import com.teamtrading.points.PointSource;
 import com.teamtrading.team.Team;
 import com.teamtrading.team.TeamCatalog;
+import com.teamtrading.trading.TradingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -46,12 +47,15 @@ public class DailyCloses {
 
     private final DailyCloseStore store;
     private final TeamCatalog catalog;
+    private final TradingService trading;
     private final TransactionTemplate tx;
     private final Clock clock;
 
-    DailyCloses(DailyCloseStore store, TeamCatalog catalog, TransactionTemplate tx, Clock clock) {
+    DailyCloses(DailyCloseStore store, TeamCatalog catalog, TradingService trading, TransactionTemplate tx,
+                Clock clock) {
         this.store = store;
         this.catalog = catalog;
+        this.trading = trading;
         this.tx = tx;
         this.clock = clock;
     }
@@ -68,7 +72,8 @@ public class DailyCloses {
     @Scheduled(cron = "0 1 0 * * *", zone = "Asia/Seoul")
     public void scheduled() {
         try {
-            catchUp();
+            // 마감한 날이 있으면 그 종가를 기준가로 새 날을 연다
+            if (catchUp() > 0) trading.startNewDay();
         } catch (RuntimeException e) {
             log.error("daily close failed", e);
         }

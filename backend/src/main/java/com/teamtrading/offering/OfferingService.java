@@ -73,8 +73,9 @@ public class OfferingService {
     public Offering create(String teamId, Long price, long totalShares, long maxPerAccount, Instant subscribeFrom,
                            Instant subscribeTo, Instant listingAt) {
         Team team = catalog.find(teamId).orElseThrow(() -> new NotFoundException("없는 구단이에요"));
-        long p = price != null ? price : trading.quote(teamId).lastPrice();
-        PriceRules.validate(OrderType.LIMIT, p, totalShares, team.basePrice()).ifPresent(reason -> {
+        var quote = trading.quote(teamId);
+        long p = price != null ? price : quote.lastPrice();
+        PriceRules.validate(OrderType.LIMIT, p, totalShares, quote.basePrice()).ifPresent(reason -> {
             throw new TradingException("공모가: " + reason);
         });
         if (maxPerAccount <= 0 || maxPerAccount > totalShares) throw new TradingException("1인 한도는 1주 이상, 공모 수량 이하여야 해요");

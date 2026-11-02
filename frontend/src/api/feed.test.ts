@@ -3,7 +3,7 @@ import { type FeedMessage, applyFeed } from './feed'
 
 const msg = (type: FeedMessage['type'], seq: number, tradeIds: number[] = [], epoch = 1): FeedMessage => ({
   type, teamId: 'lg', epoch, seq,
-  quote: { lastPrice: 18450, high: 18450, low: 18450, volume: 0 },
+  quote: { basePrice: 18450, lastPrice: 18450, high: 18450, low: 18450, volume: 0 },
   asks: [{ price: 18500, quantity: seq }], bids: [],
   trades: tradeIds.map((id) => ({ id, price: 18450, quantity: 1, aggressor: 'BUY', executedAt: '2026-11-02T00:00:00Z' })),
 })

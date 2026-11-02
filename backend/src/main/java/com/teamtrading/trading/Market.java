@@ -27,7 +27,10 @@ final class Market {
     volatile Instant listingAt;
     final ReentrantLock lock = new ReentrantLock(true);
     private final Deque<Trade> recent = new ArrayDeque<>();
+    /** 기준가(전일 종가). 매일 일 마감 뒤 바뀐다 */
+    private long basePrice;
     private long lastPrice;
+    /** 당일(KST) 고가·저가·거래량 */
     private long high;
     private long low;
     private long volume;
@@ -37,20 +40,35 @@ final class Market {
     Market(Team team) {
         this.team = team;
         this.book = new OrderBook(team.id());
-        this.lastPrice = team.basePrice();
+        this.basePrice = team.basePrice();
+        this.lastPrice = basePrice;
         this.high = lastPrice;
         this.low = lastPrice;
     }
 
-    /** DB에서 읽은 체결 내역으로 시세를 다시 계산한다. recent는 최신이 앞 */
-    void restoreQuote(List<Trade> recentTrades, long high, long low, long volume) {
+    /** DB에서 읽은 체결 내역으로 현재가를 다시 정한다. recent는 최신이 앞 */
+    void restoreTrades(List<Trade> recentTrades) {
         recent.clear();
         recent.addAll(recentTrades);
-        if (recentTrades.isEmpty()) return;
-        lastPrice = recentTrades.getFirst().price();
-        this.high = high;
-        this.low = low;
-        this.volume = volume;
+        if (!recentTrades.isEmpty()) lastPrice = recentTrades.getFirst().price();
+    }
+
+    /** 기준가와 당일 시세를 정한다. 오늘 체결이 없으면 고가·저가는 현재가 */
+    void startDay(long basePrice, TradeStore.Stats today) {
+        this.basePrice = basePrice;
+        if (today.volume() == 0) {
+            high = lastPrice;
+            low = lastPrice;
+            volume = 0;
+        } else {
+            high = today.high();
+            low = today.low();
+            volume = today.volume();
+        }
+    }
+
+    long basePrice() {
+        return basePrice;
     }
 
     void resetBook() {
@@ -90,7 +108,7 @@ final class Market {
     }
 
     Quote quote() {
-        return new Quote(team, lastPrice, high, low, volume,
-                PriceRules.upperLimit(team.basePrice()), PriceRules.lowerLimit(team.basePrice()));
+        return new Quote(team, basePrice, lastPrice, high, low, volume,
+                PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice));
     }
 }

@@ -11,7 +11,7 @@ import { ME, START_POINTS, type Market, type OrderResult, type Post, type State,
 
 const POLL_MS = 3000
 
-interface QuoteDto { id: string; lastPrice: number; high: number; low: number; volume: number }
+interface QuoteDto { id: string; basePrice: number; lastPrice: number; high: number; low: number; volume: number }
 interface HoldingDto { teamId: string; available: number; locked: number; averagePrice: number }
 interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[] }
 interface OrderDto { id: number; teamId: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; price: number; quantity: number; remaining: number; createdAt: string }
@@ -231,7 +231,7 @@ function build(): State {
     const last = q?.lastPrice ?? team.basePrice
     const intraday = (feed?.trades ?? []).map((t) => ({ ts: Date.parse(t.executedAt), price: t.price })).reverse()
     markets[team.id] = {
-      last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
+      base: q?.basePrice ?? team.basePrice, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
       daily: [], intraday: intraday.length ? intraday : [{ ts: Date.now(), price: last }],
     }
     books[team.id] = toBook(team.id, feed)

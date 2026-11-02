@@ -94,9 +94,10 @@ class DemoTraders {
             }
             boolean aggressive = random.nextDouble() < 0.4;
             int ticks = aggressive ? -random.nextInt(3) : 1 + random.nextInt(5);
-            long last = trading.quote(team.id()).lastPrice();
+            var quote = trading.quote(team.id());
+            long last = quote.lastPrice();
             long price = step(last, side == Side.BUY ? -ticks : ticks);
-            price = Math.clamp(price, PriceRules.lowerLimit(team.basePrice()), PriceRules.upperLimit(team.basePrice()));
+            price = Math.clamp(price, quote.lowerLimit(), quote.upperLimit());
             trading.place(bot, UUID.randomUUID().toString(), team.id(), side, OrderType.LIMIT, price,
                     1 + random.nextInt(15));
         } catch (TradingException expected) {

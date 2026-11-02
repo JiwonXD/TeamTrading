@@ -47,7 +47,7 @@ final class ApiDtos {
                          long upperLimit, long lowerLimit) {
         static QuoteResponse of(Quote q) {
             var t = q.team();
-            return new QuoteResponse(t.id(), t.name(), t.shortName(), t.league().name(), t.basePrice(),
+            return new QuoteResponse(t.id(), t.name(), t.shortName(), t.league().name(), q.basePrice(),
                     q.lastPrice(), q.changeRate(), q.high(), q.low(), q.volume(), q.upperLimit(), q.lowerLimit());
         }
     }

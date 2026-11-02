@@ -20,6 +20,8 @@ export interface User {
 }
 
 export interface Market {
+  /** 기준가(전일 종가). 등락률과 가격제한폭의 기준. 서버 모드는 매일 일 마감 뒤 바뀐다 */
+  base: number
   last: number
   high: number
   low: number
