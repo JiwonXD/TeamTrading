@@ -67,6 +67,7 @@ export const finishDemoAd = server.finishDemoAd
 /** 서버 모드의 내 닉네임. 시뮬레이션 모드는 null */
 export const getProfile = (): ReturnType<typeof server.getProfile> => (mode === 'server' ? server.getProfile() : null)
 export const changeNickname = server.changeNickname
+export const withdraw = server.withdraw
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})

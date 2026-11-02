@@ -7,13 +7,20 @@ import com.teamtrading.api.ApiDtos.MyTradeResponse;
 import com.teamtrading.api.ApiDtos.NicknameRequest;
 import com.teamtrading.api.ApiDtos.OrderResponse;
 import com.teamtrading.api.ApiDtos.RankingEntry;
+import com.teamtrading.auth.Withdrawal;
 import com.teamtrading.trading.TradingService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -26,10 +33,22 @@ class AccountController {
 
     private final TradingService trading;
     private final NicknameService nicknames;
+    private final Withdrawal withdrawal;
 
-    AccountController(TradingService trading, NicknameService nicknames) {
+    AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal) {
         this.trading = trading;
         this.nicknames = nicknames;
+        this.withdrawal = withdrawal;
+    }
+
+    /** 탈퇴. 대기 주문을 취소하고 로그인 연결을 끊은 뒤 이 세션도 끝낸다 */
+    @DeleteMapping("/api/accounts/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void withdraw(@AuthenticationPrincipal String accountId, HttpServletRequest request) {
+        withdrawal.withdraw(accountId);
+        HttpSession session = request.getSession(false);
+        if (session != null) session.invalidate();
+        SecurityContextHolder.clearContext();
     }
 
     @GetMapping("/api/accounts/me")
@@ -62,6 +81,7 @@ class AccountController {
         }
         List<Row> rows = new ArrayList<>();
         for (Account a : trading.allAccounts()) {
+            if (a.withdrawn()) continue;
             long value = trading.totalValue(a);
             rows.add(new Row(a, value, (double) value / a.initialValue() - 1));
         }

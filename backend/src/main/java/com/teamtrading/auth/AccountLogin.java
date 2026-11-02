@@ -25,21 +25,24 @@ public class AccountLogin {
     private final TransactionTemplate tx;
     private final SecurityContextRepository contexts;
     private final AuthProperties props;
+    private final Withdrawal withdrawal;
     private final Clock clock;
 
     AccountLogin(IdentityStore identities, TradingService trading, TransactionTemplate tx,
-                 SecurityContextRepository contexts, AuthProperties props, Clock clock) {
+                 SecurityContextRepository contexts, AuthProperties props, Withdrawal withdrawal, Clock clock) {
         this.identities = identities;
         this.trading = trading;
         this.tx = tx;
         this.contexts = contexts;
         this.props = props;
+        this.withdrawal = withdrawal;
         this.clock = clock;
     }
 
     public String findOrCreate(String provider, String subject) {
         var existing = identities.accountId(provider, subject);
         if (existing.isPresent()) return existing.get();
+        withdrawal.checkRejoin(provider, subject);
         try {
             return tx.execute(s -> {
                 String id = trading.openAccount().id();

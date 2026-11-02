@@ -1,5 +1,7 @@
 package com.teamtrading.auth;
 
+
+import com.teamtrading.trading.TradingException;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,6 +14,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -34,7 +37,7 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain api(HttpSecurity http, SecurityContextRepository contexts,
                             ObjectProvider<ClientRegistrationRepository> registrations,
-                            ObjectProvider<AccountLogin> login) throws Exception {
+                            ObjectProvider<AccountLogin> login, Withdrawal withdrawal) throws Exception {
         http.csrf(c -> c.spa())
                 .securityContext(c -> c.securityContextRepository(contexts))
                 .anonymous(AbstractHttpConfigurer::disable)
@@ -43,6 +46,7 @@ class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .addFilterBefore(new WithdrawnSessionFilter(withdrawal), AuthorizationFilter.class)
                 .authorizeHttpRequests(a -> a
                         // 운영 지표는 외부에 공개하지 않는 관리 포트(8081)에서만 열린다
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
@@ -56,8 +60,14 @@ class SecurityConfig {
                 OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) auth;
                 String provider = token.getAuthorizedClientRegistrationId();
                 AccountLogin accounts = login.getObject();
-                accounts.signIn(accounts.findOrCreate(provider, subject(provider, token.getPrincipal().getAttributes())),
-                        req, res);
+                String accountId;
+                try {
+                    accountId = accounts.findOrCreate(provider, subject(provider, token.getPrincipal().getAttributes()));
+                } catch (TradingException e) {
+                    res.sendRedirect("/#signup-blocked");
+                    return;
+                }
+                accounts.signIn(accountId, req, res);
                 res.sendRedirect("/");
             }).failureHandler((req, res, e) -> res.sendRedirect("/#login-failed")));
         }

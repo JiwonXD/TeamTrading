@@ -432,6 +432,17 @@ export async function changeNickname(nickname: string): Promise<OrderResult> {
   }
 }
 
+/** 탈퇴. 서버가 세션을 끝내므로 다시 로그인 화면으로 돌아간다 */
+export async function withdraw(): Promise<OrderResult> {
+  try {
+    await api('DELETE', '/api/accounts/me')
+    start()
+    return { ok: true, message: '탈퇴했어요. 그동안 이용해 주셔서 고마워요' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '탈퇴하지 못했어요' }
+  }
+}
+
 /** 개발·시연 서버에서만 열려 있는 닉네임 로그인 */
 export async function devLogin(nickname: string): Promise<string | null> {
   try {

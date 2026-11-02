@@ -59,7 +59,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # 같은 DB를 공유하므로 데이터를 직접 조작하는 테스트는 빼고, 동시 매매 후 총량 보존·대사 일치와
       # 닉네임 고유 인덱스(대소문자 무시 비교, 겹친 INSERT 뒤에도 트랜잭션이 이어지는지)를 실제 InnoDB에서 확인한다
-      - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares' --tests '*PointIssuerTest.concurrentRewardsStayWithinDailyLimit' --tests '*NicknameTest'
+      - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares' --tests '*PointIssuerTest.concurrentRewardsStayWithinDailyLimit' --tests '*NicknameTest' --tests '*WithdrawalTest'
       # HTTP 주문 부하를 건 뒤에도 대사가 맞는지 본다. 지연·처리량은 기록만 한다
       - run: ./gradlew loadTest -Pload.users=20 -Pload.seconds=15
       - if: always()

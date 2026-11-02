@@ -6,6 +6,7 @@ import Portfolio from './pages/Portfolio'
 import Ranking from './pages/Ranking'
 import Watch from './pages/Watch'
 import Login from './pages/Login'
+import { Privacy, Terms } from './pages/Legal'
 
 function useOnline() {
   const [online, setOnline] = useState(() => navigator.onLine)
@@ -61,6 +62,14 @@ export default function App() {
   const teamMatch = hash.match(/^team-([a-z0-9-]+)$/)
   const login = getLogin()
   const conn = getConnection()
+
+  // 약관은 로그인·서버 연결과 상관없이 볼 수 있다
+  const legal = hash === 'terms' ? <Terms /> : hash === 'privacy' ? <Privacy /> : null
+  if (legal) return (
+    <div className="app">
+      <main>{legal}</main>
+    </div>
+  )
 
   // 서버 값을 한 번도 받지 못했으면 기본값을 보여주지 않고 연결 상태만 보여준다
   if (!login && (conn.status === 'connecting' || conn.status === 'unreachable')) return (

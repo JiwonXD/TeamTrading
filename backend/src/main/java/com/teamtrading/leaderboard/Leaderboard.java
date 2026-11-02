@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -80,7 +81,11 @@ public class Leaderboard {
         Map<String, Instant> created = store.accountCreatedAt();
         Set<String> flagged = flagged(windowStart);
         Map<String, String> names = new HashMap<>();
-        for (Account a : trading.allAccounts()) names.put(a.id(), a.nickname());
+        Set<String> withdrawn = new HashSet<>();
+        for (Account a : trading.allAccounts()) {
+            names.put(a.id(), a.nickname());
+            if (a.withdrawn()) withdrawn.add(a.id());
+        }
 
         record Row(String id, double rate, long pnl, int trades) {
         }
@@ -89,6 +94,8 @@ public class Leaderboard {
         String reason = null;
         for (var e : days.entrySet()) {
             String id = e.getKey();
+            // 탈퇴한 계정은 순위에서 뺀다. 남은 주식의 평가금은 계속 움직이지만 그 사람은 더 이상 없다
+            if (withdrawn.contains(id)) continue;
             double[] perf = performance(e.getValue(), from);
             Row row = new Row(id, perf[0], (long) perf[1], trades.getOrDefault(id, 0));
             String why = ineligible(row.trades(), created.get(id), flagged.contains(id));
