@@ -1,7 +1,7 @@
 package com.teamtrading.leaderboard;
 
 import com.teamtrading.account.Account;
-import com.teamtrading.fds.Alert;
+import com.teamtrading.fds.AlertStore;
 import com.teamtrading.leaderboard.DailyCloseStore.Snapshot;
 import com.teamtrading.trading.TradingService;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -13,7 +13,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,14 +46,16 @@ public class Leaderboard {
     private final DailyCloses closes;
     private final DailyCloseStore store;
     private final TradingService trading;
+    private final AlertStore alerts;
     private final LeaderboardProperties props;
     private final Clock clock;
 
-    Leaderboard(DailyCloses closes, DailyCloseStore store, TradingService trading, LeaderboardProperties props,
-                Clock clock) {
+    Leaderboard(DailyCloses closes, DailyCloseStore store, TradingService trading, AlertStore alerts,
+                LeaderboardProperties props, Clock clock) {
         this.closes = closes;
         this.store = store;
         this.trading = trading;
+        this.alerts = alerts;
         this.props = props;
         this.clock = clock;
     }
@@ -138,15 +139,9 @@ public class Leaderboard {
         return null;
     }
 
-    /** 기간 안에 탐지된 이상거래의 양쪽 계정. 탐지 기록은 아직 메모리에만 있어 재시작하면 비워진다 */
+    /** 기간 안에 탐지된 이상거래의 양쪽 계정 */
     private Set<String> flagged(Instant since) {
-        Set<String> out = new HashSet<>();
-        for (Alert a : trading.alerts(Integer.MAX_VALUE)) {
-            if (a.detectedAt().isBefore(since)) continue;
-            out.add(a.accountA());
-            if (a.accountB() != null) out.add(a.accountB());
-        }
-        return out;
+        return alerts.flaggedSince(since);
     }
 
     /** 오늘 구간: 지금 평가금(현재가)과 오늘 들어온 외부 유입 */

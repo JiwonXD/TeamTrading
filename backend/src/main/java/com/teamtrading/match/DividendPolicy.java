@@ -23,4 +23,12 @@ public final class DividendPolicy {
     public static long drawDps(League league) {
         return winDps(league) / 2;
     }
+
+    /** 대회 성적 수당의 기준 금액 W. 평균 팀의 시즌 승리 배당 총액(약 3,000P)과 같게 잡았다 */
+    public static final long AWARD_BASE = 3_000;
+
+    /** 대회 성적 수당 주당 금액. 리그와 관계없이 W의 배수(우승 1.0, 준우승 0.6, 4강 0.35, 포스트시즌 0.15, 정규 시즌 1위 0.3) */
+    public static long awardDps(SeasonAward.Award award) {
+        return Math.round(AWARD_BASE * award.multiple());
+    }
 }

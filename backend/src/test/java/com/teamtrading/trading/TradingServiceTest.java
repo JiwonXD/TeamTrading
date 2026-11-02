@@ -11,6 +11,9 @@ import com.teamtrading.ledger.Journal;
 import com.teamtrading.ledger.Ledger;
 import com.teamtrading.ledger.Reconciliation;
 import com.teamtrading.team.Team;
+import com.teamtrading.fds.Alert;
+import com.teamtrading.fds.AlertKind;
+import com.teamtrading.fds.AlertStore;
 import com.teamtrading.team.TeamCatalog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +44,7 @@ class TradingServiceTest {
     @Autowired TradingService trading;
     @Autowired TeamCatalog catalog;
     @Autowired ListingStore listings;
+    @Autowired AlertStore alertStore;
     @Autowired AccountStore accountStore;
     @Autowired OrderStore orderStore;
     @Autowired TradeStore tradeStore;
@@ -187,7 +191,7 @@ class TradingServiceTest {
         place(buyer, Side.BUY, OrderType.LIMIT, 18_300, 7);
         var before = trading.orderBook("lg", 10);
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings, alertStore);
         restarted.recover();
 
         var after = restarted.orderBook("lg", 10);
@@ -211,13 +215,50 @@ class TradingServiceTest {
             ledger.post(Journal.lock(9_999, buyer, Journal.POINT, 180_000), order.createdAt());
         });
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings, alertStore);
         restarted.recover();
 
         assertThat(orderStore.find(9_999).orElseThrow().status()).isEqualTo(StoredOrder.Status.CANCELED);
         assertThat(account(buyer).lockedPoints()).isZero();
         assertThat(account(buyer).availablePoints()).isEqualTo(TradingService.START_POINTS);
         assertThat(restarted.orderBook("lg", 5).bids()).isEmpty();
+        assertThat(reconciliation.run().balanced()).isTrue();
+    }
+
+    @Test
+    void fdsAlertsAreStoredWithTheirTradesAndSurviveARestart() {
+        trading.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_450, 5);
+        for (int i = 0; i < 5; i++) trading.place(buyer, "b-" + i, "lg", Side.BUY, OrderType.LIMIT, 18_450, 1);
+        // 직전 체결가보다 10% 넘게 높은 가격
+        trading.place(seller, "s-2", "lg", Side.SELL, OrderType.LIMIT, 20_300, 1);
+        trading.place(buyer, "b-far", "lg", Side.BUY, OrderType.LIMIT, 20_300, 1);
+
+        trading.recover();
+        var alerts = trading.alerts(10);
+        assertThat(alerts).extracting(Alert::kind)
+                .containsExactly(AlertKind.PRICE_DEVIATION, AlertKind.REPEATED_COUNTERPARTY);
+        // 탐지 기록이 가리키는 체결은 실제로 있다
+        for (Alert a : alerts)
+            assertThat(tradeStore.recent("lg", 100)).extracting(Trade::id).contains(a.tradeId());
+        assertThat(alerts.getFirst().accountA()).isEqualTo(buyer);
+    }
+
+    @Test
+    void anAlertThatCannotBeStoredRollsBackItsTrade() {
+        AlertStore failing = new AlertStore(jdbc) {
+            @Override
+            public void insert(List<Alert> alerts) {
+                if (!alerts.isEmpty()) throw new IllegalStateException("db down");
+            }
+        };
+        TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx,
+                Clock.systemUTC(), e -> {}, listings, failing);
+        service.recover();
+        service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 20_300, 1);
+        assertThatThrownBy(() -> service.place(buyer, "b-1", "lg", Side.BUY, OrderType.LIMIT, 20_300, 1))
+                .isInstanceOf(TradingException.class);
+        assertThat(tradeStore.recent("lg", 10)).isEmpty();
+        assertThat(account(buyer).availablePoints()).isEqualTo(TradingService.START_POINTS);
         assertThat(reconciliation.run().balanced()).isTrue();
     }
 
@@ -229,7 +270,7 @@ class TradingServiceTest {
                 throw new IllegalStateException("db down");
             }
         };
-        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
+        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, points, tx, Clock.systemUTC(), e -> {}, listings, alertStore);
         service.recover();
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
 
@@ -288,7 +329,7 @@ class TradingServiceTest {
     void publishesNumberedUpdatesPerTeam() {
         List<MarketUpdate> updates = new ArrayList<>();
         TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx,
-                Clock.systemUTC(), e -> updates.add((MarketUpdate) e), listings);
+                Clock.systemUTC(), e -> updates.add((MarketUpdate) e), listings, alertStore);
         service.recover();
 
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
