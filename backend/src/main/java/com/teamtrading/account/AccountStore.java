@@ -21,7 +21,8 @@ public class AccountStore {
     private static final RowMapper<Account> ACCOUNT = (rs, i) -> new Account(rs.getString("id"),
             rs.getString("nickname"), rs.getLong("initial_value"),
             rs.getLong("available_points"), rs.getLong("locked_points"),
-            Optional.ofNullable(rs.getTimestamp("nickname_changed_at")).map(Timestamp::toInstant).orElse(null));
+            Optional.ofNullable(rs.getTimestamp("nickname_changed_at")).map(Timestamp::toInstant).orElse(null),
+            Optional.ofNullable(rs.getTimestamp("withdrawn_at")).map(Timestamp::toInstant).orElse(null));
 
     private static final RowMapper<Holding> HOLDING = (rs, i) -> new Holding(rs.getString("team_id"),
             rs.getLong("available"), rs.getLong("locked"), rs.getLong("average_price"));
@@ -58,6 +59,19 @@ public class AccountStore {
                 UPDATE accounts SET nickname = ?, nickname_changed_at = ?
                 WHERE id = ? AND (nickname_changed_at IS NULL OR nickname_changed_at <= ?)""",
                 nickname, Timestamp.from(now), id, Timestamp.from(notChangedSince)) == 1;
+    }
+
+    /**
+     * 탈퇴로 표시하고 닉네임을 바꾼다. 이미 탈퇴했으면 false.
+     * 바꿀 닉네임을 다른 계정이 쓰고 있으면 DuplicateKeyException(그 문장만 실패하고 트랜잭션은 이어 쓸 수 있다)
+     */
+    public boolean markWithdrawn(String id, String nickname, Instant now) {
+        return jdbc.update("UPDATE accounts SET nickname = ?, withdrawn_at = ? WHERE id = ? AND withdrawn_at IS NULL",
+                nickname, Timestamp.from(now), id) == 1;
+    }
+
+    public List<String> withdrawnIds() {
+        return jdbc.queryForList("SELECT id FROM accounts WHERE withdrawn_at IS NOT NULL", String.class);
     }
 
     public Optional<Account> find(String id) {

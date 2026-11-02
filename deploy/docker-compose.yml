@@ -4,6 +4,13 @@
 #   docker compose up -d
 name: teamtrading
 
+# 컨테이너 로그(접속 기록 포함)는 서비스마다 10MB씩 3개까지만 두고 오래된 것부터 지운다(개인정보처리방침)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   mysql:
     image: mysql:8.4
@@ -21,6 +28,7 @@ services:
       timeout: 5s
       retries: 30
     restart: unless-stopped
+    logging: *logging
 
   backend:
     build: ../backend
@@ -52,6 +60,7 @@ services:
     # 종료 신호를 받으면 처리 중인 요청을 끝내고 내려간다
     stop_grace_period: 30s
     restart: unless-stopped
+    logging: *logging
 
   web:
     image: nginx:1.27-alpine
@@ -64,6 +73,7 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    logging: *logging
 
   prometheus:
     image: prom/prometheus:v3.1.0
@@ -74,6 +84,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     restart: unless-stopped
+    logging: *logging
 
   # 매일 한국 시간 BACKUP_AT에 DB를 덤프해 deploy/backups에 BACKUP_KEEP_DAYS일치 남긴다(docs/deploy.md "백업").
   # 최근 26시간 안의 덤프가 없으면 unhealthy로 보인다
@@ -99,6 +110,7 @@ services:
       start_period: 120s
       start_interval: 5s
     restart: unless-stopped
+    logging: *logging
 
   # 집 PC에서 베타를 열 때: 공유기 포트를 열지 않고 Cloudflare Tunnel로 바깥 주소를 붙인다.
   #   docker compose --profile tunnel up -d   (CLOUDFLARE_TUNNEL_TOKEN 필요, docs/deploy.md)
@@ -111,6 +123,7 @@ services:
       - web
     profiles: [tunnel]
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   mysql-data:

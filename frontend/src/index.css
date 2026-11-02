@@ -277,6 +277,7 @@ main.with-cta { padding-bottom: 96px; }
 .login .btn { flex: none; }
 .btn.primary { background: var(--blue); }
 .btn.plain { background: var(--surface-2); color: var(--text-2); }
+.btn.danger { background: var(--red); }
 
 /* 공모 */
 .offering-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; text-align: left; border-top: 1px solid var(--line); }
@@ -298,3 +299,15 @@ main.with-cta { padding-bottom: 96px; }
 .ad-card, .profile-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ad-card h2, .profile-card h2 { margin: 0; }
 .ad-count { font-size: 28px; font-weight: 700; text-align: center; margin: 24px 0 8px; }
+
+/* 약관·탈퇴 */
+.legal h2 { font-size: 16px; margin: 20px 0 8px; }
+.legal h2:first-child { margin-top: 0; }
+.legal p, .legal li { font-size: 14px; line-height: 1.6; color: var(--text-2); word-break: keep-all; }
+.legal p { margin: 0 0 8px; }
+.legal ul, .withdraw-notes { margin: 0 0 8px; padding-left: 18px; }
+.legal a, .legal-consent a, .legal-links a { color: var(--text-2); text-decoration: underline; }
+.legal-consent { margin: 16px 0 0; text-align: center; word-break: keep-all; }
+.legal-links { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 8px 16px 24px; color: var(--text-3); }
+.legal-links .text-btn { font-size: 13px; }
+.withdraw-notes li { line-height: 1.6; }

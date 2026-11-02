@@ -7,6 +7,7 @@ export default function Login({ options }: { options: LoginOptions }) {
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState('')
   const failed = location.hash === '#login-failed'
+  const blocked = location.hash === '#signup-blocked'
 
   const submit = async () => {
     if (!nickname.trim()) return
@@ -22,6 +23,7 @@ export default function Login({ options }: { options: LoginOptions }) {
           가입하면 1,000,000P를 드려요. 포인트는 현금으로 바꾸거나 다른 사람에게 보낼 수 없어요.
         </p>
         {failed && <p className="login-error" role="alert">로그인하지 못했어요. 다시 시도해 주세요.</p>}
+        {blocked && <p className="login-error" role="alert">탈퇴하고 30일이 지나야 다시 가입할 수 있어요.</p>}
         {options.providers.map((p) => (
           <a key={p.id} className="login-provider" href={p.loginUrl}>{p.name}로 계속하기</a>
         ))}
@@ -35,6 +37,9 @@ export default function Login({ options }: { options: LoginOptions }) {
         )}
         {error && <p className="login-error" role="alert">{error}</p>}
         {options.providers.length === 0 && !options.devLogin && <p className="empty">지금은 로그인할 수 없어요.</p>}
+        <p className="muted xs legal-consent">
+          계속하면 <a href="#terms">이용약관</a>과 <a href="#privacy">개인정보처리방침</a>에 동의하는 것으로 봐요.
+        </p>
       </section>
     </>
   )

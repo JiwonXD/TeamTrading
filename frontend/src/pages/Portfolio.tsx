@@ -2,6 +2,7 @@ import { TEAMS, teamById } from '../data/teams'
 import { ME, START_POINTS, cancel, lockedPoints, mode, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
 import AdReward from '../components/AdReward'
 import Nickname from '../components/Nickname'
+import Withdraw from '../components/Withdraw'
 import { Header, Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 export default function Portfolio() {
@@ -93,6 +94,12 @@ export default function Portfolio() {
           </div>
         ))}
       </section>
+
+      <footer className="legal-links xs">
+        <a href="#terms">이용약관</a>
+        <a href="#privacy">개인정보처리방침</a>
+        {mode === 'server' && <Withdraw />}
+      </footer>
     </>
   )
 }

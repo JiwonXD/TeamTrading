@@ -214,6 +214,47 @@ test('changing my nickname follows the server rules and locks it for a week', as
   await expect(card.getByRole('button', { name: '바꾸기' })).toBeDisabled()
 })
 
+test('terms and privacy are readable before logging in and from my page', async ({ page }) => {
+  await page.goto('/#home')
+  await page.getByRole('link', { name: '개인정보처리방침' }).click()
+  await expect(page.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible()
+  await expect(page.locator('.legal')).toContainText('이름, 이메일, 전화번호, 프로필 사진은 받지 않아요')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+  await page.getByRole('button', { name: '뒤로' }).click()
+  await expect(page.getByPlaceholder('닉네임')).toBeVisible()
+
+  await signIn(page, '#portfolio')
+  await page.locator('.legal-links').getByRole('link', { name: '이용약관' }).click()
+  await expect(page.getByRole('heading', { name: '이용약관' })).toBeVisible()
+  await expect(page.locator('.legal')).toContainText('현금이나 상품으로 바꿀 수 없고')
+})
+
+test('withdrawing logs me out and blocks signing up again with the same login', async ({ page }) => {
+  const nickname = `bye${Date.now() % 1_000_000}`
+  await page.goto('/#portfolio')
+  await page.getByPlaceholder('닉네임').fill(nickname)
+  await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page.locator('.tabbar')).toBeVisible()
+
+  await page.getByRole('button', { name: '탈퇴하기' }).click()
+  const dialog = page.getByRole('dialog', { name: '정말 탈퇴할까요?' })
+  await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+  await dialog.getByRole('button', { name: '취소' }).click()
+  await expect(dialog).toBeHidden()
+
+  await page.getByRole('button', { name: '탈퇴하기' }).click()
+  await dialog.getByRole('button', { name: '탈퇴할게요' }).click()
+  await expect(page.locator('.toast')).toContainText('탈퇴했어요')
+  await expect(page.getByPlaceholder('닉네임')).toBeVisible()
+
+  await page.getByPlaceholder('닉네임').fill(nickname)
+  await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page.getByRole('alert')).toContainText('30일이 지나야')
+})
+
 // 개발 서버의 /src/api/ 모듈은 막지 않도록 경로로 고른다
 const serverApi = (url: URL) => url.pathname.startsWith('/api/')
 
