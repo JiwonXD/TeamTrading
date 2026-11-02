@@ -49,12 +49,25 @@ test('team page shows live order book and a limit buy at the best ask fills', as
   await expect(page.getByText('LG 트윈스').first()).toBeVisible()
 })
 
-test('order book keeps updating from the live feed', async ({ page }) => {
+test("another user's trade reaches a watcher through the live feed", async ({ page, browser }) => {
+  // 보는 사람: 주문하지 않고 체결 탭만 연다. 화면이 바뀐다면 WebSocket 실시간 시세로 받은 것이다
   await signIn(page, '#team-lg')
   await page.getByRole('button', { name: '체결' }).click()
   const rows = page.locator('.trade-row')
-  await expect(rows.first()).toBeVisible({ timeout: 20_000 })
-  const before = await rows.first().textContent()
-  // 데모 계정들이 1.5초마다 주문하므로 곧 새 체결이 맨 위에 붙는다
-  await expect.poll(async () => rows.first().textContent(), { timeout: 30_000 }).not.toBe(before)
+  const before = (await rows.count()) > 0 ? await rows.first().textContent() : null
+
+  // 다른 사용자: 별도 브라우저 세션으로 로그인해 가장 낮은 판매 호가에 1주를 산다
+  const other = await browser.newContext({ ...test.info().project.use, baseURL: test.info().project.use.baseURL })
+  const trader = await other.newPage()
+  await signIn(trader, '#team-lg')
+  const asks = trader.locator('.ob-row.ask')
+  await expect(asks.first()).toBeVisible({ timeout: 20_000 })
+  await asks.last().click()
+  await trader.getByPlaceholder('몇 주를 주문할까요?').fill('1')
+  await trader.locator('.sheet button.btn.wide').click()
+  await expect(trader.locator('.toast')).toContainText('체결')
+  await other.close()
+
+  await expect.poll(async () => ((await rows.count()) > 0 ? rows.first().textContent() : null), { timeout: 10_000 })
+    .not.toBe(before)
 })
