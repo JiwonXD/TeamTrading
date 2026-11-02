@@ -20,8 +20,9 @@ async function teamWithAsk(request: APIRequestContext) {
   await expect.poll(async () => {
     const teams: { id: string; name: string }[] = await (await request.get('/api/teams')).json()
     for (const t of teams) {
-      const book = await (await request.get(`/api/teams/${t.id}/orderbook?depth=1`)).json()
-      if (book.asks.length > 0) {
+      // 앞선 테스트나 데모 계정이 호가 한두 개를 가져가도 남도록, 판매 호가가 여러 단계 있는 구단을 고른다
+      const book = await (await request.get(`/api/teams/${t.id}/orderbook?depth=5`)).json()
+      if (book.asks.length >= 3) {
         found = { id: t.id, name: t.name }
         return true
       }

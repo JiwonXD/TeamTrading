@@ -47,6 +47,8 @@ export interface Post {
 
 export interface Dividend {
   kind?: 'win' | 'draw'
+  /** 대회 성적 수당이면 성적 이름(우승 수당 등) */
+  label?: string
   matchId: string
   teamId: string
   qty: number

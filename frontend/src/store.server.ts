@@ -19,7 +19,11 @@ interface MyTradeDto { id: number; teamId: string; side: 'BUY' | 'SELL'; price: 
 interface RankingDto { rank: number; nickname: string; totalValue: number; returnRate: number; me: boolean }
 interface AlertDto { kind: string; teamId: string; tradeId: number; nicknameA: string; nicknameB: string; message: string; detectedAt: string }
 interface ReceiptDto { message: string }
-interface MyDividendDto { matchId: number; teamId: string; kind: 'WIN' | 'DRAW'; shares: number; amount: number; paidAt: string }
+/** 경기 배당이면 matchId와 WIN·DRAW, 대회 성적 수당이면 awardId와 성적 */
+interface MyDividendDto { matchId: number | null; awardId: number | null; teamId: string; kind: string; shares: number; amount: number; paidAt: string }
+const AWARD_LABELS: Record<string, string> = {
+  CHAMPION: '우승 수당', RUNNER_UP: '준우승 수당', SEMIFINAL: '4강 수당', POSTSEASON: '포스트시즌 수당', REGULAR_FIRST: '정규 시즌 1위 수당',
+}
 export interface MatchDto {
   id: number; league: 'KBO' | 'K_LEAGUE' | 'LCK'; homeTeamId: string; awayTeamId: string; scheduledAt: string
   status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
@@ -270,8 +274,8 @@ function build(): State {
   }))
 
   const dividends = myDividends.map((d) => ({
-    matchId: String(d.matchId), teamId: d.teamId, qty: d.shares, amount: d.amount, ts: Date.parse(d.paidAt),
-    kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const),
+    matchId: d.awardId != null ? `award-${d.awardId}` : String(d.matchId), teamId: d.teamId, qty: d.shares, amount: d.amount,
+    ts: Date.parse(d.paidAt), kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const), label: AWARD_LABELS[d.kind],
   }))
   const posts = Object.values(postsByTeam).flat()
   return { users, books, markets, trades, alerts: alertList, posts, dividends, settled: [] }
