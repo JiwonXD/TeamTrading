@@ -1,13 +1,18 @@
 package com.teamtrading.api;
 
 import com.teamtrading.account.Account;
+import com.teamtrading.account.NicknameService;
 import com.teamtrading.api.ApiDtos.AccountResponse;
 import com.teamtrading.api.ApiDtos.MyTradeResponse;
+import com.teamtrading.api.ApiDtos.NicknameRequest;
 import com.teamtrading.api.ApiDtos.OrderResponse;
 import com.teamtrading.api.ApiDtos.RankingEntry;
 import com.teamtrading.trading.TradingService;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,14 +25,21 @@ import java.util.List;
 class AccountController {
 
     private final TradingService trading;
+    private final NicknameService nicknames;
 
-    AccountController(TradingService trading) {
+    AccountController(TradingService trading, NicknameService nicknames) {
         this.trading = trading;
+        this.nicknames = nicknames;
     }
 
     @GetMapping("/api/accounts/me")
     AccountResponse me(@AuthenticationPrincipal String accountId) {
         return view(trading.account(accountId));
+    }
+
+    @PutMapping("/api/accounts/me/nickname")
+    AccountResponse changeNickname(@AuthenticationPrincipal String accountId, @Valid @RequestBody NicknameRequest req) {
+        return view(nicknames.change(accountId, req.nickname()));
     }
 
     @GetMapping("/api/accounts/me/orders")
@@ -66,6 +78,6 @@ class AccountController {
     private AccountResponse view(Account a) {
         long value = trading.totalValue(a);
         return new AccountResponse(a.id(), a.nickname(), a.availablePoints(), a.lockedPoints(),
-                value, (double) value / a.initialValue() - 1, trading.holdings(a.id()));
+                value, (double) value / a.initialValue() - 1, trading.holdings(a.id()), nicknames.changeableAt(a));
     }
 }

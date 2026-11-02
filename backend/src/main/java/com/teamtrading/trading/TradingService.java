@@ -3,6 +3,7 @@ package com.teamtrading.trading;
 import com.teamtrading.account.Account;
 import com.teamtrading.account.AccountStore;
 import com.teamtrading.account.Holding;
+import com.teamtrading.account.Nicknames;
 import com.teamtrading.engine.Level;
 import com.teamtrading.engine.MatchResult;
 import com.teamtrading.engine.Order;
@@ -167,6 +168,17 @@ public class TradingService {
         }
         if (canceled > 0) log.info("canceled {} resting orders outside the new price limits", canceled);
         return canceled;
+    }
+
+    /** 기본 닉네임(투자자 + 6자리)으로 연다. 다른 계정이 쓰는 번호면 다시 뽑는다 */
+    public Account openAccount() {
+        return tx.execute(s -> {
+            String id = UUID.randomUUID().toString();
+            for (int tries = 1; !accounts.tryCreate(id, Nicknames.random(), clock.instant()); tries++)
+                if (tries == 10) throw new IllegalStateException("could not pick a free default nickname");
+            points.grantSignup(id);
+            return accounts.find(id).orElseThrow();
+        });
     }
 
     public Account openAccount(String nickname) {

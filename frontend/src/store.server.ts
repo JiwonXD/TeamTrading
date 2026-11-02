@@ -13,7 +13,7 @@ const POLL_MS = 3000
 
 interface QuoteDto { id: string; name: string; shortName: string; league: string; color: string; listed: boolean; basePrice: number; lastPrice: number; indicativePrice: number | null; indicativeVolume: number; high: number; low: number; volume: number }
 interface HoldingDto { teamId: string; available: number; locked: number; averagePrice: number }
-interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[] }
+interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[]; nicknameChangeableAt: string | null }
 interface OrderDto { id: number; teamId: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; price: number; quantity: number; remaining: number; createdAt: string }
 interface MyTradeDto { id: number; teamId: string; side: 'BUY' | 'SELL'; price: number; quantity: number; executedAt: string }
 interface RankingDto { rank: number; nickname: string; totalValue: number; returnRate: number; me: boolean }
@@ -414,6 +414,20 @@ export async function finishDemoAd(id: string): Promise<OrderResult> {
       : { ok: false, message: '오늘 받을 수 있는 광고 보상을 모두 받았어요' }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : '보상을 받지 못했어요' }
+  }
+}
+
+/** 내 닉네임과, 바꾼 지 7일이 안 됐으면 다시 바꿀 수 있는 시각 */
+export const getProfile = () =>
+  account ? { nickname: account.nickname, changeableAt: account.nicknameChangeableAt ? Date.parse(account.nicknameChangeableAt) : null } : null
+
+export async function changeNickname(nickname: string): Promise<OrderResult> {
+  try {
+    account = await api<AccountDto>('PUT', '/api/accounts/me/nickname', { nickname })
+    await refresh()
+    return { ok: true, message: `닉네임을 ${account.nickname}(으)로 바꿨어요` }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '닉네임을 바꾸지 못했어요' }
   }
 }
 
