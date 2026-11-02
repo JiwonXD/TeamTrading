@@ -175,6 +175,8 @@ test('a demo ad pays points only after the server confirms the watch', async ({ 
   await card.getByRole('button', { name: '광고 보기' }).click()
   const dialog = page.getByRole('dialog', { name: '시연용 광고' })
   await expect(dialog).toBeVisible()
+  // 시트가 올라오는 동안은 반투명이라 명암비가 낮게 잡힌다. 애니메이션이 끝난 뒤 검사한다
+  await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
 
