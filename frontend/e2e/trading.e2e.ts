@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { type Page, expect, test } from '@playwright/test'
+import { type APIRequestContext, type Page, expect, test } from '@playwright/test'
 
 // 서버 모드 화면이 실제 백엔드와 실시간 시세로 동작하는지, 사용자 흐름 그대로 확인한다.
 // 데모 서버는 개발용 닉네임 로그인을 연다. 테스트마다 새 닉네임으로 새 계정을 만든다.
@@ -9,6 +9,26 @@ async function signIn(page: Page, hash = '#home') {
   await page.getByPlaceholder('닉네임').fill(`e2e${Date.now() % 1_000_000}${Math.floor(Math.random() * 100)}`)
   await page.getByRole('button', { name: '들어가기' }).click()
   await expect(page.locator('.tabbar, .cta').first()).toBeVisible()
+}
+
+/**
+ * 판매 호가가 있는 구단. 데모 계정들의 주문은 무작위라 막 뜬 서버에서는 특정 구단에 판매 호가가 없을 수 있다.
+ * 구단을 고정하면 테스트가 운에 따라 갈리므로 지금 판매 호가가 있는 구단을 고른다.
+ */
+async function teamWithAsk(request: APIRequestContext) {
+  let found: { id: string; name: string } | undefined
+  await expect.poll(async () => {
+    const teams: { id: string; name: string }[] = await (await request.get('/api/teams')).json()
+    for (const t of teams) {
+      const book = await (await request.get(`/api/teams/${t.id}/orderbook?depth=1`)).json()
+      if (book.asks.length > 0) {
+        found = { id: t.id, name: t.name }
+        return true
+      }
+    }
+    return false
+  }, { timeout: 30_000 }).toBe(true)
+  return found!
 }
 
 test('login page has no accessibility violations and logging out returns to it', async ({ page }) => {
@@ -31,8 +51,9 @@ test('home lists every team with server prices and has no accessibility violatio
   expect(axe.violations).toEqual([])
 })
 
-test('team page shows live order book and a limit buy at the best ask fills', async ({ page }) => {
-  await signIn(page, '#team-lg')
+test('team page shows live order book and a limit buy at the best ask fills', async ({ page, request }) => {
+  const team = await teamWithAsk(request)
+  await signIn(page, `#team-${team.id}`)
   // 호가는 WebSocket 실시간 시세로만 들어온다
   const asks = page.locator('.ob-row.ask')
   await expect(asks.first()).toBeVisible({ timeout: 20_000 })
@@ -46,12 +67,13 @@ test('team page shows live order book and a limit buy at the best ask fills', as
   await expect(page.locator('.toast')).toContainText(/체결|대기/)
 
   await page.goto('/#portfolio')
-  await expect(page.getByText('LG 트윈스').first()).toBeVisible()
+  await expect(page.getByText(team.name).first()).toBeVisible()
 })
 
-test("another user's trade reaches a watcher through the live feed", async ({ page, browser }) => {
+test("another user's trade reaches a watcher through the live feed", async ({ page, browser, request }) => {
+  const team = await teamWithAsk(request)
   // 보는 사람: 주문하지 않고 체결 탭만 연다. 화면이 바뀐다면 WebSocket 실시간 시세로 받은 것이다
-  await signIn(page, '#team-lg')
+  await signIn(page, `#team-${team.id}`)
   await page.getByRole('button', { name: '체결' }).click()
   const rows = page.locator('.trade-row')
   const before = (await rows.count()) > 0 ? await rows.first().textContent() : null
@@ -59,7 +81,7 @@ test("another user's trade reaches a watcher through the live feed", async ({ pa
   // 다른 사용자: 별도 브라우저 세션으로 로그인해 가장 낮은 판매 호가에 1주를 산다
   const other = await browser.newContext({ ...test.info().project.use, baseURL: test.info().project.use.baseURL })
   const trader = await other.newPage()
-  await signIn(trader, '#team-lg')
+  await signIn(trader, `#team-${team.id}`)
   const asks = trader.locator('.ob-row.ask')
   await expect(asks.first()).toBeVisible({ timeout: 20_000 })
   await asks.last().click()
