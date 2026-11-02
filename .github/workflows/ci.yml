@@ -58,7 +58,7 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       # 같은 DB를 공유하므로 데이터를 직접 조작하는 테스트는 빼고, 동시 매매 후 총량 보존·대사 일치만 실제 InnoDB에서 확인한다
-      - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares'
+      - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares' --tests '*PointIssuerTest.concurrentRewardsStayWithinDailyLimit'
 
   e2e:
     name: End-to-end (server mode, MySQL 8.4)

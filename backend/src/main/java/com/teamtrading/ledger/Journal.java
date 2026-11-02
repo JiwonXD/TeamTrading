@@ -16,7 +16,8 @@ public record Journal(Kind kind, Long orderId, Long tradeId, List<Entry> entries
     public static final String POINT = "POINT";
     public static final String SYSTEM = "SYSTEM";
 
-    public enum Kind { OPEN_ACCOUNT, GRANT, LOCK, RELEASE, TRADE }
+    /** OPEN_ACCOUNT는 발행 기록 도입 전의 가입 지급. 이제 포인트 발행은 모두 ISSUE다 */
+    public enum Kind { OPEN_ACCOUNT, ISSUE, GRANT, LOCK, RELEASE, TRADE }
 
     public enum Bucket { AVAILABLE, LOCKED, ISSUED }
 
@@ -32,8 +33,9 @@ public record Journal(Kind kind, Long orderId, Long tradeId, List<Entry> entries
         });
     }
 
-    public static Journal openAccount(String accountId, long points) {
-        return new Journal(Kind.OPEN_ACCOUNT, null, null, List.of(
+    /** 포인트 발행. 경로와 멱등키는 point_grants에 남긴다 */
+    public static Journal issue(String accountId, long points) {
+        return new Journal(Kind.ISSUE, null, null, List.of(
                 new Entry(SYSTEM, POINT, Bucket.ISSUED, -points),
                 new Entry(accountId, POINT, Bucket.AVAILABLE, points)));
     }

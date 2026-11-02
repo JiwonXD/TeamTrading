@@ -30,15 +30,20 @@ public class AccountStore {
         this.jdbc = jdbc;
     }
 
-    public Account create(String id, String nickname, long points, Instant now) {
+    /** 잔고 0으로 만든다. 가입 지급은 PointIssuer가 발행 기록과 함께 넣는다 */
+    public void create(String id, String nickname, Instant now) {
         jdbc.update("""
                 INSERT INTO accounts (id, nickname, initial_points, initial_value, available_points, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)""", id, nickname, points, points, points, Timestamp.from(now));
-        return new Account(id, nickname, points, points, 0);
+                VALUES (?, ?, 0, 0, 0, ?)""", id, nickname, Timestamp.from(now));
     }
 
     public Optional<Account> find(String id) {
         return jdbc.query("SELECT * FROM accounts WHERE id = ?", ACCOUNT, id).stream().findFirst();
+    }
+
+    /** 트랜잭션이 끝날 때까지 계정 행을 잠근다. 계정이 없으면 false */
+    public boolean lockRow(String id) {
+        return !jdbc.queryForList("SELECT id FROM accounts WHERE id = ? FOR UPDATE", String.class, id).isEmpty();
     }
 
     public List<Account> all() {
