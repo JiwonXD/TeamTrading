@@ -40,6 +40,7 @@ class TradingServiceTest {
 
     @Autowired TradingService trading;
     @Autowired TeamCatalog catalog;
+    @Autowired ListingStore listings;
     @Autowired AccountStore accountStore;
     @Autowired OrderStore orderStore;
     @Autowired TradeStore tradeStore;
@@ -186,7 +187,7 @@ class TradingServiceTest {
         place(buyer, Side.BUY, OrderType.LIMIT, 18_300, 7);
         var before = trading.orderBook("lg", 10);
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {});
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
         restarted.recover();
 
         var after = restarted.orderBook("lg", 10);
@@ -210,7 +211,7 @@ class TradingServiceTest {
             ledger.post(Journal.lock(9_999, buyer, Journal.POINT, 180_000), order.createdAt());
         });
 
-        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {});
+        TradingService restarted = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
         restarted.recover();
 
         assertThat(orderStore.find(9_999).orElseThrow().status()).isEqualTo(StoredOrder.Status.CANCELED);
@@ -228,7 +229,7 @@ class TradingServiceTest {
                 throw new IllegalStateException("db down");
             }
         };
-        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, points, tx, Clock.systemUTC(), e -> {});
+        TradingService service = new TradingService(catalog, accountStore, orderStore, failing, ledger, points, tx, Clock.systemUTC(), e -> {}, listings);
         service.recover();
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);
 
@@ -287,7 +288,7 @@ class TradingServiceTest {
     void publishesNumberedUpdatesPerTeam() {
         List<MarketUpdate> updates = new ArrayList<>();
         TradingService service = new TradingService(catalog, accountStore, orderStore, tradeStore, ledger, points, tx,
-                Clock.systemUTC(), e -> updates.add((MarketUpdate) e));
+                Clock.systemUTC(), e -> updates.add((MarketUpdate) e), listings);
         service.recover();
 
         service.place(seller, "s-1", "lg", Side.SELL, OrderType.LIMIT, 18_500, 10);

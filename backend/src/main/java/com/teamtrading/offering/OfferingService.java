@@ -14,7 +14,6 @@ import com.teamtrading.trading.IdempotencyConflictException;
 import com.teamtrading.trading.NotFoundException;
 import com.teamtrading.trading.TradingException;
 import com.teamtrading.trading.TradingService;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -34,8 +33,8 @@ import java.util.Map;
  * 배정은 그 청약의 잠금이 풀리길 기다렸다가 함께 배정한다.</li>
  * <li>배정은 한 트랜잭션이다. 계정 행은 id 순서로 갱신하고, 보유 수량은 종목 락 안에서 바꾼다(체결 정산과 같은 순서).</li>
  * <li>배정분 대금은 발행처로 돌려 소각한다. 공모 수량을 다 팔지 못하면 남은 주식은 발행하지 않는다.</li>
- * <li>등록할 때 그 구단 주식이 하나도 없었으면 첫 상장이다. 배정 전까지, 그리고 상장 시각 전까지 그 구단을 거래할 수 없다.
- * 이미 주식이 있는 구단의 공모는 추가 공모라 거래를 막지 않는다.</li>
+ * <li>등록할 때 그 구단 주식이 하나도 없었으면 첫 상장이다. 배정 전까지는 그 구단 주문을 받지 않고, 배정 뒤 상장 시각까지는
+ * 동시호가로 지정가 주문을 모았다가 상장 시각에 한 가격으로 체결한다. 이미 주식이 있는 구단의 공모는 추가 공모라 거래를 막지 않는다.</li>
  * </ul>
  */
 @Service
@@ -65,12 +64,6 @@ public class OfferingService {
         this.ledger = ledger;
         this.tx = tx;
         this.clock = clock;
-    }
-
-    /** 기동 시 상장 전 구단의 거래를 다시 막는다 */
-    @PostConstruct
-    void restoreListingHolds() {
-        for (Offering o : store.pendingListings(clock.instant())) trading.holdUntil(o.teamId(), holdFor(o));
     }
 
     /**

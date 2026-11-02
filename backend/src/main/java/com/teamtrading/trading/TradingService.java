@@ -6,6 +6,7 @@ import com.teamtrading.account.Holding;
 import com.teamtrading.engine.Level;
 import com.teamtrading.engine.MatchResult;
 import com.teamtrading.engine.Order;
+import com.teamtrading.engine.OrderBook;
 import com.teamtrading.engine.OrderType;
 import com.teamtrading.engine.PriceRules;
 import com.teamtrading.engine.Side;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -73,6 +75,7 @@ public class TradingService {
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
 
     private final AccountStore accounts;
+    private final ListingStore listings;
     private final OrderStore orders;
     private final TradeStore trades;
     private final Ledger ledger;
@@ -87,8 +90,9 @@ public class TradingService {
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
                           Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
-                          ApplicationEventPublisher events) {
+                          ApplicationEventPublisher events, ListingStore listings) {
         this.accounts = accounts;
+        this.listings = listings;
         this.orders = orders;
         this.trades = trades;
         this.ledger = ledger;
@@ -104,7 +108,9 @@ public class TradingService {
     @PostConstruct
     public void recover() {
         ids.set(Math.max(orders.maxId(), trades.maxId()));
+        Map<String, Instant> holds = listings.holds();
         for (Market m : markets.values()) {
+            m.listingAt = holds.get(m.team.id());
             for (StoredOrder pending : orders.byStatus(m.team.id(), Status.PENDING)) cancelPending(pending);
             rebuildBook(m);
             TradeStore.Stats stats = trades.stats(m.team.id());
@@ -127,9 +133,35 @@ public class TradingService {
      */
     public void holdUntil(String teamId, Instant until) {
         underMarketLock(teamId, () -> {
-            market(teamId).listingAt = until;
+            Market market = market(teamId);
+            market.listingAt = until;
+            if (auctionPending(market)) market.book.startCollecting();
             return null;
         });
+    }
+
+    /** 상장 시각이 된 구단의 동시호가를 체결한다 */
+    public void openDueAuctions() {
+        for (Market market : markets.values()) {
+            market.lock.lock();
+            try {
+                if (market.book.isCollecting() && !before(market.listingAt)) openAuction(market);
+            } catch (TradingException e) {
+                // openAuction이 이미 기록했다. 다음 차례에 다시 시도한다
+            } finally {
+                market.lock.unlock();
+            }
+        }
+    }
+
+    /** 배정이 끝나 상장 시각을 기다리는 중(동시호가 대상)인지 */
+    private static boolean auctionPending(Market market) {
+        return market.listingAt != null && !market.listingAt.equals(Instant.MAX);
+    }
+
+    /** 지금이 그 시각 전인지. null이면 이미 지난 것으로 본다 */
+    private boolean before(Instant at) {
+        return at != null && clock.instant().isBefore(at);
     }
 
     /**
@@ -180,9 +212,19 @@ public class TradingService {
         try {
             if (market.halted) throw new TradingException("이 구단은 점검 중이라 잠시 거래할 수 없어요");
             Instant listingAt = market.listingAt;
-            if (listingAt != null && clock.instant().isBefore(listingAt))
-                throw new TradingException(listingAt.equals(Instant.MAX) ? "공모 청약 중인 구단이라 아직 거래할 수 없어요"
-                        : "상장 전이에요. " + LISTING_TIME.format(listingAt) + "부터 거래할 수 있어요");
+            if (Instant.MAX.equals(listingAt)) throw new TradingException("공모 청약 중인 구단이라 아직 거래할 수 없어요");
+            if (market.book.isCollecting()) {
+                if (!before(listingAt)) {
+                    openAuction(market);
+                } else {
+                    // 상장 전 동시호가: 지정가 주문을 모아 상장 시각에 한 가격으로 체결한다
+                    if (type != OrderType.LIMIT)
+                        throw new TradingException("상장 전 동시호가 시간이라 지정가 주문만 받아요. "
+                                + LISTING_TIME.format(listingAt) + "에 한 가격으로 체결해요");
+                    if (market.book.hasOrderFrom(accountId, side.opposite()))
+                        throw new TradingException("동시호가 시간에는 같은 구단을 사고 팔 수 없어요. 반대 주문을 먼저 취소해 주세요");
+                }
+            }
             var existing = orders.findByClientOrderId(accountId, clientOrderId);
             if (existing.isPresent()) return replay(existing.get(), teamId, side, type, price, quantity);
 
@@ -294,6 +336,56 @@ public class TradingService {
         orders.finish(order.id(), order.remaining(), status, receipt);
     }
 
+    /**
+     * 동시호가 체결. 모인 주문을 한 가격에 체결하고 연속 매매로 넘어간다. 매수자는 자기 지정가로 묶어둔 포인트에서
+     * 체결가와의 차액을 돌려받는다. 정산이 실패하면 DB 기준으로 동시호가 호가창을 되살리고 다음에 다시 시도한다
+     */
+    private void openAuction(Market market) {
+        OrderBook.AuctionResult result;
+        try {
+            result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.team.basePrice());
+            if (!result.trades().isEmpty()) tx.executeWithoutResult(s -> settleAuction(market.team.id(), result));
+        } catch (RuntimeException e) {
+            log.error("opening auction failed for {}", market.team.id(), e);
+            try {
+                rebuildBook(market);
+            } catch (RuntimeException again) {
+                market.halted = true;
+                log.error("could not recover market {}, halting it", market.team.id(), again);
+            }
+            throw new TradingException("상장 체결을 처리하지 못했어요. 잠시 후 다시 시도해 주세요");
+        }
+        market.listingAt = null;
+        for (Trade trade : result.trades()) {
+            // 시초가는 기준가와 크게 다를 수 있어 가격 괴리는 체결가 기준으로 본다
+            recordAlerts(FdsDetector.detect(trade, result.price(), market.recentTrades(Integer.MAX_VALUE)));
+            market.record(trade);
+        }
+        events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
+        log.info("opening auction for {} matched {} trades at {}", market.team.id(), result.trades().size(),
+                result.price());
+    }
+
+    private void settleAuction(String teamId, OrderBook.AuctionResult result) {
+        Map<Long, Long> limitPrice = new HashMap<>();
+        for (Order o : result.touched()) limitPrice.put(o.id(), o.price());
+        Map<String, long[]> points = new TreeMap<>(); // {available, locked}
+        Map<String, long[]> shares = new TreeMap<>(); // {available, locked, boughtQty, boughtCost}
+        for (Trade t : result.trades()) {
+            long q = t.quantity();
+            long buyerReserve = limitPrice.get(t.buyOrderId());
+            add(points, t.buyerId(), (buyerReserve - t.price()) * q, -buyerReserve * q);
+            add(shares, t.buyerId(), q, 0, q, t.price() * q);
+            add(shares, t.sellerId(), 0, -q, 0, 0);
+            add(points, t.sellerId(), t.price() * q, 0);
+            trades.insert(t);
+            ledger.post(Journal.trade(t, buyerReserve), t.executedAt());
+        }
+        points.forEach((id, d) -> accounts.applyPoints(id, d[0], d[1]));
+        shares.forEach((id, d) -> accounts.applyShares(id, teamId, d[0], d[1], d[2], d[3]));
+        for (Order o : result.touched()) orders.fillResting(o.id(), o.remaining());
+    }
+
     private void release(StoredOrder o, long qty) {
         boolean buy = o.side() == Side.BUY;
         long amount = buy ? o.reservePerShare() * qty : qty;
@@ -325,6 +417,7 @@ public class TradingService {
 
     private void rebuildBook(Market market) {
         market.resetBook();
+        if (auctionPending(market)) market.book.startCollecting();
         for (StoredOrder o : orders.byStatus(market.team.id(), Status.OPEN)) market.book.restore(o.toRestingOrder());
     }
 

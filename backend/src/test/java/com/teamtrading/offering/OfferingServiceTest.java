@@ -93,26 +93,63 @@ class OfferingServiceTest {
     }
 
     @Test
-    void firstListingBlocksTradingUntilAllocatedAndListed() {
+    void firstListingTakesNoOrdersUntilAllocatedThenOpensWithASingleAuctionPrice() {
         Offering o = lgIpo();
         assertThatThrownBy(() -> buy(a, 1)).isInstanceOf(TradingException.class).hasMessageContaining("청약 중");
         offerings.subscribe(o.id(), a, 10);
         offerings.subscribe(o.id(), b, 10);
 
         clock.set(closeAt.plusSeconds(30));
-        assertThatThrownBy(() -> buy(b, 1)).hasMessageContaining("청약 중");   // 마감했지만 아직 배정 전
+        assertThatThrownBy(() -> buy(c, 1)).hasMessageContaining("청약 중");   // 마감했지만 아직 배정 전
         offerings.allocateDue();
-        assertThatThrownBy(() -> buy(b, 1)).hasMessageContaining("상장 전");
 
-        // 재기동해도 막힌다
+        // 상장 전 동시호가: 지정가만, 체결하지 않고 모은다
+        assertThatThrownBy(() -> trading.place(c, "mkt", "lg", Side.BUY, OrderType.MARKET, 0, 1))
+                .hasMessageContaining("지정가 주문만");
+        trading.place(a, "sell-a1", "lg", Side.SELL, OrderType.LIMIT, 18_000, 4);
+        trading.place(b, "sell-b1", "lg", Side.SELL, OrderType.LIMIT, 19_000, 5);
+        trading.place(c, "buy-c1", "lg", Side.BUY, OrderType.LIMIT, 19_500, 6);   // 교차해도 체결하지 않는다
+        assertThatThrownBy(() -> trading.place(a, "buy-a1", "lg", Side.BUY, OrderType.LIMIT, 19_500, 1))
+                .hasMessageContaining("사고 팔 수 없어요");
+        assertThat(trading.trades("lg", 10)).isEmpty();
+
+        // 재기동해도 동시호가 호가창을 그대로 되살린다
         trading.holdUntil("lg", null);
-        offerings.restoreListingHolds();
-        assertThatThrownBy(() -> buy(b, 1)).hasMessageContaining("상장 전");
+        trading.recover();
+        assertThat(trading.orderBook("lg", 10).bids()).hasSize(1);
 
         clock.set(listingAt);
-        trading.place(a, "sell-a", "lg", Side.SELL, OrderType.LIMIT, PRICE, 3);
-        buy(b, 3);
-        assertThat(trading.holdings(b)).singleElement().satisfies(h -> assertThat(h.total()).isEqualTo(13));
+        trading.openDueAuctions();
+
+        // 체결 가능 수량: 18,000 → 4주, 19,000 → 6주, 19,500 → 6주. 19,000과 19,500은 남는 수량(3주)도 같아
+        // 기준가 18,450에 가까운 19,000이 체결가
+        assertThat(trading.trades("lg", 10)).allSatisfy(t -> assertThat(t.price()).isEqualTo(19_000))
+                .extracting(t -> t.quantity()).containsExactlyInAnyOrder(4L, 2L);
+        assertThat(trading.holdings(c)).singleElement().satisfies(h -> assertThat(h.total()).isEqualTo(6));
+        // 매수자는 지정가 19,500으로 묶었다가 체결가 19,000과의 차액을 돌려받는다
+        assertThat(available(c)).isEqualTo(1_000_000 - 6 * 19_000);
+        assertThat(trading.openOrders(b)).singleElement().satisfies(x -> assertThat(x.remaining()).isEqualTo(3));
+        assertThat(reconciliation.run().balanced()).isTrue();
+
+        // 이제 연속 매매
+        trading.place(c, "mkt-c", "lg", Side.BUY, OrderType.MARKET, 0, 1);
+        assertThat(trading.holdings(c)).singleElement().satisfies(h -> assertThat(h.total()).isEqualTo(7));
+        assertThat(reconciliation.run().balanced()).isTrue();
+    }
+
+    @Test
+    void anOrderArrivingAfterListingTimeOpensTheAuctionFirst() {
+        Offering o = lgIpo();
+        offerings.subscribe(o.id(), a, 10);
+        clock.set(closeAt);
+        offerings.allocate(o.id());
+        trading.place(a, "sell-a", "lg", Side.SELL, OrderType.LIMIT, PRICE, 5);
+        buy(b, 2);   // 동시호가 중이라 대기
+
+        clock.set(listingAt.plusSeconds(1));   // 스케줄러보다 주문이 먼저 온다
+        buy(c, 1);
+
+        assertThat(trading.trades("lg", 10)).extracting(t -> t.quantity()).containsExactlyInAnyOrder(2L, 1L);
         assertThat(reconciliation.run().balanced()).isTrue();
     }
 
