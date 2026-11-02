@@ -5,6 +5,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -45,7 +46,8 @@ class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/api/surveillance/reconciliation", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/accounts/me/**", "/api/orders/**", "/api/auth/logout",
-                                "/api/offerings/*/subscriptions/**").authenticated()
+                                "/api/offerings/*/subscriptions/**", "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/teams/*/posts").authenticated()
                         .anyRequest().permitAll());
         if (registrations.getIfAvailable() != null) {
             http.oauth2Login(o -> o.successHandler((req, res, auth) -> {

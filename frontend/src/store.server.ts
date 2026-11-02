@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { SEED_POSTS, TEAMS } from './data/teams'
+import { TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -31,6 +31,8 @@ export interface OfferingDto {
   status: 'SUBSCRIBING' | 'ALLOCATED' | 'CANCELED'; allocatedShares: number; subscribers: number; requested: number
 }
 export interface SubscriptionDto { offeringId: number; quantity: number; deposit: number; allocated: number | null; createdAt: string }
+interface PostDto { id: number; teamId: string; nickname: string; body: string; holder: boolean; createdAt: string; mine: boolean; reward: Post['reward'] | null }
+export type ReportReason = 'SPAM' | 'ABUSE' | 'AD' | 'OTHER'
 export type LeaderboardPeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'SEASON'
 export type LeaderboardSort = 'RETURN' | 'PNL'
 export interface LeaderboardDto {
@@ -53,9 +55,8 @@ let myDividends: MyDividendDto[] = []
 let offerings: OfferingDto[] = []
 let mySubscriptions: SubscriptionDto[] = []
 const feeds: Record<string, TeamFeed> = {}
-const posts: Post[] = SEED_POSTS.map((p, i) => ({
-  id: `p${i}`, teamId: p.teamId, userId: 'seed', author: p.author, body: p.body, ts: Date.now() - p.minutesAgo * 60_000,
-}))
+/** 보고 있는 구단의 토론 글. 구독 중인 구단만 주기적으로 받아온다 */
+const postsByTeam: Record<string, Post[]> = {}
 let state: State = build()
 
 // ---------- HTTP ----------
@@ -114,6 +115,7 @@ async function refresh() {
     api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
     api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
   ])
+  await Promise.all(Object.keys(sockets).map(loadPosts))
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
   account = a
   orders = o
@@ -155,6 +157,7 @@ function connect(teamId: string) {
 export function watchTeam(teamId: string): () => void {
   const sub = (sockets[teamId] ??= { ws: connect(teamId), watchers: 0 })
   sub.watchers++
+  loadPosts(teamId).then(update, () => {})
   return () => {
     sub.watchers--
     if (sub.watchers > 0) return
@@ -237,6 +240,7 @@ function build(): State {
     matchId: String(d.matchId), teamId: d.teamId, qty: d.shares, amount: d.amount, ts: Date.parse(d.paidAt),
     kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const),
   }))
+  const posts = Object.values(postsByTeam).flat()
   return { users, books, markets, trades, alerts: alertList, posts, dividends, settled: [] }
 }
 
@@ -294,11 +298,33 @@ export async function cancel(_userId: string, _teamId: string, orderId: string) 
   await refresh()
 }
 
-export function addPost(teamId: string, body: string) {
-  // 토론 글은 아직 서버에 저장하지 않는다
-  posts.unshift({ id: `local${Date.now()}`, teamId, userId: ME, author: account?.nickname ?? '나', body, ts: Date.now() })
-  update()
+async function loadPosts(teamId: string) {
+  const list = await api<PostDto[]>('GET', `/api/teams/${teamId}/posts?limit=30`)
+  postsByTeam[teamId] = list.map((p) => ({
+    id: String(p.id), teamId: p.teamId, userId: p.mine ? ME : `n:${p.nickname}`, author: p.nickname, body: p.body,
+    ts: Date.parse(p.createdAt), holder: p.holder, reward: p.reward ?? undefined,
+  }))
 }
+
+async function postAction(work: () => Promise<unknown>, teamId: string, done: string): Promise<OrderResult> {
+  try {
+    await work()
+    await loadPosts(teamId)
+    update()
+    return { ok: true, message: done }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '처리하지 못했어요' }
+  }
+}
+
+export const addPost = (teamId: string, body: string) =>
+  postAction(() => api('POST', `/api/teams/${teamId}/posts`, { body }), teamId, '글을 올렸어요')
+
+export const deletePost = (teamId: string, postId: string) =>
+  postAction(() => api('DELETE', `/api/posts/${postId}`), teamId, '글을 지웠어요')
+
+export const reportPost = (teamId: string, postId: string, reason: ReportReason) =>
+  postAction(() => api('POST', `/api/posts/${postId}/reports`, { reason }), teamId, '신고했어요. 확인 후 처리할게요')
 
 export const settleMatches = () => '경기 배당은 아직 서버에 없어요'
 
