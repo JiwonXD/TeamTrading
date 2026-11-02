@@ -36,6 +36,10 @@ public final class OrderBook {
      * @param trades  체결 (매수 가격 우선, 같은 가격이면 접수 순)
      * @param touched 체결에 참여한 주문. 체결 뒤 잔량이 들어 있다
      */
+    /** 예상 체결가와 그 가격에 체결될 수량 */
+    public record Indicative(long price, long volume) {
+    }
+
     public record AuctionResult(long price, List<Trade> trades, List<Order> touched) {
     }
 
@@ -125,8 +129,8 @@ public final class OrderBook {
      * 체결은 가격 우선, 같은 가격이면 접수 순으로 짝짓는다. 체결가가 정해지면 그보다 좋은 가격의 주문은 모두 체결되므로
      * 끝난 뒤 호가가 교차하지 않는다.
      */
-    public AuctionResult uncross(LongSupplier tradeIds, Instant now, long referencePrice) {
-        collecting = false;
+    /** 지금 단일가 매매를 하면 체결될 가격과 수량(예상 체결가). 체결될 주문이 없으면 빈 값. 호가창은 바꾸지 않는다 */
+    public Optional<Indicative> indicative(long referencePrice) {
         long bestPrice = referencePrice;
         long bestVolume = 0;
         long bestImbalance = Long.MAX_VALUE;
@@ -146,9 +150,15 @@ public final class OrderBook {
                 bestImbalance = imbalance;
             }
         }
-        if (bestVolume == 0) return new AuctionResult(referencePrice, List.of(), List.of());
+        return bestVolume == 0 ? Optional.empty() : Optional.of(new Indicative(bestPrice, bestVolume));
+    }
 
-        long price = bestPrice;
+    public AuctionResult uncross(LongSupplier tradeIds, Instant now, long referencePrice) {
+        collecting = false;
+        Optional<Indicative> found = indicative(referencePrice);
+        if (found.isEmpty()) return new AuctionResult(referencePrice, List.of(), List.of());
+
+        long price = found.get().price();
         List<Trade> trades = new ArrayList<>();
         Map<Long, Order> touched = new LinkedHashMap<>();
         while (!bids.isEmpty() && !asks.isEmpty() && bids.firstKey() >= price && asks.firstKey() <= price) {

@@ -37,9 +37,17 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
           <span className="muted">{team.name} · {team.league}</span>
         </div>
         <div className="huge">{fmt(m.last)}P</div>
-        <div className={`small ${tone(diff)}`}>
-          어제보다 {signed(diff)}P ({pct(diff / m.base)})
-        </div>
+        {m.listed ? (
+          <div className={`small ${tone(diff)}`}>
+            어제보다 {signed(diff)}P ({pct(diff / m.base)})
+          </div>
+        ) : (
+          <div className="small muted" aria-live="polite">
+            {m.indicative
+              ? `상장 전 동시호가 · 예상 체결가 ${fmt(m.indicative.price)}P (${fmt(m.indicative.volume)}주)`
+              : '상장 전이에요. 공모 청약과 상장 동시호가를 거쳐 거래가 시작돼요'}
+          </div>
+        )}
       </section>
 
       <Chart points={points} base={period === '1d' ? m.base : undefined} />

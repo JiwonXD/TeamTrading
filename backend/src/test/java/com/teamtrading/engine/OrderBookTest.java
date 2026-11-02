@@ -130,6 +130,11 @@ class OrderBookTest {
         submit(limit("b3", Side.BUY, 9_800, 6));
         // 9,800: 매수 13 / 매도 3 → 3주, 10,000: 매수 7 / 매도 7 → 7주, 10,200: 매수 2 / 매도 17 → 2주
 
+        // 예상 체결가는 실제 단일가 체결과 같은 가격·수량이고, 호가창은 그대로다
+        assertThat(book.indicative(9_900)).contains(new OrderBook.Indicative(10_000, 7));
+        assertThat(book.isCollecting()).isTrue();
+        assertThat(book.levels(Side.SELL, 5)).hasSize(3);
+
         OrderBook.AuctionResult r = book.uncross(ids::incrementAndGet, now, 9_900);
 
         assertThat(r.price()).isEqualTo(10_000);
@@ -157,6 +162,14 @@ class OrderBookTest {
         other.submit(limit("b", Side.BUY, 10_400, 5), ids::incrementAndGet, now);
         // 10,000: 5주(남는 0), 10,400: 5주(남는 5) → 남는 수량이 적은 10,000
         assertThat(other.uncross(ids::incrementAndGet, now, 10_400).price()).isEqualTo(10_000);
+    }
+
+    @Test
+    void noIndicativePriceWhenNothingCrosses() {
+        book.startCollecting();
+        submit(limit("s", Side.SELL, 10_200, 5));
+        submit(limit("b", Side.BUY, 10_000, 5));
+        assertThat(book.indicative(10_000)).isEmpty();
     }
 
     @Test
