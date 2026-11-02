@@ -14,3 +14,5 @@ teamtrading:
     auto-open: false
   posts:
     auto-reward: false
+  monitoring:
+    reconcile: false
