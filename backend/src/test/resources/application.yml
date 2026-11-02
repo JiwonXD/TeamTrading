@@ -10,3 +10,5 @@ teamtrading:
     auto-pay: false
   offerings:
     auto-allocate: false
+  auction:
+    auto-open: false

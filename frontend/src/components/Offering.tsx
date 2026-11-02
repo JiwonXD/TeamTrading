@@ -23,6 +23,9 @@ const live = (offerings: OfferingDto[], now = Date.now()) =>
 const isOpen = (o: OfferingDto, now = Date.now()) =>
   o.status === 'SUBSCRIBING' && Date.parse(o.subscribeFrom) <= now && now < Date.parse(o.subscribeTo)
 
+/** 배정이 끝나고 상장 시각 전(동시호가) */
+const preOpen = (o: OfferingDto, now = Date.now()) => o.status === 'ALLOCATED' && Date.parse(o.listingAt) > now
+
 // 화면은 서버 모드 3초 갱신마다 다시 그려지므로 시각에 따른 상태도 그때 함께 바뀐다
 
 /** 홈: 청약 중이거나 곧 상장하는 공모 */
@@ -103,9 +106,15 @@ export function OfferingCard({ offering: o }: { offering: OfferingDto }) {
           </button>
         </div>
       ) : null}
+      {o.firstListing && preOpen(o) && (
+        <p className="notice" role="status">
+          상장 전 동시호가 중이에요. 지정가 주문을 모아 {time(o.listingAt)}에 한 가격으로 체결해요. 체결 수량이 가장 많은
+          가격이 시초가가 되고, 매수 주문은 지정가와 시초가의 차액을 돌려받아요.
+        </p>
+      )}
       <p className="hint">
         청약금은 청약 수량 × 공모가를 바로 묶어요. 마감 뒤 공모 수량의 절반은 청약자 모두에게 똑같이, 나머지는 청약 수량에
-        비례해 나누고 남은 청약금은 돌려드려요.{o.firstListing ? ' 상장 시각부터 거래할 수 있어요.' : ''}
+        비례해 나누고 남은 청약금은 돌려드려요.{o.firstListing ? ' 첫 상장이라 청약 중에는 거래할 수 없어요.' : ''}
       </p>
     </section>
   )

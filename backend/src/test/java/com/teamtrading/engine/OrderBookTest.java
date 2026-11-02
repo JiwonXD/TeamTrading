@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class OrderBookTest {
 
@@ -39,9 +40,9 @@ class OrderBookTest {
 
         assertThat(r.trades()).extracting(Trade::sellerId, Trade::price, Trade::quantity)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("s2", 10_000L, 5L),
-                        org.assertj.core.groups.Tuple.tuple("s3", 10_000L, 5L),
-                        org.assertj.core.groups.Tuple.tuple("s1", 10_100L, 2L));
+                        tuple("s2", 10_000L, 5L),
+                        tuple("s3", 10_000L, 5L),
+                        tuple("s1", 10_100L, 2L));
         assertThat(r.resting()).isNull();
         assertThat(book.levels(Side.SELL, 5)).containsExactly(new Level(10_100, 3));
     }
@@ -104,5 +105,84 @@ class OrderBookTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> book.restore(Order.restored(3, "c", "t", Side.BUY, 10_000, 1, 1, now)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ---------- 동시호가 ----------
+
+    @Test
+    void collectingRestsCrossingOrdersWithoutTrading() {
+        book.startCollecting();
+        submit(limit("s", Side.SELL, 10_000, 5));
+        MatchResult r = submit(limit("b", Side.BUY, 10_500, 5));
+        assertThat(r.trades()).isEmpty();
+        assertThat(book.bestPrice(Side.BUY)).contains(10_500L);
+        assertThat(book.bestPrice(Side.SELL)).contains(10_000L);
+    }
+
+    @Test
+    void uncrossPicksThePriceThatTradesTheMostAndFillsBetterPricesFirst() {
+        book.startCollecting();
+        submit(limit("s1", Side.SELL, 9_800, 3));
+        submit(limit("s2", Side.SELL, 10_000, 4));
+        submit(limit("s3", Side.SELL, 10_200, 10));
+        submit(limit("b1", Side.BUY, 10_200, 2));
+        submit(limit("b2", Side.BUY, 10_000, 5));
+        submit(limit("b3", Side.BUY, 9_800, 6));
+        // 9,800: 매수 13 / 매도 3 → 3주, 10,000: 매수 7 / 매도 7 → 7주, 10,200: 매수 2 / 매도 17 → 2주
+
+        OrderBook.AuctionResult r = book.uncross(ids::incrementAndGet, now, 9_900);
+
+        assertThat(r.price()).isEqualTo(10_000);
+        assertThat(r.trades()).allSatisfy(t -> assertThat(t.price()).isEqualTo(10_000));
+        assertThat(r.trades().stream().mapToLong(Trade::quantity).sum()).isEqualTo(7);
+        assertThat(r.trades().getFirst().buyerId()).isEqualTo("b1");
+        assertThat(r.trades().getFirst().sellerId()).isEqualTo("s1");
+        assertThat(book.isCollecting()).isFalse();
+        assertThat(book.levels(Side.BUY, 5)).containsExactly(new Level(9_800, 6));
+        assertThat(book.levels(Side.SELL, 5)).containsExactly(new Level(10_200, 10));
+    }
+
+    @Test
+    void tiesPreferSmallerImbalanceThenTheReferencePrice() {
+        book.startCollecting();
+        submit(limit("s", Side.SELL, 10_000, 5));
+        submit(limit("b", Side.BUY, 10_400, 5));
+        // 10,000과 10,400 모두 5주 체결, 남는 수량 0 → 기준가 10,300에 가까운 10,400
+        assertThat(book.uncross(ids::incrementAndGet, now, 10_300).price()).isEqualTo(10_400);
+
+        OrderBook other = new OrderBook("t");
+        other.startCollecting();
+        other.submit(limit("s", Side.SELL, 10_000, 5), ids::incrementAndGet, now);
+        other.submit(limit("s2", Side.SELL, 10_400, 5), ids::incrementAndGet, now);
+        other.submit(limit("b", Side.BUY, 10_400, 5), ids::incrementAndGet, now);
+        // 10,000: 5주(남는 0), 10,400: 5주(남는 5) → 남는 수량이 적은 10,000
+        assertThat(other.uncross(ids::incrementAndGet, now, 10_400).price()).isEqualTo(10_000);
+    }
+
+    @Test
+    void earlierOrderAtTheSamePriceFillsFirst() {
+        book.startCollecting();
+        submit(limit("b1", Side.BUY, 10_000, 3));
+        submit(limit("b2", Side.BUY, 10_000, 3));
+        submit(limit("s", Side.SELL, 10_000, 4));
+
+        OrderBook.AuctionResult r = book.uncross(ids::incrementAndGet, now, 10_000);
+
+        assertThat(r.trades()).extracting(Trade::buyerId, Trade::quantity).containsExactly(
+                tuple("b1", 3L), tuple("b2", 1L));
+        assertThat(book.levels(Side.BUY, 5)).containsExactly(new Level(10_000, 2));
+    }
+
+    @Test
+    void noCrossMeansNoTradeAndContinuousTradingResumes() {
+        book.startCollecting();
+        submit(limit("s", Side.SELL, 10_100, 5));
+        submit(limit("b", Side.BUY, 10_000, 5));
+
+        OrderBook.AuctionResult r = book.uncross(ids::incrementAndGet, now, 10_050);
+
+        assertThat(r.trades()).isEmpty();
+        assertThat(r.price()).isEqualTo(10_050);
+        assertThat(submit(limit("b2", Side.BUY, 10_100, 2)).trades()).hasSize(1);
     }
 }
