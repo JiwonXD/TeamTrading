@@ -40,6 +40,9 @@ export interface LeaderboardDto {
   entries: { rank: number; nickname: string; returnRate: number; pnl: number; trades: number; me: boolean }[]
   mine: { rank: number; returnRate: number; pnl: number; trades: number; reason: string | null } | null
 }
+/** @property demo 시연 서버의 가짜 광고를 쓸 수 있는지. 실제 광고는 앱의 광고 SDK로만 본다 */
+export interface AdStatusDto { amount: number; dailyLimit: number; paidToday: number; demo: boolean }
+interface AdSessionDto { id: string; status: 'PENDING' | 'PAID' | 'LIMIT' }
 export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean }
 
 let login: LoginOptions | null = null
@@ -62,6 +65,7 @@ let matches: MatchDto[] = []
 let myDividends: MyDividendDto[] = []
 let offerings: OfferingDto[] = []
 let mySubscriptions: SubscriptionDto[] = []
+let adStatus: AdStatusDto | null = null
 const feeds: Record<string, TeamFeed> = {}
 /** 보고 있는 구단의 토론 글. 구독 중인 구단만 주기적으로 받아온다 */
 const postsByTeam: Record<string, Post[]> = {}
@@ -111,7 +115,7 @@ async function ensureLogin(): Promise<boolean> {
 }
 
 async function refresh() {
-  const [q, a, o, t, r, al, m, d, of, sub] = await Promise.all([
+  const [q, a, o, t, r, al, m, d, of, sub, ad] = await Promise.all([
     api<QuoteDto[]>('GET', '/api/teams'),
     api<AccountDto>('GET', '/api/accounts/me'),
     api<OrderDto[]>('GET', '/api/accounts/me/orders'),
@@ -122,6 +126,7 @@ async function refresh() {
     api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
     api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
     api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
+    api<AdStatusDto>('GET', '/api/accounts/me/ads'),
   ])
   await Promise.all(Object.keys(sockets).map(loadPosts))
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
@@ -134,6 +139,7 @@ async function refresh() {
   myDividends = d
   offerings = of
   mySubscriptions = sub
+  adStatus = ad
   connection = { status: 'live', lastSync: Date.now() }
   update()
 }
@@ -366,6 +372,30 @@ export async function cancelSubscription(offeringId: number): Promise<OrderResul
     return { ok: true, message: '청약을 취소했어요' }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : '취소하지 못했어요' }
+  }
+}
+
+export const getAdStatus = () => adStatus
+
+/** 광고 세션을 연다. 포인트는 광고 네트워크의 서버 콜백(시연 서버는 시청 완료)으로만 들어온다 */
+export async function openAd(): Promise<{ id: string } | { error: string }> {
+  try {
+    return { id: (await api<AdSessionDto>('POST', '/api/accounts/me/ads')).id }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : '광고를 열지 못했어요' }
+  }
+}
+
+/** 시연용 가짜 광고를 끝까지 봤다 */
+export async function finishDemoAd(id: string): Promise<OrderResult> {
+  try {
+    const s = await api<AdSessionDto>('POST', `/api/accounts/me/ads/${id}/demo-complete`)
+    await refresh()
+    return s.status === 'PAID'
+      ? { ok: true, message: `광고 보상 ${(adStatus?.amount ?? 0).toLocaleString('ko-KR')}P를 받았어요` }
+      : { ok: false, message: '오늘 받을 수 있는 광고 보상을 모두 받았어요' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '보상을 받지 못했어요' }
   }
 }
 

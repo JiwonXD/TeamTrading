@@ -166,6 +166,27 @@ test('discussion posts are stored on the server and others can report them', asy
   await expect(page.locator('.post', { hasText: text })).toHaveCount(0)
 })
 
+test('a demo ad pays points only after the server confirms the watch', async ({ page }) => {
+  await signIn(page, '#portfolio')
+  const card = page.locator('.ad-card')
+  await expect(card).toContainText('오늘 0/10회')
+  const before = await page.locator('.split b').first().textContent()
+
+  await card.getByRole('button', { name: '광고 보기' }).click()
+  const dialog = page.getByRole('dialog', { name: '시연용 광고' })
+  await expect(dialog).toBeVisible()
+  // 시트가 올라오는 동안은 반투명이라 명암비가 낮게 잡힌다. 애니메이션이 끝난 뒤 검사한다
+  await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  // 서버가 시청 시간을 확인한 뒤에만 지급한다
+  await expect(page.locator('.toast')).toContainText('1,000P를 받았어요', { timeout: 30_000 })
+  await expect(dialog).toBeHidden()
+  await expect(card).toContainText('오늘 1/10회')
+  await expect(page.locator('.split b').first()).not.toHaveText(before!)
+})
+
 // 개발 서버의 /src/api/ 모듈은 막지 않도록 경로로 고른다
 const serverApi = (url: URL) => url.pathname.startsWith('/api/')
 

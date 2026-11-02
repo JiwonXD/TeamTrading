@@ -11,7 +11,7 @@ export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
 export type { ReportReason } from './store.server'
-export type { Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
+export type { AdStatusDto, Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
@@ -58,6 +58,11 @@ export const getOfferings = (): server.OfferingDto[] | null => (mode === 'server
 export const getMySubscriptions = (): server.SubscriptionDto[] => (mode === 'server' ? server.getMySubscriptions() : [])
 export const subscribeOffering = server.subscribeOffering
 export const cancelSubscription = server.cancelSubscription
+
+/** 서버 모드의 광고 보상 상태. 시뮬레이션 모드는 null */
+export const getAdStatus = (): server.AdStatusDto | null => (mode === 'server' ? server.getAdStatus() : null)
+export const openAd = server.openAd
+export const finishDemoAd = server.finishDemoAd
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})
