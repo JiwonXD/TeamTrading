@@ -1,5 +1,6 @@
 package com.teamtrading.points;
 
+import com.teamtrading.TestClock;
 import com.teamtrading.account.Account;
 import com.teamtrading.account.AccountStore;
 import com.teamtrading.ledger.Journal;
@@ -12,17 +13,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -33,39 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
+@Import(TestClock.Config.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class PointIssuerTest {
 
     /** 2026-11-02 23:30 KST. 30분 뒤면 다음 날이다 */
-    static final Instant LATE_NIGHT = ZonedDateTime.of(2026, 11, 2, 23, 30, 0, 0, ZoneId.of("Asia/Seoul")).toInstant();
-
-    static class MovableClock extends Clock {
-        volatile Instant now = LATE_NIGHT;
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneId.of("UTC");
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
-
-    @TestConfiguration
-    static class Config {
-        @Bean
-        @Primary
-        MovableClock movableClock() {
-            return new MovableClock();
-        }
-    }
+    static final Instant LATE_NIGHT = TestClock.Config.START;
 
     @Autowired PointIssuer issuer;
     @Autowired TradingService trading;
@@ -73,7 +42,7 @@ class PointIssuerTest {
     @Autowired Ledger ledger;
     @Autowired Reconciliation reconciliation;
     @Autowired TransactionTemplate tx;
-    @Autowired MovableClock clock;
+    @Autowired TestClock clock;
 
     private String me;
 
@@ -120,7 +89,7 @@ class PointIssuerTest {
         assertThatThrownBy(() -> issuer.grant(me, PointSource.POST, "post-over"))
                 .isInstanceOf(TradingException.class);
 
-        clock.now = LATE_NIGHT.plus(Duration.ofMinutes(31));
+        clock.set(LATE_NIGHT.plus(Duration.ofMinutes(31)));
         issuer.grant(me, PointSource.POST, "post-over");
         assertThat(account(me).availablePoints())
                 .isEqualTo(PointSource.SIGNUP.amount() + 4 * PointSource.POST.amount());

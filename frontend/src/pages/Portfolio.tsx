@@ -75,10 +75,14 @@ export default function Portfolio() {
 
       <section className="card">
         <h2>배당 내역</h2>
-        {s.dividends.length === 0 && <p className="empty">홈의 오늘의 경기에서 배당을 정산할 수 있어요</p>}
+        {s.dividends.length === 0 && (
+          <p className="empty">
+            {mode === 'server' ? '경기 시작 시각에 보유한 구단이 이기면 배당이 들어와요' : '홈의 오늘의 경기에서 배당을 정산할 수 있어요'}
+          </p>
+        )}
         {s.dividends.map((d) => (
-          <div key={d.matchId} className="order-row">
-            <span>{teamById(d.teamId).name} 승리</span>
+          <div key={`${d.matchId}-${d.teamId}`} className="order-row">
+            <span>{teamById(d.teamId).name} {d.kind === 'draw' ? '무승부' : '승리'}</span>
             <span>{d.qty}주</span>
             <span className="up">+{fmt(d.amount)}P</span>
           </div>

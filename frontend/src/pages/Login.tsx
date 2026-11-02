@@ -30,7 +30,7 @@ export default function Login({ options }: { options: LoginOptions }) {
             <label htmlFor="dev-nickname" className="muted xs">개발용 로그인(시연 서버 전용)</label>
             <input id="dev-nickname" className="qty-input" maxLength={20} placeholder="닉네임" value={nickname}
               onChange={(e) => setNickname(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
-            <button className="btn buy wide" disabled={!nickname.trim()} onClick={submit}>들어가기</button>
+            <button className="btn primary wide" disabled={!nickname.trim()} onClick={submit}>들어가기</button>
           </div>
         )}
         {error && <p className="login-error" role="alert">{error}</p>}
