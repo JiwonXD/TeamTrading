@@ -23,6 +23,7 @@ import java.util.TreeMap;
  * 잔고는 조건부 UPDATE로, 원장은 전표로 따로 기록하므로 한쪽 코드가 틀리거나 DB를 직접 고치면 여기서 어긋난다.
  * 두 쪽을 한 읽기 트랜잭션에서 읽어 같은 시점의 스냅숏끼리 비교한다(InnoDB REPEATABLE READ).
  * 포인트 발행 총량도 원장의 발행처 칸과 발행 기록(point_grants)을 비교한다. 기록 없이 발행된 포인트가 있으면 어긋난다.
+ * 공모 배정으로 소각된 포인트는 청약 배정 기록(subscriptions)과 비교한다.
  */
 @Service
 public class Reconciliation {
@@ -44,10 +45,14 @@ public class Reconciliation {
     public record Mismatch(String ownerId, String asset, Bucket bucket, long ledger, long balance) {
     }
 
-    /** ledgerIssued: 원장 발행처에서 나간 포인트, recorded: 발행 기록 합, bySource: 경로별 발행 기록 합 */
-    public record Issuance(long ledgerIssued, long recorded, Map<String, Long> bySource) {
+    /**
+     * ledgerIssued: 원장 발행처에서 나간 포인트(발행 전표), recorded: 발행 기록 합, bySource: 경로별 발행 기록 합,
+     * ledgerBurned: 공모 배정으로 발행처에 돌아온 포인트, burnedRecorded: 청약 배정 기록의 대금 합
+     */
+    public record Issuance(long ledgerIssued, long recorded, Map<String, Long> bySource, long ledgerBurned,
+                           long burnedRecorded) {
         public boolean matches() {
-            return ledgerIssued == recorded;
+            return ledgerIssued == recorded && ledgerBurned == burnedRecorded;
         }
     }
 
@@ -91,16 +96,24 @@ public class Reconciliation {
 
     private Issuance issuance() {
         Long issued = jdbc.queryForObject("""
-                SELECT COALESCE(-SUM(amount), 0) FROM ledger_entries
-                WHERE owner_id = ? AND asset = ? AND bucket = ?""", Long.class,
+                SELECT COALESCE(-SUM(e.amount), 0) FROM ledger_entries e JOIN ledger_journals j ON j.id = e.journal_id
+                WHERE e.owner_id = ? AND e.asset = ? AND e.bucket = ? AND j.kind <> 'ALLOT'""", Long.class,
                 Journal.SYSTEM, Journal.POINT, Bucket.ISSUED.name());
+        Long burned = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(e.amount), 0) FROM ledger_entries e JOIN ledger_journals j ON j.id = e.journal_id
+                WHERE e.owner_id = ? AND e.asset = ? AND e.bucket = ? AND j.kind = 'ALLOT'""", Long.class,
+                Journal.SYSTEM, Journal.POINT, Bucket.ISSUED.name());
+        Long burnedRecorded = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(s.allocated * o.price), 0) FROM subscriptions s
+                JOIN offerings o ON o.id = s.offering_id WHERE s.allocated IS NOT NULL""", Long.class);
         Map<String, Long> bySource = new TreeMap<>();
         jdbc.query("SELECT source, SUM(amount) FROM point_grants GROUP BY source",
                 rs -> {
                     bySource.put(rs.getString(1), rs.getLong(2));
                 });
         long recorded = bySource.values().stream().mapToLong(Long::longValue).sum();
-        return new Issuance(issued == null ? 0 : issued, recorded, bySource);
+        return new Issuance(issued == null ? 0 : issued, recorded, bySource, burned == null ? 0 : burned,
+                burnedRecorded == null ? 0 : burnedRecorded);
     }
 
     private static void put(Map<Slot, Long> balances, Slot slot, long amount) {

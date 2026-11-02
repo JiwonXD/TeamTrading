@@ -29,6 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -41,6 +43,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * 주문 접수부터 체결, 정산까지. 종목마다 락을 하나 두어 같은 종목의 주문은 한 줄로 처리하고
@@ -65,6 +68,8 @@ public class TradingService {
 
     public static final long START_POINTS = PointSource.SIGNUP.amount();
     private static final int MAX_ALERTS = 200;
+    private static final DateTimeFormatter LISTING_TIME =
+            DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(ZoneId.of("Asia/Seoul"));
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
 
     private final AccountStore accounts;
@@ -116,6 +121,31 @@ public class TradingService {
         });
     }
 
+    /**
+     * 첫 상장 전 거래를 막는다. until이 null이면 막지 않는다. 공모 배정 전에는 Instant.MAX로 둔다.
+     * 주문 접수와 같은 종목 락 안에서 바꾸므로, 바뀐 뒤 접수되는 주문은 모두 새 값을 본다
+     */
+    public void holdUntil(String teamId, Instant until) {
+        underMarketLock(teamId, () -> {
+            market(teamId).listingAt = until;
+            return null;
+        });
+    }
+
+    /**
+     * 종목 락 안에서 실행한다. 공모 배정처럼 체결 밖에서 보유 수량을 바꾸는 일은 이 락 안에서 해야
+     * 평균 단가 계산이 체결 정산과 섞이지 않는다
+     */
+    public <T> T underMarketLock(String teamId, Supplier<T> work) {
+        Market market = market(teamId);
+        market.lock.lock();
+        try {
+            return work.get();
+        } finally {
+            market.lock.unlock();
+        }
+    }
+
     /** 시즌 시작 시 지급하는 초기 보유분. 거래 중에는 쓰지 않는다 */
     public void grantShares(String accountId, String teamId, long qty, long price) {
         Market market = market(teamId);
@@ -149,6 +179,10 @@ public class TradingService {
         market.lock.lock();
         try {
             if (market.halted) throw new TradingException("이 구단은 점검 중이라 잠시 거래할 수 없어요");
+            Instant listingAt = market.listingAt;
+            if (listingAt != null && clock.instant().isBefore(listingAt))
+                throw new TradingException(listingAt.equals(Instant.MAX) ? "공모 청약 중인 구단이라 아직 거래할 수 없어요"
+                        : "상장 전이에요. " + LISTING_TIME.format(listingAt) + "부터 거래할 수 있어요");
             var existing = orders.findByClientOrderId(accountId, clientOrderId);
             if (existing.isPresent()) return replay(existing.get(), teamId, side, type, price, quantity);
 

@@ -8,3 +8,5 @@ teamtrading:
     dev-login: true
   dividends:
     auto-pay: false
+  offerings:
+    auto-allocate: false
