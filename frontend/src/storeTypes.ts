@@ -22,6 +22,8 @@ export interface User {
 export interface Market {
   /** 기준가(전일 종가). 등락률과 가격제한폭의 기준. 서버 모드는 매일 일 마감 뒤 바뀐다 */
   base: number
+  /** 거래 중인지. 서버 모드에서 첫 상장 공모 전이거나 상장 동시호가를 기다리면 false */
+  listed: boolean
   last: number
   high: number
   low: number

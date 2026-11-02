@@ -85,7 +85,8 @@ public class TradingService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final long epoch;
-    private final Map<String, Market> markets = new LinkedHashMap<>();
+    /** 구단이 등록되면 새 맵으로 바꿔 끼운다. 읽기는 잠금 없이 한다 */
+    private volatile Map<String, Market> markets;
     private final Deque<Alert> alerts = new ConcurrentLinkedDeque<>();
     private final AtomicLong ids = new AtomicLong();
 
@@ -102,7 +103,10 @@ public class TradingService {
         this.clock = clock;
         this.events = events;
         this.epoch = clock.millis();
-        for (Team team : catalog.all()) markets.put(team.id(), new Market(team));
+        Map<String, Market> initial = new LinkedHashMap<>();
+        for (Team team : catalog.all()) initial.put(team.id(), new Market(team));
+        this.markets = initial;
+        catalog.onRegistered(this::open);
     }
 
     /** 기동 시 DB를 기준으로 호가창과 시세를 다시 만든다 */
@@ -112,8 +116,9 @@ public class TradingService {
         Map<String, Instant> holds = listings.holds();
         Map<String, Long> closes = trades.latestCloses();
         Instant dayStart = dayStart();
+        Set<String> unlisted = listings.awaitingFirstListing();
         for (Market m : markets.values()) {
-            m.listingAt = holds.get(m.team.id());
+            m.listingAt = unlisted.contains(m.team.id()) ? Instant.MAX : holds.get(m.team.id());
             for (StoredOrder pending : orders.byStatus(m.team.id(), Status.PENDING)) cancelPending(pending);
             rebuildBook(m);
             m.restoreTrades(trades.recent(m.team.id(), Market.RECENT_TRADES));
@@ -171,6 +176,15 @@ public class TradingService {
             points.grantSignup(id);
             return accounts.find(id).orElseThrow();
         });
+    }
+
+    /** 새로 등록한 구단의 종목을 연다. 첫 상장 공모 전이라 주문을 받지 않는다 */
+    private synchronized void open(Team team) {
+        Market market = new Market(team);
+        market.listingAt = Instant.MAX;
+        Map<String, Market> next = new LinkedHashMap<>(markets);
+        next.putIfAbsent(team.id(), market);
+        markets = next;
     }
 
     /**
@@ -259,7 +273,7 @@ public class TradingService {
             // 시장가 매수는 상한가 기준으로 포인트를 묶어두고 체결 후 차액을 돌려준다
             long reservePerShare = type == OrderType.LIMIT ? price : PriceRules.upperLimit(base);
             Instant listingAt = market.listingAt;
-            if (Instant.MAX.equals(listingAt)) throw new TradingException("공모 청약 중인 구단이라 아직 거래할 수 없어요");
+            if (Instant.MAX.equals(listingAt)) throw new TradingException("상장 전인 구단이라 거래할 수 없어요. 공모 청약 중이거나 공모를 기다리고 있어요");
             if (market.book.isCollecting()) {
                 if (!before(listingAt)) {
                     openAuction(market);

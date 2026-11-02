@@ -57,7 +57,8 @@ export default function App() {
   useStore()
   const hash = useHash()
   const toast = getToast()
-  const teamMatch = hash.match(/^team-(\w+)/)
+  // 구단 id에는 하이픈이 들어갈 수 있다(운영자가 등록한 구단)
+  const teamMatch = hash.match(/^team-([a-z0-9-]+)$/)
   const login = getLogin()
   const conn = getConnection()
 

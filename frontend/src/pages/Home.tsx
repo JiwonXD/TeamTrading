@@ -94,7 +94,7 @@ export default function Home() {
               </span>
               <span className="stock-price">
                 {fmt(m.last)}P
-                <span className={`xs ${tone(chg)}`}>{pct(chg)}</span>
+                {m.listed ? <span className={`xs ${tone(chg)}`}>{pct(chg)}</span> : <span className="xs muted">상장 전</span>}
               </span>
             </li>
           ))}

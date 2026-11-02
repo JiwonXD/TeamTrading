@@ -109,6 +109,6 @@ final class Market {
 
     Quote quote() {
         return new Quote(team, basePrice, lastPrice, high, low, volume,
-                PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice));
+                PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice), listingAt == null);
     }
 }
