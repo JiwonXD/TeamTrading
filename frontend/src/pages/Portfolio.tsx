@@ -1,5 +1,6 @@
 import { TEAMS, teamById } from '../data/teams'
 import { ME, START_POINTS, cancel, lockedPoints, mode, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
+import AdReward from '../components/AdReward'
 import { Header, Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 export default function Portfolio() {
@@ -28,6 +29,8 @@ export default function Portfolio() {
           <div><span className="muted xs">구단 평가금</span><b>{fmt(invested)}P</b></div>
         </div>
       </section>
+
+      <AdReward />
 
       <section className="card list-card">
         <h2>보유 구단</h2>

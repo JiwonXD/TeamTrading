@@ -63,10 +63,14 @@ public class PointIssuer {
                 return existing;
             }
             Instant now = clock.instant();
-            Instant dayStart = now.atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
-            if (store.countSince(accountId, source, dayStart) >= source.dailyLimit()) return Optional.empty();
+            if (store.countSince(accountId, source, dayStart(now)) >= source.dailyLimit()) return Optional.empty();
             return Optional.of(issue(accountId, source, sourceRef, source.amount(), now));
         });
+    }
+
+    /** 오늘(KST) 이 경로로 지급한 횟수 */
+    public int grantedToday(String accountId, PointSource source) {
+        return store.countSince(accountId, source, dayStart(clock.instant()));
     }
 
     /** 가입 지급. 계정을 만드는 트랜잭션 안에서 부른다 */
@@ -81,6 +85,10 @@ public class PointIssuer {
      */
     public PointGrant grantDividend(String accountId, String sourceRef, long amount) {
         return tx.execute(s -> issue(accountId, PointSource.DIVIDEND, sourceRef, amount, clock.instant()));
+    }
+
+    static Instant dayStart(Instant now) {
+        return now.atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
     }
 
     private PointGrant issue(String accountId, PointSource source, String sourceRef, long amount, Instant now) {

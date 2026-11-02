@@ -165,3 +165,22 @@ test('discussion posts are stored on the server and others can report them', asy
   await mine.getByRole('button', { name: '삭제' }).click()
   await expect(page.locator('.post', { hasText: text })).toHaveCount(0)
 })
+
+test('a demo ad pays points only after the server confirms the watch', async ({ page }) => {
+  await signIn(page, '#portfolio')
+  const card = page.locator('.ad-card')
+  await expect(card).toContainText('오늘 0/10회')
+  const before = await page.locator('.split b').first().textContent()
+
+  await card.getByRole('button', { name: '광고 보기' }).click()
+  const dialog = page.getByRole('dialog', { name: '시연용 광고' })
+  await expect(dialog).toBeVisible()
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  // 서버가 시청 시간을 확인한 뒤에만 지급한다
+  await expect(page.locator('.toast')).toContainText('1,000P를 받았어요', { timeout: 30_000 })
+  await expect(dialog).toBeHidden()
+  await expect(card).toContainText('오늘 1/10회')
+  await expect(page.locator('.split b').first()).not.toHaveText(before!)
+})

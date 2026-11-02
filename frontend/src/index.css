@@ -284,3 +284,6 @@ main.with-cta { padding-bottom: 96px; }
 .post-actions { margin-left: auto; }
 .link-btn { font-size: 13px; color: var(--text-3); padding: 4px 2px; }
 .post .chips { margin: 8px 0 0; }
+.ad-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ad-card h2 { margin: 0; }
+.ad-count { font-size: 28px; font-weight: 700; text-align: center; margin: 24px 0 8px; }
