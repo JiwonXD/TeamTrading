@@ -1,5 +1,6 @@
 package com.teamtrading.account;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -19,7 +20,8 @@ public class AccountStore {
 
     private static final RowMapper<Account> ACCOUNT = (rs, i) -> new Account(rs.getString("id"),
             rs.getString("nickname"), rs.getLong("initial_value"),
-            rs.getLong("available_points"), rs.getLong("locked_points"));
+            rs.getLong("available_points"), rs.getLong("locked_points"),
+            Optional.ofNullable(rs.getTimestamp("nickname_changed_at")).map(Timestamp::toInstant).orElse(null));
 
     private static final RowMapper<Holding> HOLDING = (rs, i) -> new Holding(rs.getString("team_id"),
             rs.getLong("available"), rs.getLong("locked"), rs.getLong("average_price"));
@@ -35,6 +37,27 @@ public class AccountStore {
         jdbc.update("""
                 INSERT INTO accounts (id, nickname, initial_points, initial_value, available_points, created_at)
                 VALUES (?, ?, 0, 0, 0, ?)""", id, nickname, Timestamp.from(now));
+    }
+
+    /** create와 같되, 닉네임이 이미 쓰이고 있으면 아무것도 하지 않고 false. 트랜잭션은 그대로 이어 쓸 수 있다 */
+    public boolean tryCreate(String id, String nickname, Instant now) {
+        try {
+            create(id, nickname, now);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 닉네임을 바꾼다. 마지막 변경이 notChangedSince 이후면 바꾸지 않고 false.
+     * 다른 계정이 쓰는 닉네임이면 DuplicateKeyException
+     */
+    public boolean changeNickname(String id, String nickname, Instant now, Instant notChangedSince) {
+        return jdbc.update("""
+                UPDATE accounts SET nickname = ?, nickname_changed_at = ?
+                WHERE id = ? AND (nickname_changed_at IS NULL OR nickname_changed_at <= ?)""",
+                nickname, Timestamp.from(now), id, Timestamp.from(notChangedSince)) == 1;
     }
 
     public Optional<Account> find(String id) {

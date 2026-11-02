@@ -276,6 +276,7 @@ main.with-cta { padding-bottom: 96px; }
 .match-status { grid-column: 2 / -1; text-align: center; font-size: 12px; color: var(--text-3); margin-top: -2px; }
 .login .btn { flex: none; }
 .btn.primary { background: var(--blue); }
+.btn.plain { background: var(--surface-2); color: var(--text-2); }
 
 /* 공모 */
 .offering-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; text-align: left; border-top: 1px solid var(--line); }
@@ -294,6 +295,6 @@ main.with-cta { padding-bottom: 96px; }
 .post-actions { margin-left: auto; }
 .link-btn { font-size: 13px; color: var(--text-3); padding: 4px 2px; }
 .post .chips { margin: 8px 0 0; }
-.ad-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ad-card h2 { margin: 0; }
+.ad-card, .profile-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ad-card h2, .profile-card h2 { margin: 0; }
 .ad-count { font-size: 28px; font-weight: 700; text-align: center; margin: 24px 0 8px; }
