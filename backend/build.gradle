@@ -36,5 +36,25 @@ dependencies {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'load'
+    }
+}
+
+// HTTP 주문 부하 테스트. 예: ./gradlew loadTest -Pload.users=100 -Pload.seconds=60
+tasks.register('loadTest', Test) {
+    description = 'Runs the HTTP order load test and checks the ledger afterwards.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'load'
+    }
+    ['load.users', 'load.seconds', 'load.teams'].each { key ->
+        if (project.hasProperty(key)) systemProperty key, project.property(key)
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
 }
