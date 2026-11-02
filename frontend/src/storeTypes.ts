@@ -35,6 +35,10 @@ export interface Post {
   author: string
   body: string
   ts: number
+  /** 서버 모드: 글을 쓸 때 그 구단 주식을 갖고 있었는지 */
+  holder?: boolean
+  /** 서버 모드 내 글: 게시글 보상 상태 */
+  reward?: 'PENDING' | 'PAID' | 'NONE'
 }
 
 export interface Dividend {

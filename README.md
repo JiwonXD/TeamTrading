@@ -51,6 +51,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 - 로그인: 카카오·네이버·구글 OAuth 로그인 후 세션 쿠키로 계정을 구분한다. 상태를 바꾸는 요청에는 CSRF 토큰(`XSRF-TOKEN` 쿠키 → `X-XSRF-TOKEN` 헤더)이 필요하다. 소셜 로그인 키는 `oauth` 프로필(`application-oauth.yml`)의 환경 변수로 넣고, `demo` 프로필은 키 없이 닉네임으로 들어가는 개발용 로그인을 연다. 운영자 계정은 `teamtrading.auth.admins`에 계정 id로 지정한다.
 
 - 공모: 구단 주식은 공모 청약으로 처음 푼다. 청약금은 청약할 때 묶고, 마감 뒤 공모 수량 절반은 균등배정, 나머지는 비례배정한다. 배정분 대금은 소각하고 나머지는 돌려준다. 그 구단 주식이 하나도 없을 때 연 공모(첫 상장)는 배정 전에는 주문을 받지 않고, 상장 시각까지 동시호가로 지정가 주문을 모았다가 체결 수량이 가장 많은 한 가격(시초가)에 체결한다. 대사는 원장의 소각 합과 배정 기록도 비교한다.
+- 종목토론방: 글은 서버에 저장한다. 게시글 보상(2,000P, 하루 3번)은 글을 쓰고 10분이 지나도 숨겨지지 않았을 때 준다. 신고 3건이 쌓이면 자동으로 숨기고, 운영자가 숨기거나 되돌릴 수 있다.
 - 리더보드: KST 자정마다 구단 종가(마감 전 10분 VWAP)와 계정별 평가금·외부 유입을 기록하고, 일 단위 시간가중수익률로 순위를 매긴다. 활동 보상과 지급받은 주식은 수익에서 빼고 배당은 수익에 넣는다. 서버가 멈춰 있던 날은 기동할 때 원장에서 되짚어 채운다.
 
 이상거래 탐지 기록은 아직 메모리에만 있다. 그래서 재시작하면 리더보드의 이상거래 제외 대상도 비워진다.
@@ -78,6 +79,10 @@ docker compose up -d     # 로컬 MySQL 8.4
 | DELETE | `/api/offerings/{offeringId}/subscriptions/me` | 청약 취소 (청약 기간 안에만) |
 | GET | `/api/accounts/me/subscriptions` | 내 청약과 배정 결과 |
 | POST | `/api/admin/offerings` | 공모 등록 (운영자만). `/allocate`로 바로 배정, `/cancel`로 취소 |
+| GET | `/api/teams/{teamId}/posts?before=&limit=30` | 종목토론방 글 (최신순, `before`로 더 보기). 내 글이면 `mine`과 보상 상태 |
+| POST | `/api/teams/{teamId}/posts` | 글쓰기 `{body}`. 5~300자, 링크 금지, 20초 간격, 하루 30개 |
+| DELETE | `/api/posts/{postId}` | 내 글 지우기 |
+| POST | `/api/posts/{postId}/reports` | 신고 `{reason: SPAM\|ABUSE\|AD\|OTHER}`. 다른 계정 3명이 신고하면 숨김 |
 | GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (닉네임만 공개) |
 | GET | `/api/surveillance/reconciliation` | 원장·잔고·발행 기록 대사 결과 (운영자만) |
 
@@ -111,4 +116,3 @@ npm run e2e                                     # Playwright E2E + axe 접근성
 
 - 서버 모드 화면은 시세 목록·내 계좌·랭킹·감시 기록을 3초마다 받아오고, 보고 있는 구단의 호가와 체결은 WebSocket으로 받는다. 받은 `seq`가 건너뛰면 다시 접속해 스냅숏부터 받는다.
 - 주문은 `clientOrderId`를 먼저 정해 보내고, 응답을 못 받으면 같은 번호로 한 번 더 보낸다.
-- 토론 글과 경기 배당은 아직 서버에 없다. 서버 모드에서 토론 글은 새로고침하면 사라지고 배당 정산은 비활성화된다.

@@ -10,6 +10,7 @@ import type { OrderResult, State } from './storeTypes'
 export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
+export type { ReportReason } from './store.server'
 export type { LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
@@ -25,7 +26,10 @@ export const totalShares = impl.totalShares
 export const lockedPoints = impl.lockedPoints
 export const totalValue = impl.totalValue
 export const openOrders = impl.openOrders
-export const addPost = impl.addPost
+/** 토론 글 쓰기. 서버 모드는 결과 메시지를, 시뮬레이션 모드는 undefined를 돌려준다 */
+export const addPost = (teamId: string, body: string): Promise<OrderResult | void> => Promise.resolve(impl.addPost(teamId, body))
+export const deletePost = server.deletePost
+export const reportPost = server.reportPost
 export const reset = impl.reset
 
 export const placeOrder = (userId: string, teamId: string, side: Side, type: OrderType, price: number, qty: number): Promise<OrderResult> =>

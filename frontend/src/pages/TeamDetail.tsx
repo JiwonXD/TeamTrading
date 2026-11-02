@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
-import { ME, addPost, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
+import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
@@ -184,33 +184,71 @@ function TradesView({ teamId }: { teamId: string }) {
   )
 }
 
+const REPORT_REASONS: { value: ReportReason; label: string }[] = [
+  { value: 'SPAM', label: '도배' }, { value: 'ABUSE', label: '욕설' }, { value: 'AD', label: '광고' },
+]
+
+const REWARD_LABEL = { PENDING: '보상 대기', PAID: '2,000P 받음', NONE: '' } as const
+
 function TalkView({ teamId }: { teamId: string }) {
   const s = useStore()
   const [body, setBody] = useState('')
+  const [reporting, setReporting] = useState<string | null>(null)
   const posts = s.posts.filter((p) => p.teamId === teamId)
   const myQty = totalShares(ME, teamId)
-  const submit = () => {
-    if (!body.trim()) return
-    addPost(teamId, body.trim())
-    setBody('')
+  const submit = async () => {
+    const text = body.trim()
+    if (!text) return
+    const r = await addPost(teamId, text)
+    if (r) showToast(r.message)
+    if (!r || r.ok) setBody('')
+  }
+  const report = async (postId: string, reason: ReportReason) => {
+    setReporting(null)
+    showToast((await reportPost(teamId, postId, reason)).message)
   }
   return (
     <section className="card">
       <div className="talk-input">
-        <input value={body} maxLength={200} placeholder="이 구단에 대한 생각을 남겨주세요" onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+        <input value={body} maxLength={300} aria-label="토론 글" placeholder="이 구단에 대한 생각을 남겨주세요" onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
         <button className="chip-btn" onClick={submit}>등록</button>
       </div>
+      {mode === 'server' && (
+        <p className="hint">글을 쓰고 10분 동안 숨겨지지 않으면 2,000P를 드려요(하루 3번). 링크는 올릴 수 없고, 신고가 3건 쌓이면 숨겨져요.</p>
+      )}
       {posts.length === 0 && <p className="empty">첫 글을 남겨보세요</p>}
-      {posts.map((p) => (
-        <div key={p.id} className="post">
-          <div className="row-gap">
-            <span className="strong">{p.author}</span>
-            {p.userId === ME && myQty > 0 && <span className="badge">{myQty}주 보유</span>}
-            <span className="muted xs">{timeAgo(p.ts)}</span>
+      {posts.map((p) => {
+        const holder = p.holder ?? (p.userId === ME && myQty > 0)
+        return (
+          <div key={p.id} className="post">
+            <div className="row-gap">
+              <span className="strong">{p.author}</span>
+              {holder && <span className="badge">{p.holder === undefined ? `${myQty}주 보유` : '보유'}</span>}
+              <span className="muted xs">{timeAgo(p.ts)}</span>
+              {mode === 'server' && p.userId === ME && p.reward && REWARD_LABEL[p.reward] && (
+                <span className="muted xs">{REWARD_LABEL[p.reward]}</span>
+              )}
+              {mode === 'server' && (
+                <span className="post-actions">
+                  {p.userId === ME ? (
+                    <button className="link-btn" onClick={async () => showToast((await deletePost(teamId, p.id)).message)}>삭제</button>
+                  ) : (
+                    <button className="link-btn" aria-expanded={reporting === p.id} onClick={() => setReporting(reporting === p.id ? null : p.id)}>신고</button>
+                  )}
+                </span>
+              )}
+            </div>
+            <p>{p.body}</p>
+            {reporting === p.id && (
+              <div className="chips" role="group" aria-label="신고 이유">
+                {REPORT_REASONS.map((r) => (
+                  <button key={r.value} className="chip" onClick={() => report(p.id, r.value)}>{r.label}</button>
+                ))}
+              </div>
+            )}
           </div>
-          <p>{p.body}</p>
-        </div>
-      ))}
+        )
+      })}
     </section>
   )
 }

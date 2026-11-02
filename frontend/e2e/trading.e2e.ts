@@ -137,3 +137,31 @@ test('a user subscribes to an open offering from the home list', async ({ page }
   await card.getByRole('button', { name: '청약 취소' }).click()
   await expect(card.getByLabel('청약 수량')).toBeVisible()
 })
+
+test('discussion posts are stored on the server and others can report them', async ({ page, browser }) => {
+  const text = `오늘 경기 기대돼요 ${Date.now() % 100_000}`
+  await signIn(page, '#team-lotte')
+  await page.getByRole('button', { name: '토론' }).click()
+  await page.getByLabel('토론 글').fill(text)
+  await page.getByRole('button', { name: '등록' }).click()
+  await expect(page.locator('.toast')).toContainText('글을 올렸어요')
+  const mine = page.locator('.post', { hasText: text })
+  await expect(mine).toContainText('보상 대기')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  // 다른 사용자도 같은 글을 본다(서버 저장)
+  const other = await browser.newContext({ ...test.info().project.use, baseURL: test.info().project.use.baseURL })
+  const reader = await other.newPage()
+  await signIn(reader, '#team-lotte')
+  await reader.getByRole('button', { name: '토론' }).click()
+  const seen = reader.locator('.post', { hasText: text })
+  await expect(seen).toBeVisible()
+  await seen.getByRole('button', { name: '신고' }).click()
+  await seen.getByRole('button', { name: '도배' }).click()
+  await expect(reader.locator('.toast')).toContainText('신고했어요')
+  await other.close()
+
+  await mine.getByRole('button', { name: '삭제' }).click()
+  await expect(page.locator('.post', { hasText: text })).toHaveCount(0)
+})

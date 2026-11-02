@@ -37,7 +37,7 @@ export default function App() {
   if (login) return (
     <div className="app">
       <main><Login options={login} /></main>
-      {toast && <div key={toast.id} className="toast">{toast.msg}</div>}
+      {toast && <div key={toast.id} className="toast" role="status">{toast.msg}</div>}
     </div>
   )
 
@@ -61,7 +61,7 @@ export default function App() {
           ))}
         </nav>
       )}
-      {toast && <div key={toast.id} className="toast">{toast.msg}</div>}
+      {toast && <div key={toast.id} className="toast" role="status">{toast.msg}</div>}
     </div>
   )
 }
