@@ -6,3 +6,5 @@ spring:
 teamtrading:
   auth:
     dev-login: true
+  dividends:
+    auto-pay: false

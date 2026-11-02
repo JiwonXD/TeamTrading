@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
-import { ME, START_POINTS, mode, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, type MatchDto, START_POINTS, getMatches, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 
 type Sort = 'volume' | 'up' | 'down'
@@ -18,6 +18,7 @@ export default function Home() {
       sort === 'volume' ? b.m.volume * b.m.last - a.m.volume * a.m.last : sort === 'up' ? b.chg - a.chg : a.chg - b.chg,
     )
   const allSettled = TODAY_MATCHES.every((m) => s.settled.includes(m.id))
+  const serverMatches = getMatches()
 
   return (
     <>
@@ -34,29 +35,31 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="card">
-        <div className="row-between">
-          <h2>오늘의 경기</h2>
-          <button className="chip-btn" disabled={allSettled || mode === 'server'} onClick={() => showToast(settleMatches())}>
-            {mode === 'server' ? '준비 중' : allSettled ? '정산 완료' : '배당 정산하기'}
-          </button>
-        </div>
-        <div className="match-list">
-          {TODAY_MATCHES.map((m) => {
-            const h = teamById(m.home)
-            const a = teamById(m.away)
-            return (
-              <div key={m.id} className="match">
-                <span className="match-league">{m.league}</span>
-                <span className={`match-team ${m.homeScore > m.awayScore ? 'win' : ''}`}>{h.short}</span>
-                <span className="match-score">{m.homeScore} : {m.awayScore}</span>
-                <span className={`match-team ${m.awayScore > m.homeScore ? 'win' : ''}`}>{a.short}</span>
-              </div>
-            )
-          })}
-        </div>
-        <p className="hint">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</p>
-      </section>
+      {serverMatches ? <ServerMatches matches={serverMatches} /> : (
+        <section className="card">
+          <div className="row-between">
+            <h2>오늘의 경기</h2>
+            <button className="chip-btn" disabled={allSettled} onClick={() => showToast(settleMatches())}>
+              {allSettled ? '정산 완료' : '배당 정산하기'}
+            </button>
+          </div>
+          <div className="match-list">
+            {TODAY_MATCHES.map((m) => {
+              const h = teamById(m.home)
+              const a = teamById(m.away)
+              return (
+                <div key={m.id} className="match">
+                  <span className="match-league">{m.league}</span>
+                  <span className={`match-team ${m.homeScore > m.awayScore ? 'win' : ''}`}>{h.short}</span>
+                  <span className="match-score">{m.homeScore} : {m.awayScore}</span>
+                  <span className={`match-team ${m.awayScore > m.homeScore ? 'win' : ''}`}>{a.short}</span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="hint">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</p>
+        </section>
+      )}
 
       <section className="card list-card">
         <h2>구단 시세</h2>
@@ -98,5 +101,47 @@ export default function Home() {
         {mode === 'server' ? ' 데모 서버에서는 시뮬레이션 계정도 일반 유저와 같은 방식으로 함께 거래해요.' : ' 이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.'}
       </p>
     </>
+  )
+}
+
+const LEAGUE_LABEL: Record<MatchDto['league'], string> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
+
+function matchState(m: MatchDto) {
+  if (m.status === 'CANCELED') return '경기 취소'
+  if (m.dividendStatus === 'REVIEW') return '결과 확인 중'
+  if (m.dividendStatus === 'PAID') return '배당 지급 완료'
+  if (m.status === 'FINAL') return '경기 종료 · 배당 확정 대기'
+  const start = Date.parse(m.scheduledAt)
+  if (start > Date.now()) return `${new Date(start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작`
+  return '경기 중'
+}
+
+// 서버 모드: 서버가 받은 경기(실제 또는 demo 프로필의 시연용 가상 경기)와 배당 처리 상태
+function ServerMatches({ matches }: { matches: MatchDto[] }) {
+  return (
+    <section className="card">
+      <h2>최근 경기</h2>
+      {matches.length === 0 && <p className="empty">아직 등록된 경기가 없어요</p>}
+      <div className="match-list">
+        {matches.map((m) => {
+          const h = teamById(m.homeTeamId)
+          const a = teamById(m.awayTeamId)
+          const done = m.status === 'FINAL' && m.homeScore !== null && m.awayScore !== null
+          return (
+            <div key={m.id} className="match">
+              <span className="match-league">{LEAGUE_LABEL[m.league]}</span>
+              <span className={`match-team ${done && m.homeScore! > m.awayScore! ? 'win' : ''}`}>{h.short}</span>
+              <span className="match-score">{done ? `${m.homeScore} : ${m.awayScore}` : 'vs'}</span>
+              <span className={`match-team ${done && m.awayScore! > m.homeScore! ? 'win' : ''}`}>{a.short}</span>
+              <span className="match-status">{matchState(m)}</span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="hint">
+        이긴 구단 주식 1주당 KBO 40P · K리그 210P · LCK 160P, 무승부는 절반을 배당해요. 경기 시작 시각에 가진 주식에만
+        배당하고, 결과가 나온 뒤 정정 여부를 확인하는 시간을 두고 지급해요.
+      </p>
+    </section>
   )
 }

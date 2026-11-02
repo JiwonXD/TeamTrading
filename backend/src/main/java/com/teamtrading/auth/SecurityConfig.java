@@ -43,7 +43,7 @@ class SecurityConfig {
                 .requestCache(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(a -> a
-                        .requestMatchers("/api/surveillance/reconciliation").hasRole("ADMIN")
+                        .requestMatchers("/api/surveillance/reconciliation", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/accounts/me/**", "/api/orders/**", "/api/auth/logout").authenticated()
                         .anyRequest().permitAll());
         if (registrations.getIfAvailable() != null) {

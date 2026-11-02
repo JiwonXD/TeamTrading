@@ -19,6 +19,12 @@ interface MyTradeDto { id: number; teamId: string; side: 'BUY' | 'SELL'; price: 
 interface RankingDto { rank: number; nickname: string; totalValue: number; returnRate: number; me: boolean }
 interface AlertDto { kind: string; teamId: string; tradeId: number; nicknameA: string; nicknameB: string; message: string; detectedAt: string }
 interface ReceiptDto { message: string }
+interface MyDividendDto { matchId: number; teamId: string; kind: 'WIN' | 'DRAW'; shares: number; amount: number; paidAt: string }
+export interface MatchDto {
+  id: number; league: 'KBO' | 'K_LEAGUE' | 'LCK'; homeTeamId: string; awayTeamId: string; scheduledAt: string
+  status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
+  dividendStatus: 'NONE' | 'PAID' | 'VOID' | 'REVIEW'
+}
 export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean }
 
 let login: LoginOptions | null = null
@@ -29,6 +35,8 @@ let orders: OrderDto[] = []
 let myTrades: MyTradeDto[] = []
 let rankings: RankingDto[] = []
 let alerts: AlertDto[] = []
+let matches: MatchDto[] = []
+let myDividends: MyDividendDto[] = []
 const feeds: Record<string, TeamFeed> = {}
 const posts: Post[] = SEED_POSTS.map((p, i) => ({
   id: `p${i}`, teamId: p.teamId, userId: 'seed', author: p.author, body: p.body, ts: Date.now() - p.minutesAgo * 60_000,
@@ -79,13 +87,15 @@ async function ensureLogin(): Promise<boolean> {
 }
 
 async function refresh() {
-  const [q, a, o, t, r, al] = await Promise.all([
+  const [q, a, o, t, r, al, m, d] = await Promise.all([
     api<QuoteDto[]>('GET', '/api/teams'),
     api<AccountDto>('GET', '/api/accounts/me'),
     api<OrderDto[]>('GET', '/api/accounts/me/orders'),
     api<MyTradeDto[]>('GET', '/api/accounts/me/trades?limit=50'),
     api<RankingDto[]>('GET', '/api/rankings'),
     api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50'),
+    api<MatchDto[]>('GET', '/api/matches?limit=9'),
+    api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
   ])
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
   account = a
@@ -93,6 +103,8 @@ async function refresh() {
   myTrades = t
   rankings = r
   alerts = al
+  matches = m
+  myDividends = d
   update()
 }
 
@@ -202,7 +214,11 @@ function build(): State {
     teamId: a.teamId, userIds: [a.nicknameA, a.nicknameB], message: a.message, ts: Date.parse(a.detectedAt),
   }))
 
-  return { users, books, markets, trades, alerts: alertList, posts, dividends: [], settled: [] }
+  const dividends = myDividends.map((d) => ({
+    matchId: String(d.matchId), teamId: d.teamId, qty: d.shares, amount: d.amount, ts: Date.parse(d.paidAt),
+    kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const),
+  }))
+  return { users, books, markets, trades, alerts: alertList, posts, dividends, settled: [] }
 }
 
 function update() {
@@ -264,6 +280,7 @@ export function addPost(teamId: string, body: string) {
 export const settleMatches = () => '경기 배당은 아직 서버에 없어요'
 
 export const getLogin = () => login
+export const getMatches = () => matches
 
 /** 개발·시연 서버에서만 열려 있는 닉네임 로그인 */
 export async function devLogin(nickname: string): Promise<string | null> {

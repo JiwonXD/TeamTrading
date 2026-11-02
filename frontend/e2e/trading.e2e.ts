@@ -93,3 +93,13 @@ test("another user's trade reaches a watcher through the live feed", async ({ pa
   await expect.poll(async () => ((await rows.count()) > 0 ? rows.first().textContent() : null), { timeout: 10_000 })
     .not.toBe(before)
 })
+
+test('home shows server matches with their dividend state', async ({ page }) => {
+  // demo 프로필은 기동 직후 리그마다 시연용 가상 경기를 하나씩 잡는다
+  await signIn(page)
+  const matches = page.locator('.match')
+  await expect(matches.first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.match-status').first()).toHaveText(/시작|경기 중|배당|취소|확인/)
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+})

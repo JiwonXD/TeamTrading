@@ -38,6 +38,7 @@ export interface Post {
 }
 
 export interface Dividend {
+  kind?: 'win' | 'draw'
   matchId: string
   teamId: string
   qty: number

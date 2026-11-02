@@ -2,3 +2,6 @@
 teamtrading:
   auth:
     dev-login: true
+  # 시연용 가상 경기(DemoMatches)가 몇 분 안에 배당까지 가도록 확정 대기를 줄인다
+  dividends:
+    confirm-delay: PT1M
