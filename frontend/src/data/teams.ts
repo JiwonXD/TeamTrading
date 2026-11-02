@@ -19,7 +19,7 @@ export const TEAMS: Team[] = [
   { id: 'kt', name: 'KT 위즈', short: 'KT', league: 'KBO', color: '#231f20', basePrice: 12900 },
   { id: 'ssg', name: 'SSG 랜더스', short: 'SSG', league: 'KBO', color: '#ce0e2d', basePrice: 13750 },
   { id: 'lotte', name: '롯데 자이언츠', short: '롯데', league: 'KBO', color: '#041e42', basePrice: 15400 },
-  { id: 'hanwha', name: '한화 이글스', short: '한화', league: 'KBO', color: '#fc4e00', basePrice: 19800 },
+  { id: 'hanwha', name: '한화 이글스', short: '한화', league: 'KBO', color: '#d34100', basePrice: 19800 },
   { id: 'nc', name: 'NC 다이노스', short: 'NC', league: 'KBO', color: '#315288', basePrice: 11600 },
   { id: 'kiwoom', name: '키움 히어로즈', short: '키움', league: 'KBO', color: '#820024', basePrice: 8740 },
   { id: 'ulsan', name: '울산 HD', short: '울산', league: 'K리그', color: '#1d4ea3', basePrice: 17300 },
@@ -27,9 +27,9 @@ export const TEAMS: Team[] = [
   { id: 'seoul', name: 'FC서울', short: '서울', league: 'K리그', color: '#b3182a', basePrice: 14100 },
   { id: 'pohang', name: '포항 스틸러스', short: '포항', league: 'K리그', color: '#d6001c', basePrice: 9980 },
   { id: 't1', name: 'T1', short: 'T1', league: 'LCK', color: '#e2012d', basePrice: 32500 },
-  { id: 'geng', name: '젠지', short: 'GEN', league: 'LCK', color: '#aa8a00', basePrice: 28700 },
-  { id: 'hle', name: '한화생명e스포츠', short: 'HLE', league: 'LCK', color: '#f37321', basePrice: 21450 },
-  { id: 'dk', name: '디플러스 기아', short: 'DK', league: 'LCK', color: '#0a8f8f', basePrice: 17850 },
+  { id: 'geng', name: '젠지', short: 'GEN', league: 'LCK', color: '#8b7100', basePrice: 28700 },
+  { id: 'hle', name: '한화생명e스포츠', short: 'HLE', league: 'LCK', color: '#b85719', basePrice: 21450 },
+  { id: 'dk', name: '디플러스 기아', short: 'DK', league: 'LCK', color: '#098080', basePrice: 17850 },
 ]
 
 export const teamById = (id: string) => TEAMS.find((t) => t.id === id)!

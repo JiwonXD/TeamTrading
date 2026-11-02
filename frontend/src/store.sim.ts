@@ -1,13 +1,12 @@
-// 앱 상태와 계좌 처리. 첫 버전은 서버 없이 브라우저 안에서 돌아가며,
+// 서버 없이 브라우저 안에서 돌아가는 저장소. 미리보기와 서버 없는 개발에 쓴다.
 // 다른 유저들은 시뮬레이션 계정(bot)이 실제 유저처럼 호가를 내는 방식으로 흉내 낸다.
 // 시스템이 호가를 받아주는 마켓메이커는 없다. 모든 체결은 계정 대 계정이다.
-import { useSyncExternalStore } from 'react'
+import { emit } from './storeCore'
 import {
   type Book,
   type Order,
   type OrderType,
   type Side,
-  type Trade,
   cancelOrder as bookCancel,
   priceBand,
   stepPrice,
@@ -15,62 +14,12 @@ import {
   tickSize,
   validateOrder,
 } from './engine/orderbook'
-import { type Alert, detect } from './engine/fds'
+import { detect } from './engine/fds'
 import { DIVIDEND_RATE, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
+import { ME, START_POINTS, type Holding, type Market, type Post, type OrderResult, type State, type User } from './storeTypes'
 
-export const ME = 'me'
-export const START_POINTS = 1_000_000
-
-export interface Holding {
-  qty: number // 매도 주문에 묶이지 않은 수량
-  avgPrice: number
-}
-
-export interface User {
-  id: string
-  name: string
-  points: number // 매수 주문에 묶이지 않은 포인트
-  holdings: Record<string, Holding>
-  initialValue: number
-  isBot: boolean
-}
-
-export interface Market {
-  last: number
-  high: number
-  low: number
-  volume: number
-  daily: number[]
-  intraday: { ts: number; price: number }[]
-}
-
-export interface Post {
-  id: string
-  teamId: string
-  userId: string
-  author: string
-  body: string
-  ts: number
-}
-
-export interface Dividend {
-  matchId: string
-  teamId: string
-  qty: number
-  amount: number
-  ts: number
-}
-
-export interface State {
+interface SimState extends State {
   seq: number
-  users: Record<string, User>
-  books: Record<string, Book>
-  markets: Record<string, Market>
-  trades: Trade[] // 최근 체결(전체), 최신이 앞
-  alerts: Alert[]
-  posts: Post[]
-  dividends: Dividend[] // 내 배당 내역
-  settled: string[]
   bias: Record<string, number>
 }
 
@@ -94,15 +43,7 @@ function rng(seed: number) {
 const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1))
 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
 
-let state: State
-let version = 0
-const listeners = new Set<() => void>()
-let toast: { msg: string; id: number } | null = null
-
-function emit() {
-  version++
-  listeners.forEach((l) => l())
-}
+let state: SimState
 
 const nextId = () => `${++state.seq}`
 
@@ -152,7 +93,7 @@ export function placeOrder(
   type: OrderType,
   price: number,
   qty: number,
-): { ok: boolean; message: string } {
+): OrderResult {
   const team = teamById(teamId)
   const err = validateOrder({ type, price, qty }, team.basePrice)
   if (err) return { ok: false, message: err }
@@ -301,7 +242,7 @@ function botTick() {
 
 // ---------- 초기화 ----------
 
-function freshState(): State {
+function freshState(): SimState {
   const r = rng(42)
   const users: Record<string, User> = {}
   users[ME] = { id: ME, name: '나', points: START_POINTS, holdings: {}, initialValue: START_POINTS, isBot: false }
@@ -359,10 +300,10 @@ function seedBooks() {
   TEAMS.forEach((t) => pruneFar(t.id))
 }
 
-function load(): State | null {
+function load(): SimState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as State) : null
+    return raw ? (JSON.parse(raw) as SimState) : null
   } catch {
     return null
   }
@@ -383,33 +324,11 @@ export function reset() {
   emit()
 }
 
-state = load() ?? freshState()
-if (state.seq === 0) seedBooks()
-setInterval(botTick, 1500)
-setInterval(save, 3000)
-
-// ---------- React 연결 ----------
-
-export function useStore(): State {
-  useSyncExternalStore(
-    (l) => {
-      listeners.add(l)
-      return () => listeners.delete(l)
-    },
-    () => version,
-  )
-  return state
+export function start() {
+  state = load() ?? freshState()
+  if (state.seq === 0) seedBooks()
+  setInterval(botTick, 1500)
+  setInterval(save, 3000)
 }
 
-export function showToast(msg: string) {
-  toast = { msg, id: Date.now() }
-  emit()
-  setTimeout(() => {
-    if (toast && Date.now() - toast.id >= 2400) {
-      toast = null
-      emit()
-    }
-  }, 2500)
-}
-
-export const getToast = () => toast
+export const getState = (): State => state

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
-import { ME, addPost, cancel, openOrders, placeOrder, showToast, totalShares, useStore } from '../store'
+import { ME, addPost, cancel, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 type Period = '1d' | '1w' | '1m' | '3m'
@@ -14,6 +14,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
   const [period, setPeriod] = useState<Period>('1d')
   const [tab, setTab] = useState<Tab>('book')
   const [sheet, setSheet] = useState<{ side: Side; price: number } | null>(null)
+  useEffect(() => watchTeam(teamId), [teamId])
 
   const diff = m.last - team.basePrice
   const points =
@@ -96,7 +97,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
             <div key={o.id} className="order-row">
               <span className={o.side === 'buy' ? 'up' : 'down'}>{o.side === 'buy' ? '구매' : '판매'}</span>
               <span>{fmt(o.price)}P · {o.remaining}/{o.qty}주</span>
-              <button className="chip-btn" onClick={() => { cancel(ME, teamId, o.id); showToast('주문을 취소했어요') }}>취소</button>
+              <button className="chip-btn" onClick={() => cancel(ME, teamId, o.id).then(() => showToast('주문을 취소했어요'))}>취소</button>
             </div>
           ))}
         </section>
@@ -222,8 +223,11 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
   const maxQty = side === 'buy' ? Math.floor(me.points / (type === 'limit' ? price : upper)) : me.holdings[teamId]?.qty ?? 0
   const label = side === 'buy' ? '구매' : '판매'
 
-  const submit = () => {
-    const r = placeOrder(ME, teamId, side, type, price, qty)
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    setBusy(true)
+    const r = await placeOrder(ME, teamId, side, type, price, qty)
+    setBusy(false)
     showToast(r.message)
     if (r.ok) onClose()
   }
@@ -276,7 +280,7 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
           <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>
           <span className="strong">{fmt(unitPrice * qty)}P</span>
         </div>
-        <button className={`btn wide ${side}`} disabled={qty <= 0} onClick={submit}>{label}하기</button>
+        <button className={`btn wide ${side}`} disabled={qty <= 0 || busy} onClick={submit}>{label}하기</button>
       </div>
     </div>
   )
