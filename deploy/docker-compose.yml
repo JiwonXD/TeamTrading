@@ -33,6 +33,7 @@ services:
       # nginx가 넘기는 X-Forwarded-* 를 믿어 소셜 로그인 콜백 주소와 쿠키 Secure를 바깥 주소 기준으로 만든다
       SERVER_FORWARD_HEADERS_STRATEGY: native
       TEAMTRADING_AUTH_ADMINS: ${ADMIN_ACCOUNT_IDS:-}
+      TEAMTRADING_ADS_ADMOB_AD_UNITS: ${ADMOB_AD_UNITS:-}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
