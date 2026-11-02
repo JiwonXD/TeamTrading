@@ -1,0 +1,25 @@
+groups:
+  - name: teamtrading
+    rules:
+      - alert: LedgerOutOfBalance
+        expr: teamtrading_reconciliation_balanced == 0
+        labels: { severity: critical }
+        annotations:
+          summary: 원장과 잔고가 어긋났다
+      - alert: ReconciliationStale
+        expr: time() - teamtrading_reconciliation_last_run > 900
+        labels: { severity: warning }
+        annotations:
+          summary: 대사가 15분 넘게 돌지 않았다
+      - alert: MarketHalted
+        expr: teamtrading_markets_halted > 0
+        labels: { severity: critical }
+        annotations:
+          summary: 거래가 멈춘 구단이 있다
+      - alert: SlowOrders
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri="/api/orders",method="POST"}[5m]))) > 0.25
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 주문 p99 지연이 250ms를 넘었다

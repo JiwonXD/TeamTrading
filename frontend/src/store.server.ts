@@ -47,6 +47,14 @@ export interface LoginOptions { providers: { id: string; name: string; loginUrl:
 
 let login: LoginOptions | null = null
 let poller: ReturnType<typeof setInterval> | undefined
+let retry: ReturnType<typeof setTimeout> | undefined
+/**
+ * 서버와의 연결 상태. 화면은 서버에서 받은 값만 보여주고, 받지 못했으면 그렇다고 알린다.
+ * connecting: 아직 받은 적 없음, unreachable: 받은 적 없고 마지막 시도 실패,
+ * live: 마지막 갱신 성공, stale: 받은 적은 있지만 마지막 갱신 실패(화면 값은 lastSync 시점)
+ */
+export interface Connection { status: 'connecting' | 'unreachable' | 'live' | 'stale'; lastSync: number | null }
+let connection: Connection = { status: 'connecting', lastSync: null }
 let account: AccountDto | null = null
 let quotes: Record<string, QuoteDto> = {}
 let orders: OrderDto[] = []
@@ -132,6 +140,12 @@ async function refresh() {
   offerings = of
   mySubscriptions = sub
   adStatus = ad
+  connection = { status: 'live', lastSync: Date.now() }
+  update()
+}
+
+function markFailed() {
+  connection = { status: connection.lastSync ? 'stale' : 'unreachable', lastSync: connection.lastSync }
   update()
 }
 
@@ -335,6 +349,7 @@ export const reportPost = (teamId: string, postId: string, reason: ReportReason)
 export const settleMatches = () => '경기 배당은 아직 서버에 없어요'
 
 export const getLogin = () => login
+export const getConnection = () => connection
 export const getMatches = () => matches
 export const getOfferings = () => offerings
 export const getMySubscriptions = () => mySubscriptions
@@ -399,13 +414,24 @@ export function reset() {
   api('POST', '/api/auth/logout').catch(() => {}).finally(start)
 }
 
+/** 로그인을 확인하고 주기 갱신을 건다. 서버에 닿지 않으면 닿을 때까지 다시 시도한다 */
 export function start() {
   clearInterval(poller)
+  clearTimeout(retry)
   ensureLogin()
     .then(async (ok) => {
       if (!ok) return
       await refresh()
-      poller = setInterval(() => refresh().catch(() => {}), POLL_MS)
+      poller = setInterval(() => refresh().catch(onPollError), POLL_MS)
     })
-    .catch(() => {})
+    .catch(() => {
+      markFailed()
+      retry = setTimeout(start, POLL_MS)
+    })
+}
+
+function onPollError(e: unknown) {
+  markFailed()
+  // 서버가 다시 떠서 세션이 사라졌으면 로그인부터 다시 한다
+  if (e instanceof ApiError && e.status === 401) start()
 }

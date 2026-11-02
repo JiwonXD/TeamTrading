@@ -59,6 +59,8 @@ docker compose up -d     # 로컬 MySQL 8.4
 - 성능: HTTP 주문 부하 테스트(`./gradlew loadTest`)를 CI의 MySQL 작업에서 매번 돌리고, 끝난 뒤 대사 일치를 확인한다. 측정 결과와 병목 분석은 [docs/performance.md](docs/performance.md).
 - 장애 복구: 주문 중 서버를 `kill -9`로 죽였다 다시 띄우는 장애 테스트(`tools/chaos/run.sh`)를 CI에서 돌린다. 응답받은 주문 보존, 재시도 멱등성, 대사 일치를 확인한다.
 
+- 배포: `deploy/`의 docker compose 묶음(MySQL, 서버, nginx, Prometheus)으로 서버 한 대 또는 집 PC(Cloudflare Tunnel)에 올린다. 절차는 [docs/deploy.md](docs/deploy.md).
+
 이상거래 탐지 기록은 아직 메모리에만 있다. 그래서 재시작하면 리더보드의 이상거래 제외 대상도 비워진다.
 
 | 메서드 | 경로 | 설명 |
@@ -109,6 +111,8 @@ npm run dev:server   # 서버 모드: /api, /ws를 localhost:8080 백엔드로 �
 npm test             # 매칭 엔진, 실시간 시세 처리 테스트
 npm run build        # dist/index.html 한 파일로 빌드 (시뮬레이션 모드, 미리보기용)
 ```
+
+서버 모드 배포본(`VITE_BACKEND=server npm run build`)은 홈 화면에 설치할 수 있는 PWA다. 서비스 워커는 화면 껍데기만 캐시하고 시세·잔고는 늘 서버에서 받는다. 서버에 닿지 못하면 기본값 대신 연결 상태와 마지막 갱신 시각을 보여준다([ADR 0016](docs/adr/0016-pwa-and-stale-data.md)).
 
 서버 모드로 전체를 띄우는 순서:
 
