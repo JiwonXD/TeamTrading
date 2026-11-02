@@ -10,7 +10,7 @@ import type { OrderResult, State } from './storeTypes'
 export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
-export type { LoginOptions, MatchDto } from './store.server'
+export type { LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
@@ -42,6 +42,8 @@ export const devLogin = server.devLogin
 
 /** 서버 모드의 최근 경기(실제 또는 시연용). 시뮬레이션 모드는 null */
 export const getMatches = (): server.MatchDto[] | null => (mode === 'server' ? server.getMatches() : null)
+
+export const fetchLeaderboard = server.fetchLeaderboard
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})

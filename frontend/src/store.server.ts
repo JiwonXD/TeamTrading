@@ -25,6 +25,13 @@ export interface MatchDto {
   status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
   dividendStatus: 'NONE' | 'PAID' | 'VOID' | 'REVIEW'
 }
+export type LeaderboardPeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'SEASON'
+export type LeaderboardSort = 'RETURN' | 'PNL'
+export interface LeaderboardDto {
+  period: LeaderboardPeriod; from: string; to: string
+  entries: { rank: number; nickname: string; returnRate: number; pnl: number; trades: number; me: boolean }[]
+  mine: { rank: number; returnRate: number; pnl: number; trades: number; reason: string | null } | null
+}
 export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean }
 
 let login: LoginOptions | null = null
@@ -227,6 +234,10 @@ function update() {
 }
 
 export const getState = () => state
+
+/** 기간별 리더보드. 마감 집계가 들어 있어 3초 주기 갱신에 넣지 않고 화면이 필요할 때 받는다 */
+export const fetchLeaderboard = (period: LeaderboardPeriod, sort: LeaderboardSort) =>
+  api<LeaderboardDto>('GET', `/api/leaderboard?period=${period}&sort=${sort}&limit=50`)
 
 // ---------- 화면에서 부르는 동작 ----------
 

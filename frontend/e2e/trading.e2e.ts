@@ -103,3 +103,17 @@ test('home shows server matches with their dividend state', async ({ page }) => 
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
 })
+
+test('leaderboard ranks demo traders by period with my own row', async ({ page }) => {
+  await signIn(page, '#ranking')
+  // demo 프로필은 최소 체결 1회, 가입 기간 제한 없음
+  await expect(page.locator('.rank-row').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.rank-hero')).toContainText('순위 밖')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await page.getByRole('button', { name: '주간' }).click()
+  await expect(page.locator('.rank-hero')).toContainText('마감 기준')
+  await page.getByRole('button', { name: '손익' }).click()
+  await expect(page.locator('.rank-hero')).toContainText('마감 기준')
+})
