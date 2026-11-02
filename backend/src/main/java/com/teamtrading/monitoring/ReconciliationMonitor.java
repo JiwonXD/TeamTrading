@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,15 +31,17 @@ class ReconciliationMonitor {
     private final AtomicInteger mismatches = new AtomicInteger();
     private final AtomicLong lastRun = new AtomicLong();
 
-    ReconciliationMonitor(Reconciliation reconciliation, MeterRegistry registry) {
+    ReconciliationMonitor(Reconciliation reconciliation, MeterRegistry registry, Clock clock) {
         this.reconciliation = reconciliation;
+        // 첫 대사 전에는 기동 시각을 둔다. 대사가 한 번도 돌지 않으면 그때부터 늦어진 것으로 본다
+        this.lastRun.set(clock.instant().getEpochSecond());
         this.duration = Timer.builder("teamtrading.reconciliation.duration").description("대사 소요 시간").register(registry);
         Gauge.builder("teamtrading.reconciliation.balanced", balanced, AtomicInteger::get)
                 .description("마지막 대사가 맞았으면 1, 어긋났으면 0").register(registry);
         Gauge.builder("teamtrading.reconciliation.mismatches", mismatches, AtomicInteger::get)
                 .description("마지막 대사에서 어긋난 칸·전표 수").register(registry);
         Gauge.builder("teamtrading.reconciliation.last.run", lastRun, AtomicLong::get)
-                .description("마지막 대사 시각(epoch 초)").register(registry);
+                .description("마지막 대사 시각(epoch 초). 첫 대사 전에는 기동 시각").register(registry);
     }
 
     @Scheduled(fixedDelayString = "${teamtrading.monitoring.reconcile-every:PT5M}", initialDelayString = "PT1M")
