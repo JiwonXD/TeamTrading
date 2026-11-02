@@ -4,4 +4,5 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 (cd backend && ./gradlew -q clean bootJar)
 (cd frontend && npm ci --silent && VITE_BACKEND=server npm run build)
-docker compose -f deploy/docker-compose.yml build backend
+# compose의 backend 이미지 이름과 같다. compose 파일을 거치지 않아 .env 없이도 빌드된다
+docker build -t teamtrading-backend backend
