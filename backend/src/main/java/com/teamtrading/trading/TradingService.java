@@ -12,6 +12,7 @@ import com.teamtrading.engine.PriceRules;
 import com.teamtrading.engine.Side;
 import com.teamtrading.engine.Trade;
 import com.teamtrading.fds.Alert;
+import com.teamtrading.fds.AlertStore;
 import com.teamtrading.fds.FdsDetector;
 import com.teamtrading.ledger.Journal;
 import com.teamtrading.ledger.Ledger;
@@ -32,7 +33,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Deque;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -41,7 +42,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -69,13 +69,13 @@ import java.util.function.Supplier;
 public class TradingService {
 
     public static final long START_POINTS = PointSource.SIGNUP.amount();
-    private static final int MAX_ALERTS = 200;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter LISTING_TIME =
             DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(ZoneId.of("Asia/Seoul"));
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
 
     private final AccountStore accounts;
+    private final AlertStore alerts;
     private final ListingStore listings;
     private final OrderStore orders;
     private final TradeStore trades;
@@ -87,12 +87,12 @@ public class TradingService {
     private final long epoch;
     /** 구단이 등록되면 새 맵으로 바꿔 끼운다. 읽기는 잠금 없이 한다 */
     private volatile Map<String, Market> markets;
-    private final Deque<Alert> alerts = new ConcurrentLinkedDeque<>();
     private final AtomicLong ids = new AtomicLong();
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
                           Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
-                          ApplicationEventPublisher events, ListingStore listings) {
+                          ApplicationEventPublisher events, ListingStore listings, AlertStore alerts) {
+        this.alerts = alerts;
         this.accounts = accounts;
         this.listings = listings;
         this.orders = orders;
@@ -302,18 +302,20 @@ public class TradingService {
             OrderReceipt receipt = OrderReceipt.of(order.id(), type, quantity, result.filledQuantity(),
                     result.resting() == null ? 0 : result.resting().remaining(), result.canceledQuantity(),
                     result.selfTradePrevented());
+            // 탐지는 정산 전에 해서 체결과 같은 트랜잭션에 남긴다. 체결이 커밋되면 탐지 기록도 반드시 남는다
+            List<Alert> found = detectAll(market, result.trades(), null);
             try {
-                tx.executeWithoutResult(s -> settle(market, order, result, receipt, reservePerShare));
+                tx.executeWithoutResult(s -> {
+                    settle(market, order, result, receipt, reservePerShare);
+                    alerts.insert(found);
+                });
             } catch (RuntimeException e) {
                 log.error("settlement failed for order {}", order.id(), e);
                 recoverFailedSettlement(market, order.id());
                 throw new TradingException("주문을 처리하지 못해 취소했어요. 잠시 후 다시 시도해 주세요");
             }
 
-            for (Trade trade : result.trades()) {
-                recordAlerts(FdsDetector.detect(trade, market.lastPrice(), market.recentTrades(Integer.MAX_VALUE)));
-                market.record(trade);
-            }
+            for (Trade trade : result.trades()) market.record(trade);
             events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
             return receipt;
         } finally {
@@ -405,7 +407,12 @@ public class TradingService {
         OrderBook.AuctionResult result;
         try {
             result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.basePrice());
-            if (!result.trades().isEmpty()) tx.executeWithoutResult(s -> settleAuction(market.team.id(), result));
+            // 시초가는 기준가와 크게 다를 수 있어 가격 괴리는 체결가 기준으로 본다
+            List<Alert> found = detectAll(market, result.trades(), result.price());
+            if (!result.trades().isEmpty()) tx.executeWithoutResult(s -> {
+                settleAuction(market.team.id(), result);
+                alerts.insert(found);
+            });
         } catch (RuntimeException e) {
             log.error("opening auction failed for {}", market.team.id(), e);
             try {
@@ -417,11 +424,7 @@ public class TradingService {
             throw new TradingException("상장 체결을 처리하지 못했어요. 잠시 후 다시 시도해 주세요");
         }
         market.listingAt = null;
-        for (Trade trade : result.trades()) {
-            // 시초가는 기준가와 크게 다를 수 있어 가격 괴리는 체결가 기준으로 본다
-            recordAlerts(FdsDetector.detect(trade, result.price(), market.recentTrades(Integer.MAX_VALUE)));
-            market.record(trade);
-        }
+        for (Trade trade : result.trades()) market.record(trade);
         events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
         log.info("opening auction for {} matched {} trades at {}", market.team.id(), result.trades().size(),
                 result.price());
@@ -555,14 +558,25 @@ public class TradingService {
     }
 
     public List<Alert> alerts(int limit) {
-        return alerts.stream().limit(limit).toList();
+        return alerts.recent(limit);
     }
 
-    private void recordAlerts(List<Alert> found) {
-        for (Alert a : found) {
-            alerts.addFirst(a);
-            if (alerts.size() > MAX_ALERTS) alerts.pollLast();
+    /**
+     * 이번 매칭의 체결마다 이상거래를 찾는다. 시세는 아직 바꾸지 않고, 앞선 체결을 차례로 더해 가며 본다.
+     *
+     * @param reference 가격 괴리 기준. null이면 직전 체결가
+     */
+    private static List<Alert> detectAll(Market market, List<Trade> newTrades, Long reference) {
+        if (newTrades.isEmpty()) return List.of();
+        List<Alert> found = new ArrayList<>();
+        List<Trade> recent = new ArrayList<>(market.recentTrades(Integer.MAX_VALUE)); // 최신이 앞
+        long last = market.lastPrice();
+        for (Trade t : newTrades) {
+            found.addAll(FdsDetector.detect(t, reference != null ? reference : last, recent));
+            recent.addFirst(t);
+            last = t.price();
         }
+        return found;
     }
 
     private Market market(String teamId) {
