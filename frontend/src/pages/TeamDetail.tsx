@@ -17,7 +17,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
   const [sheet, setSheet] = useState<{ side: Side; price: number } | null>(null)
   useEffect(() => watchTeam(teamId), [teamId])
 
-  const diff = m.last - team.basePrice
+  const diff = m.last - m.base
   const points =
     period === '1d'
       ? m.intraday.map((p) => p.price)
@@ -38,11 +38,11 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
         </div>
         <div className="huge">{fmt(m.last)}P</div>
         <div className={`small ${tone(diff)}`}>
-          어제보다 {signed(diff)}P ({pct(diff / team.basePrice)})
+          어제보다 {signed(diff)}P ({pct(diff / m.base)})
         </div>
       </section>
 
-      <Chart points={points} base={period === '1d' ? team.basePrice : undefined} />
+      <Chart points={points} base={period === '1d' ? m.base : undefined} />
       <div className="pad">
         <Segmented
           value={period}
@@ -77,9 +77,9 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
         <div><span className="muted">고가</span>{fmt(m.high)}</div>
         <div><span className="muted">저가</span>{fmt(m.low)}</div>
         <div><span className="muted">거래량</span>{fmt(m.volume)}</div>
-        <div><span className="muted">상한가</span><span className="up">{fmt(priceBand(team.basePrice).upper)}</span></div>
-        <div><span className="muted">하한가</span><span className="down">{fmt(priceBand(team.basePrice).lower)}</span></div>
-        <div><span className="muted">기준가</span>{fmt(team.basePrice)}</div>
+        <div><span className="muted">상한가</span><span className="up">{fmt(priceBand(m.base).upper)}</span></div>
+        <div><span className="muted">하한가</span><span className="down">{fmt(priceBand(m.base).lower)}</span></div>
+        <div><span className="muted">기준가</span>{fmt(m.base)}</div>
       </section>
 
       <div className="tabs">
@@ -123,7 +123,7 @@ function OrderBookView({ teamId, onPick }: { teamId: string; onPick: (price: num
   const s = useStore()
   const book = s.books[teamId]
   const last = s.markets[teamId].last
-  const base = teamById(teamId).basePrice
+  const base = s.markets[teamId].base
   const asks = levels(book.asks, 8).reverse()
   const bids = levels(book.bids, 8)
   const maxQty = Math.max(1, ...asks.map((l) => l.qty), ...bids.map((l) => l.qty))
@@ -256,7 +256,7 @@ function TalkView({ teamId }: { teamId: string }) {
 function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; side: Side; initialPrice: number; onClose: () => void }) {
   const s = useStore()
   const team = teamById(teamId)
-  const { upper, lower } = priceBand(team.basePrice)
+  const { upper, lower } = priceBand(s.markets[teamId].base)
   const [type, setType] = useState<OrderType>('limit')
   const [price, setPrice] = useState(initialPrice)
   const [qtyText, setQtyText] = useState('')

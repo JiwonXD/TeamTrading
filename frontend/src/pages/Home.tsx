@@ -14,7 +14,7 @@ export default function Home() {
   const value = totalValue(ME)
   const profit = value - START_POINTS
   const rows = TEAMS.filter((t) => league === 'all' || t.league === league)
-    .map((t) => ({ t, m: s.markets[t.id], chg: s.markets[t.id].last / t.basePrice - 1 }))
+    .map((t) => ({ t, m: s.markets[t.id], chg: s.markets[t.id].last / s.markets[t.id].base - 1 }))
     .sort((a, b) =>
       sort === 'volume' ? b.m.volume * b.m.last - a.m.volume * a.m.last : sort === 'up' ? b.chg - a.chg : a.chg - b.chg,
     )

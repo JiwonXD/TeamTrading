@@ -70,6 +70,7 @@ public class TradingService {
 
     public static final long START_POINTS = PointSource.SIGNUP.amount();
     private static final int MAX_ALERTS = 200;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter LISTING_TIME =
             DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(ZoneId.of("Asia/Seoul"));
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
@@ -109,13 +110,58 @@ public class TradingService {
     public void recover() {
         ids.set(Math.max(orders.maxId(), trades.maxId()));
         Map<String, Instant> holds = listings.holds();
+        Map<String, Long> closes = trades.latestCloses();
+        Instant dayStart = dayStart();
         for (Market m : markets.values()) {
             m.listingAt = holds.get(m.team.id());
             for (StoredOrder pending : orders.byStatus(m.team.id(), Status.PENDING)) cancelPending(pending);
             rebuildBook(m);
-            TradeStore.Stats stats = trades.stats(m.team.id());
-            m.restoreQuote(trades.recent(m.team.id(), Market.RECENT_TRADES), stats.high(), stats.low(), stats.volume());
+            m.restoreTrades(trades.recent(m.team.id(), Market.RECENT_TRADES));
+            m.startDay(closes.getOrDefault(m.team.id(), m.team.basePrice()), trades.stats(m.team.id(), dayStart));
         }
+    }
+
+    private Instant dayStart() {
+        return clock.instant().atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
+    }
+
+    /**
+     * 일 마감 뒤 새 날을 연다. 기준가를 가장 최근 종가로 바꾸고 당일 시세를 새로 센다.
+     * 새 가격제한폭을 벗어난 대기 주문은 취소해 묶인 포인트·주식을 돌려준다. 그대로 두면 제한폭 밖 가격에 체결될 수 있다.
+     * 종목 락 안에서 바꾸므로 주문 접수는 바뀌기 전이나 후의 기준가 하나만 본다.
+     *
+     * @return 취소한 주문 수
+     */
+    public int startNewDay() {
+        Map<String, Long> closes = trades.latestCloses();
+        Instant dayStart = dayStart();
+        int canceled = 0;
+        for (Market market : markets.values()) {
+            market.lock.lock();
+            try {
+                long base = closes.getOrDefault(market.team.id(), market.team.basePrice());
+                long upper = PriceRules.upperLimit(base);
+                long lower = PriceRules.lowerLimit(base);
+                for (StoredOrder o : orders.byStatus(market.team.id(), Status.OPEN)) {
+                    if (o.price() >= lower && o.price() <= upper) continue;
+                    long remaining = market.book.find(o.id()).map(Order::remaining).orElse(0L);
+                    tx.executeWithoutResult(s -> {
+                        if (orders.cancel(o.id(), Status.OPEN)) release(o, remaining);
+                    });
+                    market.book.cancel(o.id());
+                    canceled++;
+                }
+                market.startDay(base, trades.stats(market.team.id(), dayStart));
+                events.publishEvent(market.nextUpdate(epoch, List.of()));
+            } catch (RuntimeException e) {
+                log.error("could not start a new day for {}, halting it", market.team.id(), e);
+                market.halted = true;
+            } finally {
+                market.lock.unlock();
+            }
+        }
+        if (canceled > 0) log.info("canceled {} resting orders outside the new price limits", canceled);
+        return canceled;
     }
 
     public Account openAccount(String nickname) {
@@ -201,16 +247,17 @@ public class TradingService {
                               long price, long quantity) {
         Market market = market(teamId);
         account(accountId);
-        long base = market.team.basePrice();
-        PriceRules.validate(type, price, quantity, base).ifPresent(reason -> {
-            throw new TradingException(reason);
-        });
-        // 시장가 매수는 상한가 기준으로 포인트를 묶어두고 체결 후 차액을 돌려준다
-        long reservePerShare = type == OrderType.LIMIT ? price : PriceRules.upperLimit(base);
 
         market.lock.lock();
         try {
             if (market.halted) throw new TradingException("이 구단은 점검 중이라 잠시 거래할 수 없어요");
+            // 기준가는 일 마감 뒤 바뀌므로 종목 락 안에서 확인한다
+            long base = market.basePrice();
+            PriceRules.validate(type, price, quantity, base).ifPresent(reason -> {
+                throw new TradingException(reason);
+            });
+            // 시장가 매수는 상한가 기준으로 포인트를 묶어두고 체결 후 차액을 돌려준다
+            long reservePerShare = type == OrderType.LIMIT ? price : PriceRules.upperLimit(base);
             Instant listingAt = market.listingAt;
             if (Instant.MAX.equals(listingAt)) throw new TradingException("공모 청약 중인 구단이라 아직 거래할 수 없어요");
             if (market.book.isCollecting()) {
@@ -343,7 +390,7 @@ public class TradingService {
     private void openAuction(Market market) {
         OrderBook.AuctionResult result;
         try {
-            result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.team.basePrice());
+            result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.basePrice());
             if (!result.trades().isEmpty()) tx.executeWithoutResult(s -> settleAuction(market.team.id(), result));
         } catch (RuntimeException e) {
             log.error("opening auction failed for {}", market.team.id(), e);

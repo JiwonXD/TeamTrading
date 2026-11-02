@@ -15,6 +15,7 @@ export interface FeedTrade {
 }
 
 export interface FeedQuote {
+  basePrice: number
   lastPrice: number
   high: number
   low: number

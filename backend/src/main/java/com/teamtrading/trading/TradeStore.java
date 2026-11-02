@@ -7,6 +7,9 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 
 @Repository
@@ -50,9 +53,24 @@ public class TradeStore {
     public record Stats(long high, long low, long volume) {
     }
 
-    public Stats stats(String teamId) {
-        return jdbc.queryForObject("SELECT MAX(price), MIN(price), COALESCE(SUM(quantity), 0) FROM trades WHERE team_id = ?",
-                (rs, i) -> new Stats(rs.getLong(1), rs.getLong(2), rs.getLong(3)), teamId);
+    /** since 이후 체결의 고가·저가·거래량 */
+    public Stats stats(String teamId, Instant since) {
+        return jdbc.queryForObject("""
+                SELECT MAX(price), MIN(price), COALESCE(SUM(quantity), 0) FROM trades
+                WHERE team_id = ? AND executed_at >= ?""",
+                (rs, i) -> new Stats(rs.getLong(1), rs.getLong(2), rs.getLong(3)), teamId, Timestamp.from(since));
+    }
+
+    /** 구단별 가장 최근 일 마감 종가(daily_closes). 기준가가 된다 */
+    public Map<String, Long> latestCloses() {
+        Map<String, Long> out = new HashMap<>();
+        jdbc.query("""
+                SELECT d.team_id, d.price FROM daily_closes d
+                WHERE d.close_date = (SELECT MAX(c.close_date) FROM daily_closes c WHERE c.team_id = d.team_id)""",
+                rs -> {
+                    out.put(rs.getString(1), rs.getLong(2));
+                });
+        return out;
     }
 
     public long maxId() {
