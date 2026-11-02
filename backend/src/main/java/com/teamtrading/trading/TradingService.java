@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -73,6 +74,9 @@ public class TradingService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter LISTING_TIME =
             DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(ZoneId.of("Asia/Seoul"));
+    private static final DateTimeFormatter VI_TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of("Asia/Seoul"));
+    /** VI가 발동하면 이만큼 단일가 매매로 주문을 모은다 */
+    public static final Duration VI_DURATION = Duration.ofMinutes(2);
     private static final Logger log = LoggerFactory.getLogger(TradingService.class);
 
     private final AccountStore accounts;
@@ -212,12 +216,12 @@ public class TradingService {
         });
     }
 
-    /** 상장 시각이 된 구단의 동시호가를 체결한다 */
+    /** 상장 시각이 됐거나 VI 시간이 끝난 구단의 단일가 매매를 체결한다 */
     public void openDueAuctions() {
         for (Market market : markets.values()) {
             market.lock.lock();
             try {
-                if (market.book.isCollecting() && !before(market.listingAt)) openAuction(market);
+                if (market.book.isCollecting() && !before(auctionEndsAt(market))) openAuction(market);
             } catch (TradingException e) {
                 // openAuction이 이미 기록했다. 다음 차례에 다시 시도한다
             } finally {
@@ -229,6 +233,11 @@ public class TradingService {
     /** 배정이 끝나 상장 시각을 기다리는 중(동시호가 대상)인지 */
     private static boolean auctionPending(Market market) {
         return market.listingAt != null && !market.listingAt.equals(Instant.MAX);
+    }
+
+    /** 단일가 매매가 끝나는 시각. VI 중이면 VI 끝, 아니면 상장 시각 */
+    private static Instant auctionEndsAt(Market market) {
+        return market.viUntil != null ? market.viUntil : market.listingAt;
     }
 
     /** 지금이 그 시각 전인지. null이면 이미 지난 것으로 본다 */
@@ -287,15 +296,18 @@ public class TradingService {
             Instant listingAt = market.listingAt;
             if (Instant.MAX.equals(listingAt)) throw new TradingException("상장 전인 구단이라 거래할 수 없어요. 공모 청약 중이거나 공모를 기다리고 있어요");
             if (market.book.isCollecting()) {
-                if (!before(listingAt)) {
+                Instant endsAt = auctionEndsAt(market);
+                if (!before(endsAt)) {
                     openAuction(market);
                 } else {
-                    // 상장 전 동시호가: 지정가 주문을 모아 상장 시각에 한 가격으로 체결한다
+                    // 단일가 매매(상장 전 동시호가, VI): 지정가 주문을 모아 끝나는 시각에 한 가격으로 체결한다
+                    boolean vi = market.viUntil != null;
                     if (type != OrderType.LIMIT)
-                        throw new TradingException("상장 전 동시호가 시간이라 지정가 주문만 받아요. "
-                                + LISTING_TIME.format(listingAt) + "에 한 가격으로 체결해요");
+                        throw new TradingException(vi
+                                ? "변동성 완화장치(VI)가 발동해 " + VI_TIME.format(endsAt) + "까지 단일가 매매 중이라 지정가 주문만 받아요"
+                                : "상장 전 동시호가 시간이라 지정가 주문만 받아요. " + LISTING_TIME.format(endsAt) + "에 한 가격으로 체결해요");
                     if (market.book.hasOrderFrom(accountId, side.opposite()))
-                        throw new TradingException("동시호가 시간에는 같은 구단을 사고 팔 수 없어요. 반대 주문을 먼저 취소해 주세요");
+                        throw new TradingException((vi ? "단일가 매매" : "동시호가") + " 시간에는 같은 구단을 사고 팔 수 없어요. 반대 주문을 먼저 취소해 주세요");
                 }
             }
             var existing = orders.findByClientOrderId(accountId, clientOrderId);
@@ -310,7 +322,8 @@ public class TradingService {
                         teamId, side, type, price, quantity);
             }
 
-            MatchResult result = market.book.submit(order, ids::incrementAndGet, order.createdAt());
+            long[] band = market.viBand();
+            MatchResult result = market.book.submit(order, ids::incrementAndGet, order.createdAt(), band[0], band[1]);
             OrderReceipt receipt = OrderReceipt.of(order.id(), type, quantity, result.filledQuantity(),
                     result.resting() == null ? 0 : result.resting().remaining(), result.canceledQuantity(),
                     result.selfTradePrevented());
@@ -328,6 +341,10 @@ public class TradingService {
             }
 
             for (Trade trade : result.trades()) market.record(trade);
+            if (result.interrupted()) {
+                market.viUntil = clock.instant().plus(VI_DURATION);
+                log.info("volatility interruption for {} until {} (band {}~{})", teamId, market.viUntil, band[0], band[1]);
+            }
             events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
             return receipt;
         } finally {
@@ -412,34 +429,39 @@ public class TradingService {
     }
 
     /**
-     * 동시호가 체결. 모인 주문을 한 가격에 체결하고 연속 매매로 넘어간다. 매수자는 자기 지정가로 묶어둔 포인트에서
+     * 단일가 매매 체결(상장 동시호가, VI). 모인 주문을 한 가격에 체결하고 연속 매매로 넘어간다. 매수자는 자기 지정가로 묶어둔 포인트에서
      * 체결가와의 차액을 돌려받는다. 정산이 실패하면 DB 기준으로 동시호가 호가창을 되살리고 다음에 다시 시도한다
      */
     private void openAuction(Market market) {
         OrderBook.AuctionResult result;
         try {
-            result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.basePrice());
-            // 시초가는 기준가와 크게 다를 수 있어 가격 괴리는 체결가 기준으로 본다
-            List<Alert> found = detectAll(market, result.trades(), result.price());
+            result = market.book.uncross(ids::incrementAndGet, clock.instant(), market.auctionReference());
+            // 시초가는 기준가와 크게 다를 수 있어 가격 괴리는 체결가 기준으로 본다.
+            // VI 단일가는 VI 직전 체결가 기준으로 본다. 호가가 얇을 때 단일가 매매로 몰아주기를 피해 가지 못하게
+            long reference = market.viUntil != null ? market.lastPrice() : result.price();
+            List<Alert> found = detectAll(market, result.trades(), reference);
             if (!result.trades().isEmpty()) tx.executeWithoutResult(s -> {
                 settleAuction(market.team.id(), result);
                 alerts.insert(found);
             });
         } catch (RuntimeException e) {
-            log.error("opening auction failed for {}", market.team.id(), e);
+            log.error("auction failed for {}", market.team.id(), e);
             try {
                 rebuildBook(market);
             } catch (RuntimeException again) {
                 market.halted = true;
                 log.error("could not recover market {}, halting it", market.team.id(), again);
             }
-            throw new TradingException("상장 체결을 처리하지 못했어요. 잠시 후 다시 시도해 주세요");
+            throw new TradingException("단일가 매매 체결을 처리하지 못했어요. 잠시 후 다시 시도해 주세요");
         }
+        boolean vi = market.viUntil != null;
         market.listingAt = null;
+        market.viUntil = null;
         for (Trade trade : result.trades()) market.record(trade);
+        if (!result.trades().isEmpty()) market.auctionPrice(result.price());
         events.publishEvent(market.nextUpdate(epoch, result.trades().reversed()));
-        log.info("opening auction for {} matched {} trades at {}", market.team.id(), result.trades().size(),
-                result.price());
+        log.info("{} auction for {} matched {} trades at {}", vi ? "volatility" : "opening", market.team.id(),
+                result.trades().size(), result.price());
     }
 
     private void settleAuction(String teamId, OrderBook.AuctionResult result) {
@@ -491,10 +513,25 @@ public class TradingService {
         }
     }
 
+    /**
+     * DB의 대기 주문으로 호가창을 다시 만든다. 대기 주문끼리 가격이 교차하면 VI 단일가 매매 중에 멈춘 것이다.
+     * VI 끝 시각은 메모리에만 있으므로 지금부터 VI를 새로 시작한다(교차한 호가창으로 연속 매매를 하지 않는다)
+     */
     private void rebuildBook(Market market) {
         market.resetBook();
-        if (auctionPending(market)) market.book.startCollecting();
-        for (StoredOrder o : orders.byStatus(market.team.id(), Status.OPEN)) market.book.restore(o.toRestingOrder());
+        List<StoredOrder> open = orders.byStatus(market.team.id(), Status.OPEN);
+        if (market.viUntil == null && !auctionPending(market) && crossed(open)) {
+            market.viUntil = clock.instant().plus(VI_DURATION);
+            log.warn("restored book of {} is crossed, restarting its volatility interruption", market.team.id());
+        }
+        if (auctionPending(market) || market.viUntil != null) market.book.startCollecting();
+        for (StoredOrder o : open) market.book.restore(o.toRestingOrder());
+    }
+
+    private static boolean crossed(List<StoredOrder> open) {
+        long bid = open.stream().filter(o -> o.side() == Side.BUY).mapToLong(StoredOrder::price).max().orElse(Long.MIN_VALUE);
+        long ask = open.stream().filter(o -> o.side() == Side.SELL).mapToLong(StoredOrder::price).min().orElse(Long.MAX_VALUE);
+        return bid >= ask;
     }
 
     private static OrderReceipt replay(StoredOrder stored, String teamId, Side side, OrderType type, long price,

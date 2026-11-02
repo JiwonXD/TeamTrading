@@ -18,7 +18,7 @@ import java.util.function.LongSupplier;
 
 /**
  * 한 종목의 호가창. 가격-시간 우선 원칙으로 연속 매매한다.
- * 상장 전 동시호가 동안(collecting)에는 지정가 주문을 체결하지 않고 모으기만 하고, {@link #uncross}로 한 가격에 체결한다.
+ * 단일가 매매(상장 전 동시호가, VI) 동안(collecting)에는 지정가 주문을 체결하지 않고 모으기만 하고, {@link #uncross}로 한 가격에 체결한다.
  * 스레드 안전하지 않으며, 호출하는 쪽에서 종목 단위로 직렬화해야 한다.
  */
 public final class OrderBook {
@@ -29,6 +29,10 @@ public final class OrderBook {
     private final Map<Long, Order> byId = new HashMap<>();
     private boolean collecting;
 
+    /** 예상 체결가와 그 가격에 체결될 수량 */
+    public record Indicative(long price, long volume) {
+    }
+
     /**
      * 단일가 매매 결과.
      *
@@ -36,10 +40,6 @@ public final class OrderBook {
      * @param trades  체결 (매수 가격 우선, 같은 가격이면 접수 순)
      * @param touched 체결에 참여한 주문. 체결 뒤 잔량이 들어 있다
      */
-    /** 예상 체결가와 그 가격에 체결될 수량 */
-    public record Indicative(long price, long volume) {
-    }
-
     public record AuctionResult(long price, List<Trade> trades, List<Order> touched) {
     }
 
@@ -57,20 +57,35 @@ public final class OrderBook {
     }
 
     public MatchResult submit(Order order, LongSupplier tradeIds, Instant now) {
+        return submit(order, tradeIds, now, Long.MIN_VALUE, Long.MAX_VALUE);
+    }
+
+    /**
+     * 연속 매매. 체결가가 [guardLow, guardHigh](VI 발동 범위) 밖이 될 차례가 오면 그 앞에서 멈추고 단일가 매매로 넘어간다.
+     * 범위 안에서 이미 체결한 몫은 그대로 두고, 지정가 잔량은 단일가 매매 호가로 남기고, 시장가 잔량은 취소한다.
+     * 남은 지정가 잔량은 반대 호가와 교차할 수 있으므로 단일가 매매(collecting)로 바꾼 뒤에 쌓는다.
+     */
+    public MatchResult submit(Order order, LongSupplier tradeIds, Instant now, long guardLow, long guardHigh) {
         if (!order.teamId().equals(teamId)) throw new IllegalArgumentException("wrong book");
         if (collecting) {
             if (order.type() != OrderType.LIMIT) throw new IllegalArgumentException("auction accepts limit orders only");
             rest(order);
-            return new MatchResult(List.of(), order, 0, false);
+            return new MatchResult(List.of(), order, 0, false, false);
         }
         NavigableMap<Long, Deque<Order>> opposite = order.side() == Side.BUY ? asks : bids;
         List<Trade> trades = new ArrayList<>();
         boolean selfTradePrevented = false;
+        boolean interrupted = false;
 
         matching:
         while (order.remaining() > 0 && !opposite.isEmpty()) {
             Map.Entry<Long, Deque<Order>> best = opposite.firstEntry();
             if (!crosses(order, best.getKey())) break;
+            if (best.getKey() < guardLow || best.getKey() > guardHigh) {
+                interrupted = true;
+                collecting = true;
+                break;
+            }
             Iterator<Order> queue = best.getValue().iterator();
             while (queue.hasNext() && order.remaining() > 0) {
                 Order resting = queue.next();
@@ -91,10 +106,14 @@ public final class OrderBook {
             if (best.getValue().isEmpty()) opposite.remove(best.getKey());
         }
 
+        // VI로 멈춘 지정가 잔량이 내 반대 주문과 교차하면 단일가 체결에서 자기매매가 되므로 남기지 않고 취소한다
+        if (interrupted && order.type() == OrderType.LIMIT && crossesOwn(order)) selfTradePrevented = true;
+
         Order rested = null;
         long canceled = 0;
         if (order.remaining() > 0) {
             if (order.type() == OrderType.LIMIT && !selfTradePrevented) {
+                // VI로 멈췄으면 이 주문은 반대 호가와 교차한 채 단일가 매매 호가로 남는다
                 rest(order);
                 rested = order;
             } else {
@@ -102,7 +121,7 @@ public final class OrderBook {
                 order.cancelRemaining();
             }
         }
-        return new MatchResult(List.copyOf(trades), rested, canceled, selfTradePrevented);
+        return new MatchResult(List.copyOf(trades), rested, canceled, selfTradePrevented, interrupted);
     }
 
     /** 재시작 복구용: 매칭 없이 대기 주문을 접수 순서대로 다시 쌓는다. 동시호가 중이 아닌데 호가가 교차하면 거부한다 */
@@ -114,21 +133,16 @@ public final class OrderBook {
         rest(order);
     }
 
+    private boolean crossesOwn(Order incoming) {
+        return book(incoming.side().opposite()).values().stream().flatMap(Deque::stream)
+                .anyMatch(o -> o.accountId().equals(incoming.accountId()) && crosses(incoming, o.price()));
+    }
+
     /** 이 계정이 반대쪽에 대기 주문을 갖고 있는지. 동시호가에서는 자기매매를 막으려고 접수 단계에서 거절한다 */
     public boolean hasOrderFrom(String accountId, Side side) {
         return book(side).values().stream().flatMap(Deque::stream).anyMatch(o -> o.accountId().equals(accountId));
     }
 
-    /**
-     * 동시호가를 끝내고 모인 주문을 한 가격에 체결한 뒤 연속 매매로 넘어간다.
-     * <ol>
-     * <li>체결 가능 수량 min(그 가격 이상 매수 합, 그 가격 이하 매도 합)이 가장 큰 가격</li>
-     * <li>같으면 남는 수량 |매수 합 - 매도 합|이 가장 작은 가격</li>
-     * <li>같으면 기준가에 가장 가까운 가격, 그래도 같으면 낮은 가격</li>
-     * </ol>
-     * 체결은 가격 우선, 같은 가격이면 접수 순으로 짝짓는다. 체결가가 정해지면 그보다 좋은 가격의 주문은 모두 체결되므로
-     * 끝난 뒤 호가가 교차하지 않는다.
-     */
     /** 지금 단일가 매매를 하면 체결될 가격과 수량(예상 체결가). 체결될 주문이 없으면 빈 값. 호가창은 바꾸지 않는다 */
     public Optional<Indicative> indicative(long referencePrice) {
         long bestPrice = referencePrice;
@@ -153,6 +167,16 @@ public final class OrderBook {
         return bestVolume == 0 ? Optional.empty() : Optional.of(new Indicative(bestPrice, bestVolume));
     }
 
+    /**
+     * 단일가 매매를 끝내고 모인 주문을 한 가격에 체결한 뒤 연속 매매로 넘어간다.
+     * <ol>
+     * <li>체결 가능 수량 min(그 가격 이상 매수 합, 그 가격 이하 매도 합)이 가장 큰 가격</li>
+     * <li>같으면 남는 수량 |매수 합 - 매도 합|이 가장 작은 가격</li>
+     * <li>같으면 기준가에 가장 가까운 가격, 그래도 같으면 낮은 가격</li>
+     * </ol>
+     * 체결은 가격 우선, 같은 가격이면 접수 순으로 짝짓는다. 체결가가 정해지면 그보다 좋은 가격의 주문은 모두 체결되므로
+     * 끝난 뒤 호가가 교차하지 않는다.
+     */
     public AuctionResult uncross(LongSupplier tradeIds, Instant now, long referencePrice) {
         collecting = false;
         Optional<Indicative> found = indicative(referencePrice);

@@ -6,6 +6,10 @@ import java.util.Optional;
 public final class PriceRules {
 
     public static final double PRICE_LIMIT_RATE = 0.30;
+    /** 동적 VI: 직전 체결가에서 이 비율(%) 이상 벗어난 가격에 체결될 차례면 단일가 매매로 넘어간다 */
+    public static final int DYNAMIC_VI_PERCENT = 6;
+    /** 정적 VI: 직전 단일가(그날 기준가 또는 마지막 단일가 체결가)에서 이 비율(%) 이상 */
+    public static final int STATIC_VI_PERCENT = 10;
 
     private PriceRules() {
     }
@@ -26,6 +30,19 @@ public final class PriceRules {
 
     public static long lowerLimit(long basePrice) {
         long raw = (long) Math.ceil(basePrice * (1 - PRICE_LIMIT_RATE));
+        long tick = tickSize(raw);
+        return (raw + tick - 1) / tick * tick;
+    }
+
+    /** 기준 가격에서 percent% 미만으로 오른 가격 중 가장 높은 호가. 정수로 계산해 경계에서 어긋나지 않는다 */
+    public static long viUpper(long reference, int percent) {
+        long raw = (reference * (100 + percent) - 1) / 100;
+        return raw / tickSize(raw) * tickSize(raw);
+    }
+
+    /** 기준 가격에서 percent% 미만으로 내린 가격 중 가장 낮은 호가 */
+    public static long viLower(long reference, int percent) {
+        long raw = reference * (100 - percent) / 100 + 1;
         long tick = tickSize(raw);
         return (raw + tick - 1) / tick * tick;
     }

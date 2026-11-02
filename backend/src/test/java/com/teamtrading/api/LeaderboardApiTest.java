@@ -26,9 +26,9 @@ class LeaderboardApiTest {
     void showsNicknamesAndMyRowWithoutAccountIds() throws Exception {
         String seller = trading.openAccount("lb-seller").id();
         String buyer = trading.openAccount("lb-buyer").id();
-        trading.grantShares(seller, "ssg", 5, 15_000);
-        trading.place(seller, "lb-s", "ssg", Side.SELL, OrderType.LIMIT, 15_000, 1);
-        trading.place(buyer, "lb-b", "ssg", Side.BUY, OrderType.LIMIT, 15_000, 1);
+        trading.grantShares(seller, "ssg", 5, 13_750);
+        trading.place(seller, "lb-s", "ssg", Side.SELL, OrderType.LIMIT, 13_750, 1);
+        trading.place(buyer, "lb-b", "ssg", Side.BUY, OrderType.LIMIT, 13_750, 1);
 
         String body = mvc.perform(get("/api/leaderboard?period=TODAY&sort=PNL").with(login(buyer)))
                 .andExpect(status().isOk())

@@ -26,11 +26,15 @@ final class Market {
     boolean halted;
     /** 첫 상장 전이면 거래를 시작할 시각. 공모 배정 전이면 Instant.MAX, 거래 중이면 null */
     volatile Instant listingAt;
+    /** VI가 발동해 단일가 매매 중이면 끝나는 시각, 아니면 null */
+    volatile Instant viUntil;
     final ReentrantLock lock = new ReentrantLock(true);
     private final Deque<Trade> recent = new ArrayDeque<>();
     /** 기준가(전일 종가). 매일 일 마감 뒤 바뀐다 */
     private long basePrice;
     private long lastPrice;
+    /** 정적 VI 기준. 그날 기준가로 시작해 단일가 매매로 체결될 때마다 그 가격으로 바뀐다 */
+    private long staticReference;
     /** 당일(KST) 고가·저가·거래량 */
     private long high;
     private long low;
@@ -43,6 +47,7 @@ final class Market {
         this.book = new OrderBook(team.id());
         this.basePrice = team.basePrice();
         this.lastPrice = basePrice;
+        this.staticReference = basePrice;
         this.high = lastPrice;
         this.low = lastPrice;
     }
@@ -57,6 +62,7 @@ final class Market {
     /** 기준가와 당일 시세를 정한다. 오늘 체결이 없으면 고가·저가는 현재가 */
     void startDay(long basePrice, TradeStore.Stats today) {
         this.basePrice = basePrice;
+        this.staticReference = basePrice;
         if (today.volume() == 0) {
             high = lastPrice;
             low = lastPrice;
@@ -89,6 +95,20 @@ final class Market {
         return lastPrice;
     }
 
+    /** 단일가 매매로 체결된 가격. 정적 VI의 새 기준이 된다 */
+    void auctionPrice(long price) {
+        staticReference = price;
+    }
+
+    /** 연속 매매에서 체결해도 되는 가격 범위 {낮은 끝, 높은 끝}. 직전 체결가 ±6%와 직전 단일가 ±10% 미만이 겹치는 곳 */
+    long[] viBand() {
+        long low = Math.max(PriceRules.viLower(lastPrice, PriceRules.DYNAMIC_VI_PERCENT),
+                PriceRules.viLower(staticReference, PriceRules.STATIC_VI_PERCENT));
+        long high = Math.min(PriceRules.viUpper(lastPrice, PriceRules.DYNAMIC_VI_PERCENT),
+                PriceRules.viUpper(staticReference, PriceRules.STATIC_VI_PERCENT));
+        return new long[]{low, high};
+    }
+
     long seq() {
         return seq;
     }
@@ -108,12 +128,17 @@ final class Market {
                 book.levels(Side.BUY, FEED_DEPTH), trades);
     }
 
+    /** 단일가 매매에서 가격이 같은 조건이면 고르는 기준. 상장 동시호가는 기준가, VI는 직전 체결가 */
+    long auctionReference() {
+        return viUntil != null ? lastPrice : basePrice;
+    }
+
     Quote quote() {
-        // 동시호가 중이면 지금 단일가 매매를 할 때의 가격과 수량을 함께 내보낸다(상장 체결과 같은 계산)
-        var indicative = book.isCollecting() ? book.indicative(basePrice) : Optional.<OrderBook.Indicative>empty();
+        // 단일가 매매 중이면 지금 체결할 때의 가격과 수량을 함께 내보낸다(실제 체결과 같은 계산)
+        var indicative = book.isCollecting() ? book.indicative(auctionReference()) : Optional.<OrderBook.Indicative>empty();
         return new Quote(team, basePrice, lastPrice, high, low, volume,
                 PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice), listingAt == null,
                 indicative.map(OrderBook.Indicative::price).orElse(null),
-                indicative.map(OrderBook.Indicative::volume).orElse(0L));
+                indicative.map(OrderBook.Indicative::volume).orElse(0L), viUntil);
     }
 }

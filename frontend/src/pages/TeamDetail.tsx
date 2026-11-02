@@ -48,6 +48,14 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
               : '상장 전이에요. 공모 청약과 상장 동시호가를 거쳐 거래가 시작돼요'}
           </div>
         )}
+        {m.listed && m.viUntil && (
+          <p className="notice vi-notice" aria-live="polite">
+            가격이 크게 움직여 변동성 완화장치(VI)가 발동했어요.{' '}
+            {new Date(m.viUntil).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}까지
+            지정가 주문을 모아 한 가격에 체결해요
+            {m.indicative && ` · 예상 체결가 ${fmt(m.indicative.price)}P (${fmt(m.indicative.volume)}주)`}
+          </p>
+        )}
       </section>
 
       <Chart points={points} base={period === '1d' ? m.base : undefined} />

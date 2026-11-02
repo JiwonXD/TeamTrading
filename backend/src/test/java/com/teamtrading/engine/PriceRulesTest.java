@@ -23,4 +23,16 @@ class PriceRulesTest {
         assertThat(PriceRules.validate(OrderType.LIMIT, 10_010, 1, 10_000)).isEmpty();
         assertThat(PriceRules.validate(OrderType.MARKET, 0, 1, 10_000)).isEmpty();
     }
+
+    @Test
+    void volatilityBandStopsJustBeforeTheThresholdOnATick() {
+        // 정확히 6%(10,600)는 발동 가격이라 범위에 넣지 않는다
+        assertThat(PriceRules.viUpper(10_000, 6)).isEqualTo(10_590);
+        assertThat(PriceRules.viLower(10_000, 6)).isEqualTo(9_410);
+        assertThat(PriceRules.viUpper(18_450, 10)).isEqualTo(20_250);
+        assertThat(PriceRules.viLower(18_450, 10)).isEqualTo(16_610);
+        // 호가 단위가 바뀌는 경계(5,000 미만은 5원, 이상은 10원)
+        assertThat(PriceRules.viUpper(4_800, 6)).isEqualTo(5_080);
+        assertThat(PriceRules.viLower(5_300, 6)).isEqualTo(4_985);
+    }
 }
