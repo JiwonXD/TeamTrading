@@ -111,6 +111,8 @@ jobs:
         run: |
           tail -n 200 backend.log
           tail -n 50 frontend.log
+          curl -s localhost:8080/api/teams/lg/orderbook; echo
+          cat frontend/test-results/*/error-context.md | head -120
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
