@@ -141,11 +141,20 @@ class MatchStore {
 
     List<MyDividend> myDividends(String accountId, int limit) {
         return jdbc.query("""
-                SELECT d.match_id, d.team_id, d.kind, d.dps, g.amount, g.granted_at FROM point_grants g
-                JOIN dividends d ON g.source_ref = CONCAT(d.match_id, ':', d.team_id, ':', g.account_id)
-                WHERE g.account_id = ? AND g.source = 'DIVIDEND' ORDER BY g.id DESC LIMIT ?""",
-                (rs, i) -> new MyDividend(rs.getLong(1), rs.getString(2), rs.getString(3),
-                        rs.getLong(5) / rs.getLong(4), rs.getLong(5), rs.getTimestamp(6).toInstant()),
-                accountId, limit);
+                SELECT * FROM (
+                    SELECT g.id AS grant_id, d.match_id, NULL AS award_id, d.team_id, d.kind, d.dps, g.amount,
+                        g.granted_at FROM point_grants g
+                    JOIN dividends d ON g.source_ref = CONCAT(d.match_id, ':', d.team_id, ':', g.account_id)
+                    WHERE g.account_id = ? AND g.source = 'DIVIDEND'
+                    UNION ALL
+                    SELECT g.id, NULL, a.id, a.team_id, a.award, a.dps, g.amount, g.granted_at FROM point_grants g
+                    JOIN season_awards a ON g.source_ref = CONCAT('award:', a.id, ':', g.account_id)
+                    WHERE g.account_id = ? AND g.source = 'DIVIDEND'
+                ) x ORDER BY grant_id DESC LIMIT ?""",
+                (rs, i) -> new MyDividend((Long) rs.getObject("match_id", Long.class),
+                        (Long) rs.getObject("award_id", Long.class), rs.getString("team_id"), rs.getString("kind"),
+                        rs.getLong("amount") / rs.getLong("dps"), rs.getLong("amount"),
+                        rs.getTimestamp("granted_at").toInstant()),
+                accountId, accountId, limit);
     }
 }
