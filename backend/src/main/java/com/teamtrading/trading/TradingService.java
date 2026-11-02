@@ -488,6 +488,11 @@ public class TradingService {
         return accounts.all();
     }
 
+    /** 복구에 실패해 거래를 멈춘 구단 */
+    public List<String> haltedTeams() {
+        return markets.values().stream().filter(m -> m.halted).map(m -> m.team.id()).toList();
+    }
+
     public List<Alert> alerts(int limit) {
         return alerts.stream().limit(limit).toList();
     }

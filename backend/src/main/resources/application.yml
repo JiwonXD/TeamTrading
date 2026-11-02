@@ -7,3 +7,21 @@ spring:
     password: teamtrading
 server:
   port: 8080
+# 운영 지표와 상태 확인은 별도 포트(8081)로만 연다. 이 포트는 외부에 공개하지 않고 내부 네트워크의 Prometheus만 읽는다
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: [health, prometheus]
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: [50ms, 100ms, 250ms, 500ms, 1s]

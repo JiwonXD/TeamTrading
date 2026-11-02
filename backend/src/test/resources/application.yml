@@ -12,3 +12,5 @@ teamtrading:
     auto-allocate: false
   auction:
     auto-open: false
+  monitoring:
+    reconcile: false
