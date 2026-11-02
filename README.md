@@ -47,7 +47,10 @@ docker compose up -d     # 로컬 MySQL 8.4
 - 대사: 원장을 계정·자산·칸(가능/묶임)별로 합산해 `accounts`·`positions` 잔고와 비교하고, 합이 0이 아닌 전표를 찾는다. 두 쪽을 한 읽기 트랜잭션에서 읽어 같은 시점끼리 비교한다.
 - 복구: 정산이 실패하면 그 주문을 취소하고 호가창을 DB에서 다시 쌓는다. 기동 시에는 `PENDING`으로 남은 주문을 취소하고 `OPEN` 주문을 접수 순서대로 읽어 호가창을 복구한다. 복구마저 실패하면 그 종목 거래를 멈춘다.
 
-로그인 대신 `X-Account-Id` 헤더로 계정을 구분한다. 이상거래 탐지 기록은 아직 메모리에만 있다.
+- 포인트 발행: 가입·광고·게시글 등 포인트가 새로 생기는 경로는 모두 `point_grants`에 `(source, source_ref)` 멱등키로 기록하고 경로별 하루 한도를 둔다. 대사는 원장 발행 총량과 발행 기록 합도 비교한다.
+- 로그인: 카카오·네이버·구글 OAuth 로그인 후 세션 쿠키로 계정을 구분한다. 상태를 바꾸는 요청에는 CSRF 토큰(`XSRF-TOKEN` 쿠키 → `X-XSRF-TOKEN` 헤더)이 필요하다. 소셜 로그인 키는 `oauth` 프로필(`application-oauth.yml`)의 환경 변수로 넣고, `demo` 프로필은 키 없이 닉네임으로 들어가는 개발용 로그인을 연다. 운영자 계정은 `teamtrading.auth.admins`에 계정 id로 지정한다.
+
+이상거래 탐지 기록은 아직 메모리에만 있다.
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
@@ -55,15 +58,18 @@ docker compose up -d     # 로컬 MySQL 8.4
 | GET | `/api/teams/{teamId}` | 구단 시세, 상·하한가 |
 | GET | `/api/teams/{teamId}/orderbook?depth=10` | 호가창. 실시간 시세와 같은 `epoch`·`seq`를 함께 준다 |
 | GET | `/api/teams/{teamId}/trades?limit=30` | 최근 체결 (익명) |
-| POST | `/api/accounts` | 계정 만들기 (100만P 지급) |
+| GET | `/api/auth/options` | 로그인 방법 (소셜 로그인 제공자, 개발용 로그인 여부) |
+| GET | `/oauth2/authorization/{kakao\|naver\|google}` | 소셜 로그인 시작. 처음 로그인하면 계정을 만들고 100만P 지급 |
+| POST | `/api/auth/dev-login` | 개발용 닉네임 로그인 (`demo` 프로필에서만) |
+| POST | `/api/auth/logout` | 로그아웃 |
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |
 | GET | `/api/accounts/me/orders` | 내 대기 주문 |
 | GET | `/api/accounts/me/trades?limit=20` | 내 체결 내역 |
 | POST | `/api/orders` | 주문. `clientOrderId`가 같은 재시도는 처음 결과를 그대로 돌려주고, 같은 번호로 다른 주문을 보내면 409 |
 | DELETE | `/api/orders/{orderId}` | 주문 취소 |
-| GET | `/api/rankings` | 수익률 랭킹. 헤더를 보내면 내 행에 `me: true` (계정 id는 내보내지 않음) |
-| GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (운영자용) |
-| GET | `/api/surveillance/reconciliation` | 원장과 잔고 대사 결과 (운영자용) |
+| GET | `/api/rankings` | 수익률 랭킹. 로그인했으면 내 행에 `me: true` (계정 id는 내보내지 않음) |
+| GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (닉네임만 공개) |
+| GET | `/api/surveillance/reconciliation` | 원장·잔고·발행 기록 대사 결과 (운영자만) |
 
 ### 실시간 시세
 

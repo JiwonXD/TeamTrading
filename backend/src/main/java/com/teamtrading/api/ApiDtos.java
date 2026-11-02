@@ -25,9 +25,6 @@ final class ApiDtos {
     private ApiDtos() {
     }
 
-    record OpenAccountRequest(@NotBlank @Size(max = 20) String nickname) {
-    }
-
     record AccountResponse(String id, String nickname, long availablePoints, long lockedPoints,
                            long totalValue, double returnRate, List<Holding> holdings) {
     }

@@ -11,6 +11,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.teamtrading.auth.TestLogin.login;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,12 +29,8 @@ class TradingApiTest {
     @Autowired
     TradingService trading;
 
-    private String openAccount(String nickname) throws Exception {
-        String body = mvc.perform(post("/api/accounts").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nickname\":\"" + nickname + "\"}"))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$.id");
+    private String openAccount(String nickname) {
+        return trading.openAccount(nickname).id();
     }
 
     @Test
@@ -48,7 +46,7 @@ class TradingApiTest {
     void placesShowsAndCancelsOrder() throws Exception {
         String me = openAccount("api-user");
 
-        String receipt = mvc.perform(post("/api/orders").header("X-Account-Id", me)
+        String receipt = mvc.perform(post("/api/orders").with(login(me))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"clientOrderId\":\"o-1\",\"teamId\":\"t1\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":32000,\"quantity\":3}"))
                 .andExpect(status().isCreated())
@@ -58,19 +56,19 @@ class TradingApiTest {
 
         mvc.perform(get("/api/teams/t1/orderbook"))
                 .andExpect(jsonPath("$.bids[0].price").value(32_000));
-        mvc.perform(get("/api/accounts/me").header("X-Account-Id", me))
+        mvc.perform(get("/api/accounts/me").with(login(me)))
                 .andExpect(jsonPath("$.lockedPoints").value(96_000));
 
-        mvc.perform(delete("/api/orders/" + orderId).header("X-Account-Id", me))
+        mvc.perform(delete("/api/orders/" + orderId).with(login(me)))
                 .andExpect(status().isNoContent());
-        mvc.perform(get("/api/accounts/me/orders").header("X-Account-Id", me))
+        mvc.perform(get("/api/accounts/me/orders").with(login(me)))
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test
     void rejectsOrderOutsidePriceBandWithReadableMessage() throws Exception {
         String me = openAccount("band");
-        mvc.perform(post("/api/orders").header("X-Account-Id", me)
+        mvc.perform(post("/api/orders").with(login(me))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"clientOrderId\":\"o-2\",\"teamId\":\"lg\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":30000,\"quantity\":1}"))
                 .andExpect(status().isUnprocessableContent())
@@ -81,18 +79,18 @@ class TradingApiTest {
     void retriedOrderReturnsSameReceiptAndReusedIdIsConflict() throws Exception {
         String me = openAccount("retry");
         String order = "{\"clientOrderId\":\"r-1\",\"teamId\":\"kt\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":12000,\"quantity\":2}";
-        String first = mvc.perform(post("/api/orders").header("X-Account-Id", me)
+        String first = mvc.perform(post("/api/orders").with(login(me))
                         .contentType(MediaType.APPLICATION_JSON).content(order))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        String retry = mvc.perform(post("/api/orders").header("X-Account-Id", me)
+        String retry = mvc.perform(post("/api/orders").with(login(me))
                         .contentType(MediaType.APPLICATION_JSON).content(order))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         org.assertj.core.api.Assertions.assertThat(retry).isEqualTo(first);
 
-        mvc.perform(post("/api/orders").header("X-Account-Id", me)
+        mvc.perform(post("/api/orders").with(login(me))
                         .contentType(MediaType.APPLICATION_JSON).content(order.replace("\"quantity\":2", "\"quantity\":3")))
                 .andExpect(status().isConflict());
-        mvc.perform(get("/api/accounts/me/orders").header("X-Account-Id", me))
+        mvc.perform(get("/api/accounts/me/orders").with(login(me)))
                 .andExpect(jsonPath("$.length()").value(1));
     }
 
@@ -104,14 +102,14 @@ class TradingApiTest {
         trading.place(seller, "s-1", "ssg", Side.SELL, OrderType.LIMIT, 13_750, 5);
         trading.place(buyer, "b-1", "ssg", Side.BUY, OrderType.LIMIT, 13_750, 2);
 
-        mvc.perform(get("/api/accounts/me/trades").header("X-Account-Id", buyer))
+        mvc.perform(get("/api/accounts/me/trades").with(login(buyer)))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].side").value("BUY"))
                 .andExpect(jsonPath("$[0].quantity").value(2));
-        mvc.perform(get("/api/accounts/me/trades").header("X-Account-Id", seller))
+        mvc.perform(get("/api/accounts/me/trades").with(login(seller)))
                 .andExpect(jsonPath("$[0].side").value("SELL"));
 
-        String ranking = mvc.perform(get("/api/rankings").header("X-Account-Id", buyer))
+        String ranking = mvc.perform(get("/api/rankings").with(login(buyer)))
                 .andReturn().getResponse().getContentAsString();
         org.assertj.core.api.Assertions.assertThat(ranking).doesNotContain(buyer).doesNotContain(seller);
         java.util.List<String> mine = JsonPath.read(ranking, "$[?(@.me == true)].nickname");
@@ -132,7 +130,10 @@ class TradingApiTest {
     }
 
     @Test
-    void requiresAccountHeader() throws Exception {
+    void requiresLogin() throws Exception {
         mvc.perform(get("/api/accounts/me")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/orders").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientOrderId\":\"x\",\"teamId\":\"lg\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":18450,\"quantity\":1}"))
+                .andExpect(status().isUnauthorized());
     }
 }

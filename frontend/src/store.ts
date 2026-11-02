@@ -10,6 +10,8 @@ import type { OrderResult, State } from './storeTypes'
 export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
+export type { LoginOptions } from './store.server'
+
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
 impl.start()
@@ -33,6 +35,10 @@ export const cancel = (userId: string, teamId: string, orderId: string): Promise
   Promise.resolve(impl.cancel(userId, teamId, orderId))
 
 export const settleMatches = impl.settleMatches
+
+/** 서버 모드에서 로그인이 필요하면 로그인 방법, 아니면 null */
+export const getLogin = (): server.LoginOptions | null => (mode === 'server' ? server.getLogin() : null)
+export const devLogin = server.devLogin
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})

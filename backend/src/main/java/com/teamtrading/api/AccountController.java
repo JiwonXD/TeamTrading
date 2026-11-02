@@ -3,29 +3,21 @@ package com.teamtrading.api;
 import com.teamtrading.account.Account;
 import com.teamtrading.api.ApiDtos.AccountResponse;
 import com.teamtrading.api.ApiDtos.MyTradeResponse;
-import com.teamtrading.api.ApiDtos.OpenAccountRequest;
 import com.teamtrading.api.ApiDtos.OrderResponse;
 import com.teamtrading.api.ApiDtos.RankingEntry;
 import com.teamtrading.trading.TradingService;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** 로그인은 다음 단계. 지금은 X-Account-Id 헤더로 계정을 구분한다 */
+/** 계정은 로그인(소셜 또는 개발용)으로만 생긴다. 내 계정은 세션의 로그인 정보로 구분한다 */
 @RestController
 class AccountController {
-
-    static final String ACCOUNT_HEADER = "X-Account-Id";
 
     private final TradingService trading;
 
@@ -33,25 +25,19 @@ class AccountController {
         this.trading = trading;
     }
 
-    @PostMapping("/api/accounts")
-    @ResponseStatus(HttpStatus.CREATED)
-    AccountResponse open(@Valid @RequestBody OpenAccountRequest req) {
-        return view(trading.openAccount(req.nickname()));
-    }
-
     @GetMapping("/api/accounts/me")
-    AccountResponse me(@RequestHeader(ACCOUNT_HEADER) String accountId) {
+    AccountResponse me(@AuthenticationPrincipal String accountId) {
         return view(trading.account(accountId));
     }
 
     @GetMapping("/api/accounts/me/orders")
-    List<OrderResponse> myOrders(@RequestHeader(ACCOUNT_HEADER) String accountId) {
+    List<OrderResponse> myOrders(@AuthenticationPrincipal String accountId) {
         trading.account(accountId);
         return trading.openOrders(accountId).stream().map(OrderResponse::of).toList();
     }
 
     @GetMapping("/api/accounts/me/trades")
-    List<MyTradeResponse> myTrades(@RequestHeader(ACCOUNT_HEADER) String accountId,
+    List<MyTradeResponse> myTrades(@AuthenticationPrincipal String accountId,
                                    @RequestParam(defaultValue = "20") int limit) {
         trading.account(accountId);
         return trading.myTrades(accountId, Math.min(limit, 100)).stream()
@@ -59,7 +45,7 @@ class AccountController {
     }
 
     @GetMapping("/api/rankings")
-    List<RankingEntry> rankings(@RequestHeader(value = ACCOUNT_HEADER, required = false) String accountId) {
+    List<RankingEntry> rankings(@AuthenticationPrincipal String accountId) {
         record Row(Account account, long value, double rate) {
         }
         List<Row> rows = new ArrayList<>();

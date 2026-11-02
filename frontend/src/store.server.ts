@@ -1,6 +1,7 @@
 // 서버에 붙는 저장소. 시세 목록·내 계좌·랭킹·감시 기록은 주기적으로 받아오고,
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
-// 계정 id는 지금 인증 수단이라 이 모듈 밖으로 내보내지 않고, 화면에는 ME로만 보인다.
+// 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
+// 화면에서 내 계정은 ME로만 보인다.
 import { SEED_POSTS, TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
@@ -8,7 +9,6 @@ import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
 import { emit } from './storeCore'
 import { ME, START_POINTS, type Market, type OrderResult, type Post, type State, type User } from './storeTypes'
 
-const ACCOUNT_KEY = 'teamtrading:account'
 const POLL_MS = 3000
 
 interface QuoteDto { id: string; lastPrice: number; high: number; low: number; volume: number }
@@ -19,8 +19,10 @@ interface MyTradeDto { id: number; teamId: string; side: 'BUY' | 'SELL'; price: 
 interface RankingDto { rank: number; nickname: string; totalValue: number; returnRate: number; me: boolean }
 interface AlertDto { kind: string; teamId: string; tradeId: number; nicknameA: string; nicknameB: string; message: string; detectedAt: string }
 interface ReceiptDto { message: string }
+export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean }
 
-let accountId = ''
+let login: LoginOptions | null = null
+let poller: ReturnType<typeof setInterval> | undefined
 let account: AccountDto | null = null
 let quotes: Record<string, QuoteDto> = {}
 let orders: OrderDto[] = []
@@ -43,10 +45,15 @@ class ApiError extends Error {
   }
 }
 
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)
+  return m ? decodeURIComponent(m[1]) : ''
+}
+
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(accountId ? { 'X-Account-Id': accountId } : {}) },
+    headers: { 'Content-Type': 'application/json', ...(method === 'GET' ? {} : { 'X-XSRF-TOKEN': csrfToken() }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!res.ok) {
@@ -56,20 +63,19 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.status === 204 ? (undefined as T) : res.json()
 }
 
-async function ensureAccount() {
-  accountId = localStorage.getItem(ACCOUNT_KEY) ?? ''
-  if (accountId) {
-    try {
-      account = await api<AccountDto>('GET', '/api/accounts/me')
-      return
-    } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) throw e
-    }
+/** 로그인돼 있으면 true. 아니면 로그인 화면에 보여줄 방법을 받아 둔다 */
+async function ensureLogin(): Promise<boolean> {
+  try {
+    account = await api<AccountDto>('GET', '/api/accounts/me')
+    login = null
+    return true
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 401)) throw e
+    account = null
+    login = await api<LoginOptions>('GET', '/api/auth/options')
+    update()
+    return false
   }
-  accountId = ''
-  account = await api<AccountDto>('POST', '/api/accounts', { nickname: `투자자${Math.floor(1000 + Math.random() * 9000)}` })
-  accountId = account.id
-  localStorage.setItem(ACCOUNT_KEY, accountId)
 }
 
 async function refresh() {
@@ -257,16 +263,30 @@ export function addPost(teamId: string, body: string) {
 
 export const settleMatches = () => '경기 배당은 아직 서버에 없어요'
 
+export const getLogin = () => login
+
+/** 개발·시연 서버에서만 열려 있는 닉네임 로그인 */
+export async function devLogin(nickname: string): Promise<string | null> {
+  try {
+    await api('POST', '/api/auth/dev-login', { nickname })
+    start()
+    return null
+  } catch (e) {
+    return e instanceof Error ? e.message : '로그인하지 못했어요'
+  }
+}
+
 export function reset() {
-  localStorage.removeItem(ACCOUNT_KEY)
-  accountId = ''
-  account = null
-  ensureAccount().then(refresh)
+  api('POST', '/api/auth/logout').catch(() => {}).finally(start)
 }
 
 export function start() {
-  ensureAccount()
-    .then(refresh)
-    .then(() => setInterval(() => refresh().catch(() => {}), POLL_MS))
+  clearInterval(poller)
+  ensureLogin()
+    .then(async (ok) => {
+      if (!ok) return
+      await refresh()
+      poller = setInterval(() => refresh().catch(() => {}), POLL_MS)
+    })
     .catch(() => {})
 }

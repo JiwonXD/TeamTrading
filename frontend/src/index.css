@@ -256,3 +256,10 @@ main.with-cta { padding-bottom: 96px; }
   font-size: 14px; z-index: 100; width: max-content; max-width: calc(100% - 32px); text-align: center;
   animation: up 0.2s ease-out;
 }
+
+.login h2 { font-size: 20px; line-height: 1.4; margin-bottom: 8px; }
+.login-provider {
+  display: block; margin-top: 12px; padding: 15px; border-radius: 14px; text-align: center;
+  font-weight: 700; background: var(--surface-2); color: var(--text); text-decoration: none;
+}
+.login-error { margin-top: 12px; color: var(--red); font-size: 14px; }
