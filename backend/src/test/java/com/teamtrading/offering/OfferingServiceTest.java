@@ -112,6 +112,9 @@ class OfferingServiceTest {
         assertThatThrownBy(() -> trading.place(a, "buy-a1", "lg", Side.BUY, OrderType.LIMIT, 19_500, 1))
                 .hasMessageContaining("사고 팔 수 없어요");
         assertThat(trading.trades("lg", 10)).isEmpty();
+        // 시세에 예상 체결가를 내보낸다. 상장 시각의 실제 체결가와 같다
+        assertThat(trading.quote("lg").indicativePrice()).isEqualTo(19_000);
+        assertThat(trading.quote("lg").indicativeVolume()).isEqualTo(6);
 
         // 재기동해도 동시호가 호가창을 그대로 되살린다
         trading.holdUntil("lg", null);
@@ -126,6 +129,7 @@ class OfferingServiceTest {
         assertThat(trading.trades("lg", 10)).allSatisfy(t -> assertThat(t.price()).isEqualTo(19_000))
                 .extracting(t -> t.quantity()).containsExactlyInAnyOrder(4L, 2L);
         assertThat(trading.holdings(c)).singleElement().satisfies(h -> assertThat(h.total()).isEqualTo(6));
+        assertThat(trading.quote("lg").indicativePrice()).isNull();
         // 매수자는 지정가 19,500으로 묶었다가 체결가 19,000과의 차액을 돌려받는다
         assertThat(available(c)).isEqualTo(1_000_000 - 6 * 19_000);
         assertThat(trading.openOrders(b)).singleElement().satisfies(x -> assertThat(x.remaining()).isEqualTo(3));

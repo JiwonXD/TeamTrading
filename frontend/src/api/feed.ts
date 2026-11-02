@@ -16,6 +16,8 @@ export interface FeedTrade {
 
 export interface FeedQuote {
   basePrice: number
+  indicativePrice?: number | null
+  indicativeVolume?: number
   lastPrice: number
   high: number
   low: number

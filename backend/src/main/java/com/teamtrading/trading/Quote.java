@@ -5,9 +5,11 @@ import com.teamtrading.team.Team;
 /**
  * @param basePrice 기준가(전일 종가). 등락률과 가격제한폭의 기준
  * @param listed    거래 중인지. 첫 상장 공모 전이거나 상장 동시호가를 기다리면 false
+ * @param indicativePrice  상장 동시호가 중 예상 체결가. 동시호가가 아니거나 체결될 주문이 없으면 null
+ * @param indicativeVolume 예상 체결가에 체결될 수량
  */
 public record Quote(Team team, long basePrice, long lastPrice, long high, long low, long volume, long upperLimit, long lowerLimit,
-                    boolean listed) {
+                    boolean listed, Long indicativePrice, long indicativeVolume) {
 
     public double changeRate() {
         return (double) lastPrice / basePrice - 1;

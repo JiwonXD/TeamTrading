@@ -11,6 +11,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 /** 종목 하나의 호가창과 시세. 모든 접근은 lock을 잡은 상태에서 한다 */
@@ -108,7 +109,11 @@ final class Market {
     }
 
     Quote quote() {
+        // 동시호가 중이면 지금 단일가 매매를 할 때의 가격과 수량을 함께 내보낸다(상장 체결과 같은 계산)
+        var indicative = book.isCollecting() ? book.indicative(basePrice) : Optional.<OrderBook.Indicative>empty();
         return new Quote(team, basePrice, lastPrice, high, low, volume,
-                PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice), listingAt == null);
+                PriceRules.upperLimit(basePrice), PriceRules.lowerLimit(basePrice), listingAt == null,
+                indicative.map(OrderBook.Indicative::price).orElse(null),
+                indicative.map(OrderBook.Indicative::volume).orElse(0L));
     }
 }

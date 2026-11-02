@@ -11,7 +11,7 @@ import { ME, START_POINTS, type Market, type OrderResult, type Post, type State,
 
 const POLL_MS = 3000
 
-interface QuoteDto { id: string; name: string; shortName: string; league: string; color: string; listed: boolean; basePrice: number; lastPrice: number; high: number; low: number; volume: number }
+interface QuoteDto { id: string; name: string; shortName: string; league: string; color: string; listed: boolean; basePrice: number; lastPrice: number; indicativePrice: number | null; indicativeVolume: number; high: number; low: number; volume: number }
 interface HoldingDto { teamId: string; available: number; locked: number; averagePrice: number }
 interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[] }
 interface OrderDto { id: number; teamId: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; price: number; quantity: number; remaining: number; createdAt: string }
@@ -254,7 +254,8 @@ function build(): State {
     const last = q?.lastPrice ?? team.basePrice
     const intraday = (feed?.trades ?? []).map((t) => ({ ts: Date.parse(t.executedAt), price: t.price })).reverse()
     markets[team.id] = {
-      base: q?.basePrice ?? team.basePrice, listed: quotes[team.id]?.listed ?? true, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
+      base: q?.basePrice ?? team.basePrice, listed: quotes[team.id]?.listed ?? true,
+      indicative: q?.indicativePrice != null ? { price: q.indicativePrice, volume: q.indicativeVolume ?? 0 } : undefined, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
       daily: [], intraday: intraday.length ? intraday : [{ ts: Date.now(), price: last }],
     }
     books[team.id] = toBook(team.id, feed)
