@@ -1,5 +1,5 @@
 import { TEAMS, teamById } from '../data/teams'
-import { ME, START_POINTS, cancel, lockedPoints, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
+import { ME, START_POINTS, cancel, lockedPoints, mode, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
 import { Header, Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 export default function Portfolio() {
@@ -15,7 +15,9 @@ export default function Portfolio() {
 
   return (
     <>
-      <Header title="내 투자" right={<button className="text-btn" onClick={() => { reset(); showToast('시즌을 처음부터 다시 시작했어요') }}>초기화</button>} />
+      <Header title="내 투자" right={mode === 'server'
+        ? <button className="text-btn" onClick={() => { reset(); showToast('로그아웃했어요') }}>로그아웃</button>
+        : <button className="text-btn" onClick={() => { reset(); showToast('시즌을 처음부터 다시 시작했어요') }}>초기화</button>} />
       <section className="card">
         <div className="muted">총 자산</div>
         <div className="big">{fmt(value)}P</div>

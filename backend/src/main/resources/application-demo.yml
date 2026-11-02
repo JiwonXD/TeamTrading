@@ -1,0 +1,4 @@
+# 개발·시연용. 소셜 로그인 키 없이 닉네임만으로 로그인할 수 있다. 운영에서는 켜지 않는다.
+teamtrading:
+  auth:
+    dev-login: true

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 운영자용 탐지 기록과 대사. 권한 검사는 로그인 도입 때 붙인다 */
+/** 탐지 기록은 닉네임만 보여 누구나 볼 수 있고, 계정 id가 나오는 대사는 운영자만 본다(SecurityConfig) */
 @RestController
 class SurveillanceController {
 

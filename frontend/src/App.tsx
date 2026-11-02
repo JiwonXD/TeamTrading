@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getToast, useStore } from './store'
+import { getLogin, getToast, useStore } from './store'
 import Home from './pages/Home'
 import TeamDetail from './pages/TeamDetail'
 import Portfolio from './pages/Portfolio'
 import Ranking from './pages/Ranking'
 import Watch from './pages/Watch'
+import Login from './pages/Login'
 
 function useHash() {
   const [hash, setHash] = useState(() => location.hash.slice(1) || 'home')
@@ -31,6 +32,14 @@ export default function App() {
   const hash = useHash()
   const toast = getToast()
   const teamMatch = hash.match(/^team-(\w+)/)
+  const login = getLogin()
+
+  if (login) return (
+    <div className="app">
+      <main><Login options={login} /></main>
+      {toast && <div key={toast.id} className="toast">{toast.msg}</div>}
+    </div>
+  )
 
   let page
   if (teamMatch) page = <TeamDetail teamId={teamMatch[1]} />
