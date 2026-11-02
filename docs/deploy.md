@@ -8,6 +8,7 @@
 | `backend` | 서버. `backend/Dockerfile`로 만든 이미지. 비루트 사용자로 실행. 8080(서비스)과 8081(관리)은 컨테이너 네트워크 안에서만 열린다 |
 | `web` | nginx. 화면(`frontend/dist`)을 주고 `/api`, `/ws`, 소셜 로그인 경로를 서버로 넘긴다. 바깥에 여는 포트는 이것 하나 |
 | `prometheus` | 서버 지표 수집과 경보 규칙(`deploy/prometheus/alerts.yml`). 서버 안(127.0.0.1:9090)에서만 열린다 |
+| `backup` | 매일 DB를 덤프해 `deploy/backups`에 남긴다 |
 
 ## 올리기
 
@@ -46,7 +47,7 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 감수할 점:
 
 - PC가 꺼지거나 잠자기에 들어가면 서비스도 멈춘다. 전원 설정에서 잠자기를 끈다. 컨테이너는 `restart: unless-stopped`라 Docker가 뜨면 다시 올라온다.
-- 백업은 직접 챙긴다. 아래 "백업"의 덤프 명령을 매일 돌린다(WSL의 cron이나 Windows 작업 스케줄러). 덤프 파일은 PC 밖(클라우드 드라이브 등)에도 둔다.
+- 백업은 `backup` 서비스가 매일 뜬다. 다만 PC 디스크가 망가지면 덤프도 함께 사라지므로 `deploy/backups`를 PC 밖(클라우드 드라이브 동기화 폴더 등)에도 복사한다.
 - 처리량의 상한은 집 업로드 속도와 PC 사양이다. 사용자가 늘면 같은 묶음을 클라우드 VM에 그대로 옮기고, Cloudflare의 Public Hostname만 새 서버로 바꾼다.
 
 ## HTTPS
@@ -70,11 +71,29 @@ DB 스키마는 Flyway가 기동할 때 올린다. 이미 적용된 마이그레
 
 ## 백업
 
-- 같은 서버의 MySQL이면 매일 `mysqldump --single-transaction`을 떠서 다른 곳(S3 등)에 둔다.
+`backup` 서비스가 매일 한국 시간 `BACKUP_AT`(기본 04:00)에 `mysqldump --single-transaction`으로 DB를 떠서 `deploy/backups/teamtrading-날짜-시각.sql.gz`로 남긴다.
+
+- 서비스를 멈추지 않고 한 시점의 장부를 뜬다(InnoDB 트랜잭션 스냅숏). 원장·잔고·주문이 서로 맞는 상태로 남는다.
+- 끝까지 쓰인 덤프만 이름을 붙여 남긴다. 실패하면 10초 간격으로 5분까지 다시 해 보고, 그래도 안 되면 다음 날 다시 한다.
+- `BACKUP_KEEP_DAYS`(기본 14)일 지난 덤프는 지운다.
+- 최근 26시간 안의 덤프가 없으면 `docker compose ps`에 backup이 `unhealthy`로 보인다. 처음 띄울 때는 바로 한 번 뜬다.
+- 지금 바로 뜨려면:
   ```bash
-  docker compose -f deploy/docker-compose.yml exec -T mysql sh -c 'mysqldump --single-transaction -uroot -p"$MYSQL_ROOT_PASSWORD" teamtrading' | gzip > teamtrading-$(date +%F).sql.gz
+  docker compose -f deploy/docker-compose.yml exec backup /usr/local/bin/backup.sh once
   ```
-- 관리형 DB(RDS 등)를 쓰면 자동 백업과 시점 복구를 켠다. 이때는 `mysql` 서비스를 빼고 `backend`의 `SPRING_DATASOURCE_URL`을 그 DB 주소로 바꾼다.
+- 덤프는 같은 PC에 있으므로 다른 곳(클라우드 드라이브, S3 등)에도 복사한다.
+- 관리형 DB(RDS 등)를 쓰면 자동 백업과 시점 복구를 켠다. 이때는 `mysql`·`backup` 서비스를 빼고 `backend`의 `SPRING_DATASOURCE_URL`을 그 DB 주소로 바꾼다.
+
+### 복원
+
+```bash
+cd deploy
+./restore.sh backups/teamtrading-20261102-040000.sql.gz
+```
+
+서버를 멈추고 DB를 비운 뒤 덤프를 넣고 서버를 다시 띄운다. 서버는 기동할 때 DB에서 호가창을 다시 쌓는다. 덤프 뒤의 주문·체결·포인트는 모두 사라지므로 '복원'을 입력해야 진행한다. 끝까지 쓰이지 않은 덤프는 거절한다. 복원하는 동안 화면의 요청은 502를 받는다.
+
+CI(Deploy bundle smoke test)가 매번 덤프를 뜨고 복원해, 덤프 뒤에 생긴 계정만 사라지고 서버가 다시 뜨는지 확인한다.
 
 ## 확인한 것 (2026-11-02, 로컬 Docker)
 

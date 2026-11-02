@@ -75,6 +75,31 @@ services:
       - "127.0.0.1:9090:9090"
     restart: unless-stopped
 
+  # 매일 한국 시간 BACKUP_AT에 DB를 덤프해 deploy/backups에 BACKUP_KEEP_DAYS일치 남긴다(docs/deploy.md "백업").
+  # 최근 26시간 안의 덤프가 없으면 unhealthy로 보인다
+  backup:
+    image: mysql:8.4
+    entrypoint: ["/usr/local/bin/backup.sh"]
+    # 다음 덤프를 기다리는 중에도 종료 신호를 받으면 바로 내려간다
+    init: true
+    environment:
+      MYSQL_PWD: ${DB_ROOT_PASSWORD}
+      BACKUP_AT: ${BACKUP_AT:-04:00}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -name 'teamtrading-*.sql.gz' -mmin -1560 | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      start_interval: 5s
+    restart: unless-stopped
+
   # 집 PC에서 베타를 열 때: 공유기 포트를 열지 않고 Cloudflare Tunnel로 바깥 주소를 붙인다.
   #   docker compose --profile tunnel up -d   (CLOUDFLARE_TUNNEL_TOKEN 필요, docs/deploy.md)
   tunnel:

@@ -205,6 +205,29 @@ jobs:
             sleep 2
           done
           curl -s localhost:9090/api/v1/targets; exit 1
+      # 백업 서비스가 덤프를 남기고, 그 덤프로 되돌리면 덤프 뒤에 가입한 계정만 사라지고 서버가 다시 뜨는지 본다
+      - name: Backup and restore
+        working-directory: deploy
+        run: |
+          login() {
+            jar=$(mktemp)
+            curl -sf -c $jar -b $jar localhost:8088/api/auth/options > /dev/null
+            tok=$(awk '$6 == "XSRF-TOKEN" { print $7 }' $jar)
+            curl -sf -c $jar -b $jar -H "X-XSRF-TOKEN: $tok" -H 'Content-Type: application/json' \
+              -d "{\"nickname\":\"$1\"}" localhost:8088/api/auth/dev-login > /dev/null
+          }
+          logins() {
+            docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N teamtrading -e \
+              "SELECT GROUP_CONCAT(subject ORDER BY subject) FROM account_identities WHERE subject LIKE \"ci-%-backup\""'
+          }
+          ls backups/teamtrading-*.sql.gz
+          login ci-before-backup
+          docker compose exec -T backup /usr/local/bin/backup.sh once
+          login ci-after-backup
+          test "$(logins)" = "ci-after-backup,ci-before-backup"
+          ./restore.sh "$(ls -t backups/teamtrading-*.sql.gz | head -1)" --yes
+          test "$(logins)" = "ci-before-backup"
+          curl -sf localhost:8088/api/teams | grep -q '"id":"lg"'
       - name: Show logs on failure
         if: failure()
         working-directory: deploy
