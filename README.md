@@ -109,6 +109,8 @@ npm test             # 매칭 엔진, 실시간 시세 처리 테스트
 npm run build        # dist/index.html 한 파일로 빌드 (시뮬레이션 모드, 미리보기용)
 ```
 
+서버 모드 배포본(`VITE_BACKEND=server npm run build`)은 홈 화면에 설치할 수 있는 PWA다. 서비스 워커는 화면 껍데기만 캐시하고 시세·잔고는 늘 서버에서 받는다. 서버에 닿지 못하면 기본값 대신 연결 상태와 마지막 갱신 시각을 보여준다([ADR 0016](docs/adr/0016-pwa-and-stale-data.md)).
+
 서버 모드로 전체를 띄우는 순서:
 
 ```bash

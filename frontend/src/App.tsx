@@ -1,11 +1,37 @@
 import { useEffect, useState } from 'react'
-import { getLogin, getToast, useStore } from './store'
+import { getConnection, getLogin, getToast, useStore } from './store'
 import Home from './pages/Home'
 import TeamDetail from './pages/TeamDetail'
 import Portfolio from './pages/Portfolio'
 import Ranking from './pages/Ranking'
 import Watch from './pages/Watch'
 import Login from './pages/Login'
+
+function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const on = () => setOnline(navigator.onLine)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', on)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', on)
+    }
+  }, [])
+  return online
+}
+
+const clock = (ts: number) => new Date(ts).toLocaleTimeString('ko-KR', { hour12: false })
+
+// 화면 값이 지금 서버 값이 아닐 때(오프라인, 서버 연결 끊김) 분명히 알린다
+function StatusBanner() {
+  const online = useOnline()
+  const conn = getConnection()
+  if (!online) return <div className="offline" role="alert">인터넷 연결이 끊겼어요. 시세와 주문은 다시 연결되면 이어서 보여드려요.</div>
+  if (conn.status === 'stale' && conn.lastSync)
+    return <div className="offline" role="alert">서버와 연결이 끊겨 {clock(conn.lastSync)} 기준 값이에요. 다시 연결하는 중이에요.</div>
+  return null
+}
 
 function useHash() {
   const [hash, setHash] = useState(() => location.hash.slice(1) || 'home')
@@ -33,9 +59,22 @@ export default function App() {
   const toast = getToast()
   const teamMatch = hash.match(/^team-(\w+)/)
   const login = getLogin()
+  const conn = getConnection()
+
+  // 서버 값을 한 번도 받지 못했으면 기본값을 보여주지 않고 연결 상태만 보여준다
+  if (!login && (conn.status === 'connecting' || conn.status === 'unreachable')) return (
+    <div className="app">
+      <StatusBanner />
+      <main className="connecting" aria-busy="true">
+        <div className="logo">팀트</div>
+        <p className="muted">{conn.status === 'connecting' ? '서버에 연결하는 중이에요' : '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해요'}</p>
+      </main>
+    </div>
+  )
 
   if (login) return (
     <div className="app">
+      <StatusBanner />
       <main><Login options={login} /></main>
       {toast && <div key={toast.id} className="toast" role="status">{toast.msg}</div>}
     </div>
@@ -50,6 +89,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <StatusBanner />
       <main className={teamMatch ? 'with-cta' : 'with-nav'}>{page}</main>
       {!teamMatch && (
         <nav className="tabbar">

@@ -165,3 +165,26 @@ test('discussion posts are stored on the server and others can report them', asy
   await mine.getByRole('button', { name: '삭제' }).click()
   await expect(page.locator('.post', { hasText: text })).toHaveCount(0)
 })
+
+// 개발 서버의 /src/api/ 모듈은 막지 않도록 경로로 고른다
+const serverApi = (url: URL) => url.pathname.startsWith('/api/')
+
+test('never shows default numbers without the server and marks values as stale when the server drops', async ({ page }) => {
+  // 서버에 한 번도 닿지 못하면 기본 자산·기준가 대신 연결 상태만 보여준다
+  await page.route(serverApi, (route) => route.abort())
+  await page.goto('/#home')
+  await expect(page.getByText('서버에 연결할 수 없어요')).toBeVisible()
+  await expect(page.locator('.asset-card')).toHaveCount(0)
+
+  // 다시 닿으면 스스로 연결한다
+  await page.unroute(serverApi)
+  await page.getByPlaceholder('닉네임').fill(`e2e${Date.now() % 1_000_000}`)
+  await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page.locator('.asset-card')).toBeVisible()
+
+  // 받은 뒤 끊기면 화면 값이 언제 기준인지 알린다
+  await page.route(serverApi, (route) => route.abort())
+  await expect(page.getByRole('alert')).toContainText('기준 값이에요')
+  await page.unroute(serverApi)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
