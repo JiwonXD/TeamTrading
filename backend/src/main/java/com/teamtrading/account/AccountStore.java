@@ -18,7 +18,7 @@ import java.util.Optional;
 public class AccountStore {
 
     private static final RowMapper<Account> ACCOUNT = (rs, i) -> new Account(rs.getString("id"),
-            rs.getString("nickname"), rs.getLong("initial_points"),
+            rs.getString("nickname"), rs.getLong("initial_value"),
             rs.getLong("available_points"), rs.getLong("locked_points"));
 
     private static final RowMapper<Holding> HOLDING = (rs, i) -> new Holding(rs.getString("team_id"),
@@ -31,8 +31,9 @@ public class AccountStore {
     }
 
     public Account create(String id, String nickname, long points, Instant now) {
-        jdbc.update("INSERT INTO accounts (id, nickname, initial_points, available_points, created_at) VALUES (?, ?, ?, ?, ?)",
-                id, nickname, points, points, Timestamp.from(now));
+        jdbc.update("""
+                INSERT INTO accounts (id, nickname, initial_points, initial_value, available_points, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)""", id, nickname, points, points, points, Timestamp.from(now));
         return new Account(id, nickname, points, points, 0);
     }
 
@@ -59,6 +60,11 @@ public class AccountStore {
         return jdbc.update("""
                 UPDATE accounts SET available_points = available_points - ?, locked_points = locked_points + ?
                 WHERE id = ? AND available_points >= ?""", amount, amount, accountId, amount) == 1;
+    }
+
+    /** 시즌 초 주식 지급분을 수익률 기준에 더한다 */
+    public void addInitialValue(String accountId, long amount) {
+        jdbc.update("UPDATE accounts SET initial_value = initial_value + ? WHERE id = ?", amount, accountId);
     }
 
     /** 판매 가능 수량이 충분할 때만 묶는다 */

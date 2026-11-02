@@ -117,6 +117,7 @@ public class TradingService {
         try {
             tx.executeWithoutResult(s -> {
                 accounts.applyShares(accountId, teamId, qty, 0, qty, qty * price);
+                accounts.addInitialValue(accountId, qty * price);
                 ledger.post(Journal.grant(accountId, teamId, qty), clock.instant());
             });
         } finally {
@@ -326,6 +327,10 @@ public class TradingService {
 
     public List<Trade> trades(String teamId, int limit) {
         return locked(market(teamId), m -> m.recentTrades(limit));
+    }
+
+    public List<Trade> myTrades(String accountId, int limit) {
+        return trades.byAccount(accountId, limit);
     }
 
     public List<StoredOrder> openOrders(String accountId) {

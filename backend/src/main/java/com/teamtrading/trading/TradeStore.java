@@ -37,6 +37,16 @@ public class TradeStore {
         return jdbc.query("SELECT * FROM trades WHERE team_id = ? ORDER BY id DESC LIMIT ?", TRADE, teamId, limit);
     }
 
+    /** 한 계정이 매수자나 매도자로 참여한 체결. 최신이 앞 */
+    public List<Trade> byAccount(String accountId, int limit) {
+        return jdbc.query("""
+                SELECT * FROM trades WHERE id IN (
+                    SELECT id FROM (SELECT id FROM trades WHERE buyer_id = ? ORDER BY id DESC LIMIT ?) b
+                    UNION
+                    SELECT id FROM (SELECT id FROM trades WHERE seller_id = ? ORDER BY id DESC LIMIT ?) s
+                ) ORDER BY id DESC LIMIT ?""", TRADE, accountId, limit, accountId, limit, limit);
+    }
+
     public record Stats(long high, long low, long volume) {
     }
 
