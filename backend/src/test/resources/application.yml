@@ -12,5 +12,7 @@ teamtrading:
     auto-allocate: false
   auction:
     auto-open: false
+  posts:
+    auto-reward: false
   monitoring:
     reconcile: false

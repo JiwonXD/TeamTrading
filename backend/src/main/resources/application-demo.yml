@@ -9,3 +9,6 @@ teamtrading:
   leaderboard:
     min-trades: 1
     min-age: PT0S
+  # 게시글 보상 대기(기본 10분)를 줄여 시연 중에 지급을 볼 수 있게 한다
+  posts:
+    reward-delay: PT1M

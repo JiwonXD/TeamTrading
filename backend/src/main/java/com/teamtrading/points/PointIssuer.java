@@ -12,6 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Optional;
 
 /**
  * 포인트 발행. 포인트를 새로 만드는 코드는 여기 하나뿐이다.
@@ -42,6 +43,15 @@ public class PointIssuer {
      * 계정 행을 잠근 뒤 오늘 지급 횟수를 세므로 동시 요청이 한도를 넘지 못한다.
      */
     public PointGrant grant(String accountId, PointSource source, String sourceRef) {
+        return grantWithinLimit(accountId, source, sourceRef)
+                .orElseThrow(() -> new TradingException("오늘 받을 수 있는 보상을 모두 받았어요"));
+    }
+
+    /**
+     * {@link #grant}와 같지만 하루 한도를 넘었으면 예외 대신 빈 값을 돌려준다.
+     * 바깥 트랜잭션 안에서 불러도 한도 초과 때문에 바깥 트랜잭션이 롤백 표시되지 않는다
+     */
+    public Optional<PointGrant> grantWithinLimit(String accountId, PointSource source, String sourceRef) {
         if (source == PointSource.SIGNUP || source == PointSource.DIVIDEND)
             throw new IllegalArgumentException(source + " is not an activity reward");
         return tx.execute(s -> {
@@ -50,13 +60,12 @@ public class PointIssuer {
             if (existing.isPresent()) {
                 if (!existing.get().accountId().equals(accountId))
                     throw new IdempotencyConflictException("이미 다른 계정에 지급된 보상이에요");
-                return existing.get();
+                return existing;
             }
             Instant now = clock.instant();
             Instant dayStart = now.atZone(KST).toLocalDate().atStartOfDay(KST).toInstant();
-            if (store.countSince(accountId, source, dayStart) >= source.dailyLimit())
-                throw new TradingException("오늘 받을 수 있는 보상을 모두 받았어요");
-            return issue(accountId, source, sourceRef, source.amount(), now);
+            if (store.countSince(accountId, source, dayStart) >= source.dailyLimit()) return Optional.empty();
+            return Optional.of(issue(accountId, source, sourceRef, source.amount(), now));
         });
     }
 
