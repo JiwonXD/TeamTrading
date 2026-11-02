@@ -50,7 +50,9 @@ docker compose up -d     # 로컬 MySQL 8.4
 - 포인트 발행: 가입·광고·게시글 등 포인트가 새로 생기는 경로는 모두 `point_grants`에 `(source, source_ref)` 멱등키로 기록하고 경로별 하루 한도를 둔다. 대사는 원장 발행 총량과 발행 기록 합도 비교한다.
 - 로그인: 카카오·네이버·구글 OAuth 로그인 후 세션 쿠키로 계정을 구분한다. 상태를 바꾸는 요청에는 CSRF 토큰(`XSRF-TOKEN` 쿠키 → `X-XSRF-TOKEN` 헤더)이 필요하다. 소셜 로그인 키는 `oauth` 프로필(`application-oauth.yml`)의 환경 변수로 넣고, `demo` 프로필은 키 없이 닉네임으로 들어가는 개발용 로그인을 연다. 운영자 계정은 `teamtrading.auth.admins`에 계정 id로 지정한다.
 
-이상거래 탐지 기록은 아직 메모리에만 있다.
+- 리더보드: KST 자정마다 구단 종가(마감 전 10분 VWAP)와 계정별 평가금·외부 유입을 기록하고, 일 단위 시간가중수익률로 순위를 매긴다. 활동 보상과 지급받은 주식은 수익에서 빼고 배당은 수익에 넣는다. 서버가 멈춰 있던 날은 기동할 때 원장에서 되짚어 채운다.
+
+이상거래 탐지 기록은 아직 메모리에만 있다. 그래서 재시작하면 리더보드의 이상거래 제외 대상도 비워진다.
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
@@ -68,6 +70,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 | POST | `/api/orders` | 주문. `clientOrderId`가 같은 재시도는 처음 결과를 그대로 돌려주고, 같은 번호로 다른 주문을 보내면 409 |
 | DELETE | `/api/orders/{orderId}` | 주문 취소 |
 | GET | `/api/rankings` | 수익률 랭킹. 로그인했으면 내 행에 `me: true` (계정 id는 내보내지 않음) |
+| GET | `/api/leaderboard?period=TODAY&sort=RETURN&limit=50` | 기간별(`TODAY`·`WEEK`·`MONTH`·`SEASON`) 시간가중수익률·손익 순위와 내 순위, 순위 밖이면 그 이유 |
 | GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (닉네임만 공개) |
 | GET | `/api/surveillance/reconciliation` | 원장·잔고·발행 기록 대사 결과 (운영자만) |
 
