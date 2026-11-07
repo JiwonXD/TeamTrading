@@ -183,7 +183,9 @@ jobs:
           curl -sf localhost:8088/ | grep -q '<html'
           curl -sf localhost:8088/api/teams | grep -q '"id":"lg"'
           # .env의 운영자 정보가 화면 빌드에 들어갔는지
-          curl -sf localhost:8088/ | grep -o 'assets/index-[^"]*\.js' | head -1 | xargs -I{} curl -sf localhost:8088/{} | grep -q 'ops@example.com'
+          # 화면은 한 파일(index.html)로 묶여 나온다. 큰 응답을 grep -q로 끊으면 curl이 SIGPIPE로 실패하므로 파일로 받아 찾는다
+          curl -sf localhost:8088/ -o page.html
+          grep -q 'ops@example.com' page.html
           jar=$(mktemp)
           curl -sf -c $jar -b $jar localhost:8088/api/auth/options > /dev/null
           token() { awk '$6 == "XSRF-TOKEN" { print $7 }' $jar; }
