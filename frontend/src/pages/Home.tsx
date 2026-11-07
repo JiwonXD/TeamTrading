@@ -3,17 +3,19 @@ import { type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
 import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
+import { LeagueStats, LeagueTabs } from '../components/League'
+import { LeagueSchedule } from '../components/Schedule'
 
 type Sort = 'volume' | 'up' | 'down'
 
-export default function Home() {
+/** league가 있으면 그 리그 카테고리 화면, 없으면 전체 홈 */
+export default function Home({ league }: { league: League | null }) {
   const s = useStore()
-  const [league, setLeague] = useState<League | 'all'>('all')
   const [sort, setSort] = useState<Sort>('volume')
 
   const value = totalValue(ME)
   const profit = value - START_POINTS
-  const rows = TEAMS.filter((t) => league === 'all' || t.league === league)
+  const rows = TEAMS.filter((t) => !league || t.league === league)
     .map((t) => ({ t, m: s.markets[t.id], chg: s.markets[t.id].last / s.markets[t.id].base - 1 }))
     .sort((a, b) =>
       sort === 'volume' ? b.m.volume * b.m.last - a.m.volume * a.m.last : sort === 'up' ? b.chg - a.chg : a.chg - b.chg,
@@ -24,31 +26,28 @@ export default function Home() {
   return (
     <>
       <Header />
-      <section className="card asset-card" onClick={() => go('portfolio')}>
-        <div className="muted">내 자산</div>
-        <div className="big">{fmt(value)}P</div>
-        <div className={`small ${tone(profit)}`}>
-          {signed(profit)}P ({pct(profit / START_POINTS)})
-        </div>
-        <div className="row-between top-gap">
-          <span className="muted">주문 가능 포인트</span>
-          <span className="strong">{fmt(s.users[ME].points)}P</span>
-        </div>
-      </section>
+      <LeagueTabs current={league} />
+      {league ? <LeagueSchedule league={league} /> : (
+        <section className="card asset-card" onClick={() => go('portfolio')}>
+          <div className="muted">내 자산</div>
+          <div className="big">{fmt(value)}P</div>
+          <div className={`small ${tone(profit)}`}>
+            {signed(profit)}P ({pct(profit / START_POINTS)})
+          </div>
+          <div className="row-between top-gap">
+            <span className="muted">주문 가능 포인트</span>
+            <span className="strong">{fmt(s.users[ME].points)}P</span>
+          </div>
+        </section>
+      )}
 
-      {offerings && <OfferingList offerings={offerings} />}
+      {offerings && <OfferingList offerings={league ? offerings.filter((o) => TEAMS.find((t) => t.id === o.teamId)?.league === league) : offerings} />}
 
-      {serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />}
+      {!league && (serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />)}
 
       <section className="card list-card">
-        <h2>구단 시세</h2>
-        <div className="chips">
-          {(['all', 'KBO', 'K리그', 'LCK'] as const).map((l) => (
-            <button key={l} className={`chip ${league === l ? 'on' : ''}`} onClick={() => setLeague(l)}>
-              {l === 'all' ? '전체' : l}
-            </button>
-          ))}
-        </div>
+        <h2>{league ? `${league} 구단 시세` : '구단 시세'}</h2>
+        {league && <LeagueStats league={league} />}
         <Segmented
           value={sort}
           onChange={setSort}
@@ -116,7 +115,7 @@ export function SimMatches() {
 
 const LEAGUE_LABEL: Record<MatchDto['league'], string> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
 
-function matchState(m: MatchDto) {
+export function matchState(m: MatchDto) {
   if (m.status === 'CANCELED') return '경기 취소'
   if (m.dividendStatus === 'REVIEW') return '결과 확인 중'
   if (m.dividendStatus === 'PAID') return '배당 지급 완료'

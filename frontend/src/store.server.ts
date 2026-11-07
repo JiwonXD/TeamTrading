@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { type League, TEAMS } from './data/teams'
+import { LEAGUES as LEAGUE_LIST, type League, TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -13,7 +13,7 @@ const POLL_MS = 3000
 
 interface QuoteDto { id: string; name: string; shortName: string; league: string; color: string; listed: boolean; basePrice: number; lastPrice: number; indicativePrice: number | null; indicativeVolume: number; viUntil: string | null; high: number; low: number; volume: number }
 interface HoldingDto { teamId: string; available: number; locked: number; averagePrice: number }
-interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[]; nicknameChangeableAt: string | null }
+interface AccountDto { id: string; nickname: string; availablePoints: number; lockedPoints: number; totalValue: number; holdings: HoldingDto[]; nicknameChangeableAt: string | null; admin: boolean }
 interface OrderDto { id: number; teamId: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; price: number; quantity: number; remaining: number; createdAt: string }
 interface MyTradeDto { id: number; teamId: string; side: 'BUY' | 'SELL'; price: number; quantity: number; executedAt: string }
 interface RankingDto { rank: number; nickname: string; totalValue: number; returnRate: number; me: boolean }
@@ -131,19 +131,20 @@ function syncTeams(list: QuoteDto[]) {
 }
 
 async function refresh() {
-  const [q, a, o, t, r, al, m, d, of, sub, ad] = await Promise.all([
+  const [q, a, o, t, r, m, d, of, sub, ad] = await Promise.all([
     api<QuoteDto[]>('GET', '/api/teams'),
     api<AccountDto>('GET', '/api/accounts/me'),
     api<OrderDto[]>('GET', '/api/accounts/me/orders'),
     api<MyTradeDto[]>('GET', '/api/accounts/me/trades?limit=50'),
     api<RankingDto[]>('GET', '/api/rankings'),
-    api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50'),
     api<MatchDto[]>('GET', '/api/matches?limit=9'),
     api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
     api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
     api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
     api<AdStatusDto>('GET', '/api/accounts/me/ads'),
   ])
+  // 이상거래 탐지 기록은 운영자만 받을 수 있다
+  const al = a.admin ? await api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50') : []
   await Promise.all(Object.keys(sockets).map(loadPosts))
   syncTeams(q)
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
@@ -294,6 +295,10 @@ export const getState = () => state
 export const fetchLeaderboard = (period: LeaderboardPeriod, sort: LeaderboardSort) =>
   api<LeaderboardDto>('GET', `/api/leaderboard?period=${period}&sort=${sort}&limit=50`)
 
+/** 리그 화면 달력: 한 리그의 [from, to) 경기를 시작 시각 순으로 */
+export const fetchSchedule = (league: League, from: Date, to: Date) =>
+  api<MatchDto[]>('GET', `/api/matches/schedule?league=${LEAGUE_LIST.find((l) => l.id === league)!.code}&from=${from.toISOString()}&to=${to.toISOString()}`)
+
 // ---------- 화면에서 부르는 동작 ----------
 
 export function totalShares(userId: string, teamId: string) {
@@ -419,6 +424,9 @@ export async function finishDemoAd(id: string): Promise<OrderResult> {
 }
 
 /** 내 닉네임과, 바꾼 지 7일이 안 됐으면 다시 바꿀 수 있는 시각 */
+/** 운영자 계정인지. 시장감시 메뉴를 보일지 정한다(실제 권한 검사는 서버) */
+export const isAdmin = () => account?.admin === true
+
 export const getProfile = () =>
   account ? { nickname: account.nickname, changeableAt: account.nicknameChangeableAt ? Date.parse(account.nicknameChangeableAt) : null } : null
 

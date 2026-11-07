@@ -32,8 +32,30 @@ test('desktop home shows the market table, side list and no accessibility violat
   await expect(page.locator('.tabbar')).toHaveCount(0)
   await expect(page.locator('.dtable tbody tr')).toHaveCount(18)
   await expect(page.locator('.side-row')).toHaveCount(18)
+  // 시장감시는 운영자만 본다
+  await expect(page.getByRole('link', { name: '시장감시' })).toHaveCount(0)
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
+})
+
+test('league tab shows that league\'s schedule and prices while the logo and 홈 menu stay', async ({ page }) => {
+  await signIn(page)
+  await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
+  await expect(page).toHaveURL(/#league-lck$/)
+  await expect(page.locator('.desk-brand')).toContainText('팬차트')
+  await expect(page.locator('.desk-nav [aria-current="page"]')).toHaveText('홈')
+  await expect(page.locator('.dh-table-panel h2')).toHaveText('LCK 실시간 시세')
+  // demo 프로필은 3분마다 리그별 시연 경기를 잡으므로 오늘 일정에 LCK 경기가 있다
+  await expect(page.locator('.sched-match').first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.dtable tbody tr').first()).toBeVisible()
+  await expect(page.locator('.dtable .dt-name .xs').filter({ hasNotText: 'LCK' })).toHaveCount(0)
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await page.goBack()
+  await expect(page).toHaveURL(/#home$/)
+  await expect(page.locator('.dtable tbody tr')).toHaveCount(18)
+  await expect(page.locator('.schedule')).toHaveCount(0)
 })
 
 test('slash opens team search and Enter moves to the team page', async ({ page, request }) => {

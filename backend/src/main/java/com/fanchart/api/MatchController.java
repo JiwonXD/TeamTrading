@@ -4,6 +4,7 @@ import com.fanchart.match.Match;
 import com.fanchart.match.MatchService;
 import com.fanchart.match.DividendRow;
 import com.fanchart.match.MyDividend;
+import com.fanchart.team.League;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +42,8 @@ class MatchController {
     record ResultRequest(@NotNull @Min(0) Integer homeScore, @NotNull @Min(0) Integer awayScore) {
     }
 
+    private static final Duration MAX_SCHEDULE_SPAN = Duration.ofDays(31);
+
     private final MatchService matches;
 
     MatchController(MatchService matches) {
@@ -53,6 +58,14 @@ class MatchController {
     @GetMapping("/api/matches")
     List<MatchResponse> latest(@RequestParam(defaultValue = "10") int limit) {
         return matches.latest(Math.min(limit, 50)).stream().map(this::view).toList();
+    }
+
+    /** 리그 화면의 날짜별 일정. 기간은 화면이 고른 날짜(사용자 시간대)를 시각으로 바꿔 보낸다 */
+    @GetMapping("/api/matches/schedule")
+    List<MatchResponse> schedule(@RequestParam League league, @RequestParam Instant from, @RequestParam Instant to) {
+        if (!from.isBefore(to) || Duration.between(from, to).compareTo(MAX_SCHEDULE_SPAN) > 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "기간은 31일 이내로 보내 주세요");
+        return matches.schedule(league, from, to).stream().map(this::view).toList();
     }
 
     @GetMapping("/api/matches/{matchId}")

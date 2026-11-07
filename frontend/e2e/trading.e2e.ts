@@ -44,9 +44,31 @@ test('login page has no accessibility violations and logging out returns to it',
   await expect(page.getByPlaceholder('닉네임')).toBeVisible()
 })
 
+test('league tab shows the schedule and only that league, and a team in a match opens its order page', async ({ page }) => {
+  await signIn(page)
+  await page.locator('.league-tabs').getByRole('link', { name: 'KBO' }).click()
+  await expect(page).toHaveURL(/#league-kbo$/)
+  await expect(page.locator('.topbar .brand')).toHaveText('팬차트')
+  await expect(page.locator('.tabbar a.on')).toContainText('홈')
+  await expect(page.locator('.stock-list li').first()).toBeVisible()
+  await expect(page.locator('.stock-name .xs').filter({ hasNotText: 'KBO' })).toHaveCount(0)
+  // demo 프로필은 3분마다 리그별 시연 경기를 잡으므로 오늘 일정에 KBO 경기가 있다
+  const firstMatch = page.locator('.sched-match').first()
+  await expect(firstMatch).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.sched-day[aria-pressed="true"]')).toContainText('오늘')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await firstMatch.locator('.sched-team').first().click()
+  await expect(page).toHaveURL(/#team-[a-z0-9-]+$/)
+  await expect(page.locator('.cta')).toBeVisible()
+})
+
 test('home lists every team with server prices and has no accessibility violations', async ({ page }) => {
   await signIn(page)
   await expect(page.locator('.stock-list li')).toHaveCount(18)
+  // 시장감시는 운영자만 보므로 일반 계정의 아래 탭은 홈·내 투자·랭킹
+  await expect(page.locator('.tabbar a')).toHaveText(['홈', '내 투자', '랭킹'])
   await expect(page.locator('.asset-card .big')).toHaveText(/1,000,000P|[\d,]+P/)
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])

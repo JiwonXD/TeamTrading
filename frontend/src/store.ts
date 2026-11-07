@@ -52,6 +52,7 @@ export const getConnection = (): server.Connection =>
 export const getMatches = (): server.MatchDto[] | null => (mode === 'server' ? server.getMatches() : null)
 
 export const fetchLeaderboard = server.fetchLeaderboard
+export const fetchSchedule = impl.fetchSchedule
 
 /** 서버 모드의 공모 목록과 내 청약. 시뮬레이션 모드는 null */
 export const getOfferings = (): server.OfferingDto[] | null => (mode === 'server' ? server.getOfferings() : null)
@@ -67,6 +68,9 @@ export const finishDemoAd = server.finishDemoAd
 /** 서버 모드의 내 닉네임. 시뮬레이션 모드는 null */
 export const getProfile = (): ReturnType<typeof server.getProfile> => (mode === 'server' ? server.getProfile() : null)
 export const changeNickname = server.changeNickname
+
+/** 시장감시(이상거래 탐지 기록)를 볼 수 있는지. 서버 모드는 운영자만, 시뮬레이션 미리보기는 운영자 화면 예시로 보여준다 */
+export const canWatch = (): boolean => (mode === 'server' ? server.isAdmin() : true)
 export const withdraw = server.withdraw
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */

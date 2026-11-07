@@ -50,7 +50,7 @@ class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         // 운영 지표는 외부에 공개하지 않는 관리 포트(8081)에서만 열린다
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
-                        .requestMatchers("/api/surveillance/reconciliation", "/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/surveillance/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/accounts/me/**", "/api/orders/**", "/api/auth/logout",
                                 "/api/offerings/*/subscriptions/**", "/api/posts/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/teams/*/posts").authenticated()

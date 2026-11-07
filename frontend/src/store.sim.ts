@@ -15,7 +15,8 @@ import {
   validateOrder,
 } from './engine/orderbook'
 import { detect } from './engine/fds'
-import { DIVIDEND_RATE, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
+import { DIVIDEND_RATE, LEAGUES, type League, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
+import type { MatchDto } from './store.server'
 import { ME, START_POINTS, type Holding, type Market, type Post, type OrderResult, type State, type User } from './storeTypes'
 
 interface SimState extends State {
@@ -332,3 +333,15 @@ export function start() {
 }
 
 export const getState = (): State => state
+
+/** 리그 화면 달력. 미리보기에는 경기 일정이 없으므로 목업 경기를 오늘 저녁 일정으로 보여준다 */
+export function fetchSchedule(league: League, from: Date, to: Date): Promise<MatchDto[]> {
+  const at = new Date()
+  at.setHours(18, 30, 0, 0)
+  if (at < from || at >= to) return Promise.resolve([])
+  return Promise.resolve(TODAY_MATCHES.filter((m) => m.league === league).map((m, i) => ({
+    id: i + 1, league: LEAGUES.find((l) => l.id === m.league)!.code, homeTeamId: m.home, awayTeamId: m.away,
+    scheduledAt: at.toISOString(), status: 'FINAL', homeScore: m.homeScore, awayScore: m.awayScore,
+    dividendStatus: state.settled.includes(m.id) ? 'PAID' : 'NONE',
+  })))
+}

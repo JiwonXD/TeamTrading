@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConnection, getLogin, getToast, useStore } from './store'
+import { canWatch, getConnection, getLogin, getToast, useStore } from './store'
 import Home from './pages/Home'
 import TeamDetail from './pages/TeamDetail'
 import Portfolio from './pages/Portfolio'
@@ -7,6 +7,7 @@ import Ranking from './pages/Ranking'
 import Watch from './pages/Watch'
 import Login from './pages/Login'
 import { Privacy, Terms } from './pages/Legal'
+import { LEAGUES } from './data/teams'
 import DesktopShell from './desktop/DesktopShell'
 import DesktopHome from './desktop/DesktopHome'
 import DesktopTeam from './desktop/DesktopTeam'
@@ -65,6 +66,8 @@ export default function App() {
   const toast = getToast()
   // 구단 id에는 하이픈이 들어갈 수 있다(운영자가 등록한 구단)
   const teamMatch = hash.match(/^team-([a-z0-9-]+)$/)
+  // 리그 카테고리 화면: #league-kbo 처럼 홈을 한 리그로 좁혀 보여준다
+  const league = LEAGUES.find((l) => hash === `league-${l.slug}`)?.id ?? null
   const login = getLogin()
   const conn = getConnection()
 
@@ -101,8 +104,8 @@ export default function App() {
     if (teamMatch) deskPage = <DesktopTeam key={teamMatch[1]} teamId={teamMatch[1]} />
     else if (hash === 'portfolio') deskPage = <div className="desk-page"><Portfolio /></div>
     else if (hash === 'ranking') deskPage = <div className="desk-page"><Ranking /></div>
-    else if (hash === 'watch') deskPage = <div className="desk-page"><Watch /></div>
-    else deskPage = <DesktopHome />
+    else if (hash === 'watch' && canWatch()) deskPage = <div className="desk-page"><Watch /></div>
+    else deskPage = <DesktopHome league={league} />
     return (
       <DesktopShell
         hash={hash}
@@ -119,8 +122,8 @@ export default function App() {
   if (teamMatch) page = <TeamDetail teamId={teamMatch[1]} />
   else if (hash === 'portfolio') page = <Portfolio />
   else if (hash === 'ranking') page = <Ranking />
-  else if (hash === 'watch') page = <Watch />
-  else page = <Home />
+  else if (hash === 'watch' && canWatch()) page = <Watch />
+  else page = <Home league={league} />
 
   return (
     <div className="app">
@@ -128,8 +131,8 @@ export default function App() {
       <main className={teamMatch ? 'with-cta' : 'with-nav'}>{page}</main>
       {!teamMatch && (
         <nav className="tabbar">
-          {TABS.map((t) => (
-            <a key={t.path} href={`#${t.path}`} className={hash === t.path ? 'on' : ''}>
+          {TABS.filter((t) => t.path !== 'watch' || canWatch()).map((t) => (
+            <a key={t.path} href={`#${t.path}`} className={hash === t.path || (t.path === 'home' && league) ? 'on' : ''}>
               <svg width="24" height="24" viewBox="0 0 24 24"><path d={t.icon} fill="currentColor" /></svg>
               {t.label}
             </a>

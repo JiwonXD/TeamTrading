@@ -105,6 +105,34 @@ main.with-cta { padding-bottom: 96px; }
   padding: 20px;
 }
 .asset-card { cursor: pointer; }
+
+/* 리그 카테고리 탭(토스증권 국내·해외 구분처럼 굵은 글자 탭)과 리그 요약 카드 */
+.league-tabs { display: flex; gap: 18px; padding: 0 20px 12px; overflow-x: auto; scrollbar-width: none; }
+.league-tabs a { font-size: 18px; font-weight: 800; color: var(--text-3); white-space: nowrap; }
+.league-tabs a.on { color: var(--text); }
+.league-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: -4px 0 12px; color: var(--text-2); }
+
+/* 리그 화면 일정: 주간 달력과 경기(구단을 누르면 주문 화면) */
+.sched-nav { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+.sched-nav .icon-btn { margin: 0; color: var(--text-2); border-radius: 8px; }
+.sched-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+.sched-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 6px; border-radius: 12px; color: var(--text-2); }
+.sched-day b { font-size: 16px; }
+.sched-day.today span { color: var(--blue); font-weight: 700; }
+.sched-day.on { background: var(--text); color: var(--surface); }
+.sched-day.on span { color: inherit; }
+.sched-day .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--blue); }
+.sched-day .dot.none { visibility: hidden; }
+.sched-day.on .dot { background: var(--surface); }
+.sched-list { list-style: none; margin: 0; padding: 0; }
+.sched-match { display: grid; grid-template-columns: 52px 1fr 56px 1fr; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.sched-time { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.sched-team { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; border-radius: 12px; text-align: center; }
+.sched-team:hover, .sched-team:active { background: var(--surface-2); }
+.sched-name { font-weight: 600; font-size: 14px; color: var(--text-2); }
+.sched-team.win .sched-name { color: var(--text); font-weight: 800; }
+.sched-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sched-score { text-align: center; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
 .list-card { padding-bottom: 8px; }
 .split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .split div { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
