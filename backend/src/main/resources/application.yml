@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: teamtrading
+  datasource:
+    # 세션 상태를 드라이버가 기억해 트랜잭션마다 도는 SET autocommit 왕복을 줄이고, 원장 분개 일괄 저장을 한 문장으로 보낸다.
+    # 서버 측 준비문을 캐시한다. 측정과 근거는 docs/performance.md
+    url: jdbc:mysql://localhost:3306/teamtrading?useLocalSessionState=true&rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true&prepStmtCacheSize=250
+    username: teamtrading
+    password: teamtrading
+server:
+  port: 8080
+# 운영 지표와 상태 확인은 별도 포트(8081)로만 연다. 이 포트는 외부에 공개하지 않고 내부 네트워크의 Prometheus만 읽는다
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: [health, prometheus]
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: [50ms, 100ms, 250ms, 500ms, 1s]
+# 경기 일정·결과 수집(API-Sports). 키가 없으면 수집하지 않는다. 리그 번호는 제공처의 /leagues로 확인한다(docs/operations.md)
+teamtrading:
+  match-feed:
+    api-key: ${MATCH_FEED_API_KEY:}
+    daily-request-limit: 90
+    leagues:
+      - source: api-baseball
+        league: KBO
+        league-id: 5
+      - source: api-football
+        league: K_LEAGUE
+        league-id: 292

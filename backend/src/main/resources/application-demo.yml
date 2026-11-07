@@ -1,0 +1,17 @@
+# 개발·시연용. 소셜 로그인 키 없이 닉네임만으로 로그인할 수 있다. 운영에서는 켜지 않는다.
+teamtrading:
+  auth:
+    dev-login: true
+  # 시연용 가상 경기(DemoMatches)가 몇 분 안에 배당까지 가도록 확정 대기를 줄인다
+  dividends:
+    confirm-delay: PT1M
+  # 시연 서버는 사람이 적고 막 뜬 계정뿐이라 리더보드 자격을 낮춘다
+  leaderboard:
+    min-trades: 1
+    min-age: PT0S
+  # 게시글 보상 대기(기본 10분)를 줄여 시연 중에 지급을 볼 수 있게 한다
+  posts:
+    reward-delay: PT1M
+  # 광고 네트워크 없이 15초를 기다리면 광고 보상을 주는 시연용 가짜 광고
+  ads:
+    demo: true

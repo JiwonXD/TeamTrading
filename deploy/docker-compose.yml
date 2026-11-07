@@ -1,0 +1,130 @@
+# 한 대의 서버에 올리는 배포 묶음: MySQL, 서버, 화면(nginx), Prometheus.
+#   cp .env.example .env   # 값 채우기
+#   ./build.sh             # jar·화면 빌드 후 이미지 생성
+#   docker compose up -d
+name: teamtrading
+
+# 컨테이너 로그(접속 기록 포함)는 서비스마다 10MB씩 3개까지만 두고 오래된 것부터 지운다(개인정보처리방침)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: teamtrading
+      MYSQL_USER: teamtrading
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD를 .env에 넣어 주세요}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD를 .env에 넣어 주세요}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  backend:
+    build: ../backend
+    image: teamtrading-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-oauth}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/teamtrading?useLocalSessionState=true&rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true&prepStmtCacheSize=250
+      SPRING_DATASOURCE_USERNAME: teamtrading
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      # nginx가 넘기는 X-Forwarded-* 를 믿어 소셜 로그인 콜백 주소와 쿠키 Secure를 바깥 주소 기준으로 만든다
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      TEAMTRADING_AUTH_ADMINS: ${ADMIN_ACCOUNT_IDS:-}
+      TEAMTRADING_ADS_ADMOB_AD_UNITS: ${ADMOB_AD_UNITS:-}
+      MATCH_FEED_API_KEY: ${MATCH_FEED_API_KEY:-}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    # 종료 신호를 받으면 처리 중인 요청을 끝내고 내려간다
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    # 서버 안에서만 연다. 밖에서 보려면 SSH 터널을 쓴다
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+    logging: *logging
+
+  # 매일 한국 시간 BACKUP_AT에 DB를 덤프해 deploy/backups에 BACKUP_KEEP_DAYS일치 남긴다(docs/deploy.md "백업").
+  # 최근 26시간 안의 덤프가 없으면 unhealthy로 보인다
+  backup:
+    image: mysql:8.4
+    entrypoint: ["/usr/local/bin/backup.sh"]
+    # 다음 덤프를 기다리는 중에도 종료 신호를 받으면 바로 내려간다
+    init: true
+    environment:
+      MYSQL_PWD: ${DB_ROOT_PASSWORD}
+      BACKUP_AT: ${BACKUP_AT:-04:00}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -name 'teamtrading-*.sql.gz' -mmin -1560 | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      start_interval: 5s
+    restart: unless-stopped
+    logging: *logging
+
+  # 집 PC에서 베타를 열 때: 공유기 포트를 열지 않고 Cloudflare Tunnel로 바깥 주소를 붙인다.
+  #   docker compose --profile tunnel up -d   (CLOUDFLARE_TUNNEL_TOKEN 필요, docs/deploy.md)
+  tunnel:
+    image: cloudflare/cloudflared:2025.1.0
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
+    profiles: [tunnel]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  mysql-data:
+  prometheus-data:

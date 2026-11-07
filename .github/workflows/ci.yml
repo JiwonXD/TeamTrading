@@ -1,0 +1,252 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  backend:
+    name: Backend tests (H2)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-test-report
+          path: backend/build/reports/tests/test
+
+  backend-mysql:
+    name: Concurrency and reconciliation on MySQL 8.4
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: teamtrading
+          MYSQL_USER: teamtrading
+          MYSQL_PASSWORD: teamtrading
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/teamtrading?useLocalSessionState=true&rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true&prepStmtCacheSize=250
+      SPRING_DATASOURCE_USERNAME: teamtrading
+      SPRING_DATASOURCE_PASSWORD: teamtrading
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # 같은 DB를 공유하므로 데이터를 직접 조작하는 테스트는 빼고, 동시 매매 후 총량 보존·대사 일치와
+      # 닉네임 고유 인덱스(대소문자 무시 비교, 겹친 INSERT 뒤에도 트랜잭션이 이어지는지)를 실제 InnoDB에서 확인한다
+      - run: ./gradlew test --tests '*TradingServiceTest.concurrentTradingConservesPointsAndShares' --tests '*PointIssuerTest.concurrentRewardsStayWithinDailyLimit' --tests '*NicknameTest' --tests '*WithdrawalTest'
+      # HTTP 주문 부하를 건 뒤에도 대사가 맞는지 본다. 지연·처리량은 기록만 한다
+      - run: ./gradlew loadTest -Pload.users=20 -Pload.seconds=15
+      - if: always()
+        run: cat build/reports/load/summary.txt >> "$GITHUB_STEP_SUMMARY" || true
+
+  e2e:
+    name: End-to-end (server mode, MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: teamtrading
+          MYSQL_USER: teamtrading
+          MYSQL_PASSWORD: teamtrading
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Start backend with demo traders
+        working-directory: backend
+        run: |
+          SPRING_PROFILES_ACTIVE=demo nohup ./gradlew bootRun > ../backend.log 2>&1 &
+          for i in $(seq 90); do curl -sf localhost:8080/api/teams > /dev/null && exit 0; sleep 2; done
+          cat ../backend.log; exit 1
+      - name: Start frontend in server mode
+        working-directory: frontend
+        run: |
+          npm ci
+          nohup npm run dev:server -- --port 5173 --strictPort > ../frontend.log 2>&1 &
+          for i in $(seq 30); do curl -sf localhost:5173 > /dev/null && exit 0; sleep 1; done
+          cat ../frontend.log; exit 1
+      - name: Run Playwright
+        working-directory: frontend
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          tail -n 200 backend.log
+          tail -n 50 frontend.log
+          curl -s localhost:8080/api/teams/lg/orderbook; echo
+          cat frontend/test-results/*/error-context.md | head -120
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            frontend/playwright-report
+            backend.log
+            frontend.log
+
+  chaos:
+    name: Kill -9 during trading and recover (MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: teamtrading
+          MYSQL_USER: teamtrading
+          MYSQL_PASSWORD: teamtrading
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 주문을 받는 중에 서버를 세 번 강제 종료하고, 재시작할 때마다 응답받은 주문 보존·재시도 멱등성·대사 일치를 확인한다
+      - run: tools/chaos/run.sh
+        env:
+          ROUNDS: 3
+          USERS: 10
+          WORK: chaos-work
+          MYSQL_ROOT: mysql -h127.0.0.1 -uroot -proot
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: chaos-work
+          path: chaos-work
+
+  deploy:
+    name: Deploy bundle smoke test (docker compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: deploy/build.sh
+      - name: Start the bundle
+        working-directory: deploy
+        run: |
+          printf 'DB_PASSWORD=ci\nDB_ROOT_PASSWORD=ci-root\nSPRING_PROFILES_ACTIVE=demo\nHTTP_PORT=8088\n' > .env
+          docker compose up -d --wait --wait-timeout 300
+      # nginx를 거쳐 화면·시세·주문이 되고, Prometheus가 서버 지표를 읽는지 본다
+      - name: Smoke test through nginx
+        run: |
+          curl -sf localhost:8088/ | grep -q '<html'
+          curl -sf localhost:8088/api/teams | grep -q '"id":"lg"'
+          jar=$(mktemp)
+          curl -sf -c $jar -b $jar localhost:8088/api/auth/options > /dev/null
+          token() { awk '$6 == "XSRF-TOKEN" { print $7 }' $jar; }
+          curl -sf -c $jar -b $jar -H "X-XSRF-TOKEN: $(token)" -H 'Content-Type: application/json' \
+            -d '{"nickname":"ci-deploy"}' localhost:8088/api/auth/dev-login
+          curl -sf -c $jar -b $jar -H "X-XSRF-TOKEN: $(token)" -H 'Content-Type: application/json' \
+            -d '{"clientOrderId":"ci-1","teamId":"lg","side":"BUY","type":"LIMIT","price":18000,"quantity":1}' \
+            localhost:8088/api/orders | grep -q '"orderId"'
+          for i in $(seq 30); do
+            curl -s localhost:9090/api/v1/targets | grep -q '"health":"up"' && exit 0
+            sleep 2
+          done
+          curl -s localhost:9090/api/v1/targets; exit 1
+      # 백업 서비스가 덤프를 남기고, 그 덤프로 되돌리면 덤프 뒤에 가입한 계정만 사라지고 서버가 다시 뜨는지 본다
+      - name: Backup and restore
+        working-directory: deploy
+        run: |
+          login() {
+            jar=$(mktemp)
+            curl -sf -c $jar -b $jar localhost:8088/api/auth/options > /dev/null
+            tok=$(awk '$6 == "XSRF-TOKEN" { print $7 }' $jar)
+            curl -sf -c $jar -b $jar -H "X-XSRF-TOKEN: $tok" -H 'Content-Type: application/json' \
+              -d "{\"nickname\":\"$1\"}" localhost:8088/api/auth/dev-login > /dev/null
+          }
+          logins() {
+            docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N teamtrading -e \
+              "SELECT GROUP_CONCAT(subject ORDER BY subject) FROM account_identities WHERE subject LIKE \"ci-%-backup\""'
+          }
+          ls backups/teamtrading-*.sql.gz
+          login ci-before-backup
+          docker compose exec -T backup /usr/local/bin/backup.sh once
+          login ci-after-backup
+          test "$(logins)" = "ci-after-backup,ci-before-backup"
+          ./restore.sh "$(ls -t backups/teamtrading-*.sql.gz | head -1)" --yes
+          test "$(logins)" = "ci-before-backup"
+          curl -sf localhost:8088/api/teams | grep -q '"id":"lg"'
+      - name: Show logs on failure
+        if: failure()
+        working-directory: deploy
+        run: docker compose logs --tail 200
+
+  frontend:
+    name: Frontend lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
