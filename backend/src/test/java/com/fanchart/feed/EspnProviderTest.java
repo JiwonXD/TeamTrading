@@ -69,6 +69,20 @@ class EspnProviderTest {
     }
 
     @Test
+    void putsTheSportBeforeIdsOutsideSoccerBecauseEspnNumbersEachSportSeparately() {
+        String body = "{\"events\": [" + event("401", "STATUS_SCHEDULED", "pre", false, "0", "0") + "]}";
+        var nba = MatchFeedProperties.CompetitionFeed.of(com.fanchart.team.Competition.NBA, MatchFeedProperties.ESPN,
+                "basketball/nba");
+        var cup = MatchFeedProperties.CompetitionFeed.of(com.fanchart.team.Competition.FA_CUP, MatchFeedProperties.ESPN,
+                "soccer/eng.fa");
+
+        assertThat(provider.parse(nba, json(body))).extracting(FeedGame::ref, FeedGame::homeTeamId, FeedGame::awayTeamId)
+                .containsExactly(tuple("basketball:401", "basketball:2528", "basketball:443"));
+        assertThat(provider.parse(cup, json(body))).extracting(FeedGame::ref, FeedGame::homeTeamId)
+                .containsExactly(tuple("401", "2528"));
+    }
+
+    @Test
     void refusesBrokenResponsesAndEvents() {
         assertThatThrownBy(() -> provider.parse(json("{\"code\": 400}"))).isInstanceOf(FeedException.class);
         assertThatThrownBy(() -> provider.parse(json("{\"events\": [" + event("1", "STATUS_SCHEDULED", "pre", false,

@@ -27,6 +27,8 @@ import java.util.List;
  *     새 경기는 시작 36시간 안이면 들이므로 그 사이에 빠지는 경기는 없다.</li>
  * <li>시작 시각은 초가 없는 UTC(2026-10-22T14:30Z)로 온다.</li>
  * <li>시작 시각이 지났는데 예정(pre)으로 남은 경기가 있다. 끝났다는 표시(completed)와 점수가 함께 와야만 FINAL로 본다.</li>
+ * <li>ESPN의 팀·경기 번호는 종목마다 따로 매겨 겹칠 수 있다(축구 13번 팀과 NBA 13번 레이커스). 같은 출처(espn)로
+ *     구단을 연결하므로 축구가 아닌 종목은 번호 앞에 종목을 붙인다(basketball:13).</li>
  * <li>승부차기로 끝난 경기는 점수 칸이 승부차기를 담는지 확인하지 못해 UNKNOWN으로 두고 운영자가 넣는다.
  *     몰수·중도 종료도 점수가 경기 결과가 아니라서 UNKNOWN이다.</li>
  * </ul>
@@ -69,6 +71,16 @@ final class EspnProvider implements FeedProvider {
             out.add(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).GET().build());
         }
         return out;
+    }
+
+    @Override
+    public List<FeedGame> parse(CompetitionFeed feed, JsonNode root) {
+        String sport = feed.leagueId().substring(0, Math.max(0, feed.leagueId().indexOf('/')));
+        List<FeedGame> games = parse(root);
+        if (sport.isEmpty() || sport.equals("soccer")) return games;
+        String p = sport + ":";
+        return games.stream().map(g -> new FeedGame(p + g.ref(), p + g.homeTeamId(), g.homeName(), p + g.awayTeamId(),
+                g.awayName(), g.scheduledAt(), g.state(), g.rawStatus(), g.homeScore(), g.awayScore())).toList();
     }
 
     @Override

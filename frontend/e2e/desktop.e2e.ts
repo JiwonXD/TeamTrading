@@ -118,9 +118,13 @@ test('clicking an ask fills the order panel and a 1-share buy goes through', asy
   expect(axe.violations).toEqual([])
 
   const best = asks.last() // 가장 낮은 판매 호가
+  // 데모 봇이 호가를 계속 바꾸므로 가격을 읽은 뒤 따로 누르면 그 사이 다른 호가를 누를 수 있다. 같은 순간에 읽고 누른다.
   // 가격 칸은 가격 글자 뒤에 등락률(<small>)이 붙어 있으므로 첫 글자 노드만 읽는다
-  const price = await best.locator('.dob-price').evaluate((el) => el.firstChild!.textContent!)
-  await best.click()
+  const price = await best.evaluate((row) => {
+    const text = row.querySelector('.dob-price')!.firstChild!.textContent!
+    ;(row as HTMLElement).click()
+    return text
+  })
   await expect(page.locator('.order-side .on')).toHaveText('구매')
   await expect(page.locator('#of-price')).toHaveValue(price)
   await page.locator('#of-qty').fill('1')
