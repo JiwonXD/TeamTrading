@@ -3,6 +3,7 @@ package com.fanchart.api;
 import com.fanchart.account.Account;
 import com.fanchart.account.LeagueTabs;
 import com.fanchart.account.NicknameService;
+import com.fanchart.account.Watchlist;
 import com.fanchart.api.ApiDtos.AccountResponse;
 import com.fanchart.api.ApiDtos.LeagueTabsRequest;
 import com.fanchart.api.ApiDtos.MyTradeResponse;
@@ -19,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,12 +39,15 @@ class AccountController {
     private final NicknameService nicknames;
     private final Withdrawal withdrawal;
     private final LeagueTabs leagueTabs;
+    private final Watchlist watchlist;
 
-    AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal, LeagueTabs leagueTabs) {
+    AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal, LeagueTabs leagueTabs,
+                      Watchlist watchlist) {
         this.trading = trading;
         this.nicknames = nicknames;
         this.withdrawal = withdrawal;
         this.leagueTabs = leagueTabs;
+        this.watchlist = watchlist;
     }
 
     /** 탈퇴. 대기 주문을 취소하고 로그인 연결을 끊은 뒤 이 세션도 끝낸다 */
@@ -75,6 +80,21 @@ class AccountController {
         return leagueTabs.save(accountId, req.order(), req.hidden());
     }
 
+    @GetMapping("/api/accounts/me/watchlist")
+    Watchlist.Entries watchlist(@AuthenticationPrincipal String accountId) {
+        return watchlist.get(accountId);
+    }
+
+    @PutMapping("/api/accounts/me/watchlist/{teamId}")
+    Watchlist.Entries watch(@AuthenticationPrincipal String accountId, @PathVariable String teamId) {
+        return watchlist.add(accountId, teamId);
+    }
+
+    @DeleteMapping("/api/accounts/me/watchlist/{teamId}")
+    Watchlist.Entries unwatch(@AuthenticationPrincipal String accountId, @PathVariable String teamId) {
+        return watchlist.remove(accountId, teamId);
+    }
+
     @GetMapping("/api/accounts/me/orders")
     List<OrderResponse> myOrders(@AuthenticationPrincipal String accountId) {
         trading.account(accountId);
@@ -95,7 +115,8 @@ class AccountController {
         }
         List<Row> rows = new ArrayList<>();
         for (Account a : trading.allAccounts()) {
-            if (a.withdrawn()) continue;
+            // 탈퇴한 계정과 운영자(증자 물량을 든 발행자)는 순위에 넣지 않는다
+            if (a.withdrawn() || trading.isIssuer(a.id())) continue;
             long value = trading.totalValue(a);
             rows.add(new Row(a, value, (double) value / a.initialValue() - 1));
         }

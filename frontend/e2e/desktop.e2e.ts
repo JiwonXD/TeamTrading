@@ -50,6 +50,35 @@ test('hiding a league in the tab editor also hides it from the side list filter'
   await expect(page.locator('.side-filter button', { hasText: 'LCK' })).toHaveCount(0)
 })
 
+test('stars in the market table fill the 관심 tab of the side list in the order they were added', async ({ page }) => {
+  await signIn(page)
+  const table = page.locator('.dtable')
+  const side = page.locator('.desk-side')
+  await table.getByRole('button', { name: 'T1 관심 구단' }).click()
+  await table.getByRole('button', { name: '젠지 관심 구단' }).click()
+  // 별만 눌렀으므로 구단 화면으로 넘어가지 않는다
+  await expect(page).toHaveURL(/#home$/)
+  await side.getByRole('tab', { name: '관심' }).click()
+  await expect(side.locator('.side-name')).toHaveText(['T1', '젠지'])
+
+  // 사이드바의 별로 바로 뺀다. 화면은 먼저 바뀌고 요청은 앞선 담기 요청 뒤에 차례로 나가므로,
+  // 새로고침 전에 빼기 응답까지 기다린다(기다리지 않으면 아직 안 보낸 요청이 새로고침에 사라진다)
+  const removed = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().endsWith('/api/accounts/me/watchlist/t1'))
+  await side.getByRole('button', { name: 'T1 관심 구단' }).click()
+  expect((await removed).ok()).toBe(true)
+  await expect(side.locator('.side-name')).toHaveText(['젠지'])
+  await expect(table.getByRole('button', { name: 'T1 관심 구단' })).toHaveAttribute('aria-pressed', 'false')
+
+  // 계정에 저장돼 새로고침해도 남고, 관심 구단이 있으면 관심 탭부터 연다
+  await page.reload()
+  await expect(side.getByRole('tab', { name: '관심' })).toHaveAttribute('aria-selected', 'true')
+  await expect(side.locator('.side-name')).toHaveText(['젠지'])
+  await page.goto('/#team-geng')
+  await expect(page.locator('.dt-head').getByRole('button', { name: '젠지 관심 구단' })).toHaveAttribute('aria-pressed', 'true')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+})
+
 test('league tab shows that league\'s schedule and prices while the logo and 홈 menu stay', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
@@ -89,9 +118,13 @@ test('clicking an ask fills the order panel and a 1-share buy goes through', asy
   expect(axe.violations).toEqual([])
 
   const best = asks.last() // 가장 낮은 판매 호가
+  // 데모 봇이 호가를 계속 바꾸므로 가격을 읽은 뒤 따로 누르면 그 사이 다른 호가를 누를 수 있다. 같은 순간에 읽고 누른다.
   // 가격 칸은 가격 글자 뒤에 등락률(<small>)이 붙어 있으므로 첫 글자 노드만 읽는다
-  const price = await best.locator('.dob-price').evaluate((el) => el.firstChild!.textContent!)
-  await best.click()
+  const price = await best.evaluate((row) => {
+    const text = row.querySelector('.dob-price')!.firstChild!.textContent!
+    ;(row as HTMLElement).click()
+    return text
+  })
   await expect(page.locator('.order-side .on')).toHaveText('구매')
   await expect(page.locator('#of-price')).toHaveValue(price)
   await page.locator('#of-qty').fill('1')

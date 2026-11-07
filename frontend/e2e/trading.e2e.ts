@@ -336,3 +336,27 @@ test('never shows default numbers without the server and marks values as stale w
   await page.unroute(serverApi)
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
+
+test('a star on the team page adds it to 관심 구단 on home, which stays after reload and the star there removes it', async ({ page }) => {
+  await signIn(page, '#team-t1')
+  const star = page.getByRole('button', { name: 'T1 관심 구단' })
+  await expect(star).toHaveAttribute('aria-pressed', 'false')
+  await star.click()
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('status')).toContainText('관심 구단에 담았어요')
+
+  await page.goto('/#home')
+  const card = page.locator('.watch-card')
+  await expect(card.locator('.stock-list li')).toHaveCount(1)
+  await expect(card).toContainText('T1')
+  await page.reload()
+  await expect(card.locator('.stock-list li')).toHaveCount(1)
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await card.getByRole('button', { name: 'T1 관심 구단' }).click()
+  await expect(card.locator('.stock-list li')).toHaveCount(0)
+  await expect(card).toContainText('별을 누르면 여기에 모여요')
+  // 별만 눌렀으므로 구단 화면으로 넘어가지 않는다
+  await expect(page).toHaveURL(/#home$/)
+})

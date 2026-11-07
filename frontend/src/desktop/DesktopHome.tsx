@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { type League, TEAMS, type Team } from '../data/teams'
 import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, mode, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
+import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 import { ServerMatches, SimMatches } from '../pages/Home'
 import { LeagueStats, LeagueTabs } from '../components/League'
@@ -161,11 +162,14 @@ function TeamRow({ team, rank, active, onHover }: { team: Team; rank: number; ac
   return (
     <tr className={active ? 'active' : ''} onPointerEnter={onHover} onClick={() => go(`team-${team.id}`)}>
       <td>
-        <a href={`#team-${team.id}`} className="dt-team" onFocus={onHover}>
-          <span className="dt-rank">{rank}</span>
-          <Logo team={team} size={32} />
-          <span className="dt-name">{team.name}<span className="muted xs">{team.league}</span></span>
-        </a>
+        <div className="dt-team-cell">
+          <WatchStar team={team} size={18} />
+          <a href={`#team-${team.id}`} className="dt-team" onFocus={onHover}>
+            <span className="dt-rank">{rank}</span>
+            <Logo team={team} size={32} />
+            <span className="dt-name">{team.name}<span className="muted xs">{team.league}</span></span>
+          </a>
+        </div>
       </td>
       <td className="num"><span key={flash.key} className={`cell-flash ${flash.className}`}>{fmt(m.last)}P</span></td>
       <td className={`num ${tone(chg)}`}>{m.listed ? pct(chg) : <span className="muted">상장 전</span>}</td>

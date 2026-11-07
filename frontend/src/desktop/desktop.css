@@ -84,6 +84,11 @@
 .side-row:hover { background: var(--hover); }
 .side-row:active { background: var(--press); }
 .side-row.on { background: var(--blue-bg); }
+.side-watch { display: flex; align-items: center; }
+.side-watch .side-row { flex: 1; min-width: 0; padding-left: 4px; }
+.desk .star-btn { width: 30px; height: 30px; border-radius: 8px; }
+.desk .star-btn:hover { background: var(--hover); }
+.dt-team-cell { display: flex; align-items: center; gap: 2px; margin-left: -8px; }
 .side-rank { width: 16px; font-size: 12px; font-weight: 700; color: var(--text-3); text-align: center; }
 .side-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-price { display: flex; flex-direction: column; align-items: flex-end; font-weight: 600; font-variant-numeric: tabular-nums; }

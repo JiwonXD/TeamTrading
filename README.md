@@ -80,6 +80,8 @@ docker compose up -d     # 로컬 MySQL 8.4
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |
 | PUT | `/api/accounts/me/nickname` | 닉네임 변경. 한글·영문·숫자·밑줄 2~12자, 다른 계정과 겹치지 않게, 7일에 한 번 |
 | GET·PUT | `/api/accounts/me/league-tabs` | 홈 리그 탭 순서(`order`)와 숨긴 리그(`hidden`). 리그 코드는 `League` enum, 저장한 적 없으면 둘 다 빈 목록 |
+| GET | `/api/accounts/me/watchlist` | 관심 구단 id(`teamIds`), 담은 순서대로 |
+| PUT·DELETE | `/api/accounts/me/watchlist/{teamId}` | 관심 구단 하나 넣기·빼기. 다시 보내도 결과가 같다. 없는 구단은 404 |
 | GET | `/api/accounts/me/orders` | 내 대기 주문 |
 | GET | `/api/accounts/me/trades?limit=20` | 내 체결 내역 |
 | POST | `/api/orders` | 주문. `clientOrderId`가 같은 재시도는 처음 결과를 그대로 돌려주고, 같은 번호로 다른 주문을 보내면 409 |
