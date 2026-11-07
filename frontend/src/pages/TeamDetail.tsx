@@ -180,7 +180,7 @@ function OrderBookView({ teamId, onPick }: { teamId: string; onPick: (price: num
   )
 }
 
-function TradesView({ teamId }: { teamId: string }) {
+export function TradesView({ teamId }: { teamId: string }) {
   const s = useStore()
   const trades = s.trades.filter((t) => t.teamId === teamId).slice(0, 30)
   return (
@@ -206,7 +206,7 @@ const REPORT_REASONS: { value: ReportReason; label: string }[] = [
 
 const REWARD_LABEL = { PENDING: '보상 대기', PAID: '2,000P 받음', NONE: '' } as const
 
-function TalkView({ teamId }: { teamId: string }) {
+export function TalkView({ teamId }: { teamId: string }) {
   const s = useStore()
   const [body, setBody] = useState('')
   const [reporting, setReporting] = useState<string | null>(null)
