@@ -38,4 +38,9 @@ interface FeedProvider {
 
     /** 쓸 수 없는 응답이면 FeedException */
     List<FeedGame> parse(JsonNode body);
+
+    /** 대회 설정을 알아야 번호를 읽을 수 있는 제공처는 이것을 고친다. 기본은 {@link #parse(JsonNode)} */
+    default List<FeedGame> parse(CompetitionFeed feed, JsonNode body) {
+        return parse(body);
+    }
 }

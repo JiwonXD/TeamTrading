@@ -328,6 +328,10 @@ class MatchFeedSyncTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"api-baseball\",\"externalId\":\"104\"}"))
                 .andExpect(status().isOk());
         assertThat(teams.teamFor(SRC, "104")).contains("doosan");
+        mvc.perform(put("/api/admin/teams/lg/feed").with(admin("ops"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"espn\",\"externalId\":\"basketball:13\"}"))
+                .andExpect(status().isOk());
+        assertThat(teams.teamFor(MatchFeedProperties.ESPN, "basketball:13")).contains("lg");
 
         mvc.perform(put("/api/admin/teams/doosan/feed").with(admin("ops"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"rss\",\"externalId\":\"1\"}"))

@@ -63,7 +63,7 @@ public class FeedClient {
         for (HttpRequest request : provider.requests(feed, key, base, date, today)) {
             spend(feed, key, provider, today);
             // 하루씩 묻는 제공처는 날짜 경계의 경기가 두 번 올 수 있다
-            for (FeedGame g : provider.parse(fetch(feed, request)))
+            for (FeedGame g : provider.parse(feed, fetch(feed, request)))
                 if (seen.add(g.ref())) out.add(g);
         }
         return out;
