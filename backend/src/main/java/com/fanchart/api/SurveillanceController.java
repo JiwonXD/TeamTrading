@@ -9,7 +9,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 탐지 기록은 닉네임만 보여 누구나 볼 수 있고, 계정 id가 나오는 대사는 운영자만 본다(SecurityConfig) */
+/**
+ * 시장감시는 운영자만 본다(SecurityConfig). 탐지 기록은 닉네임만 담지만, 일반 유저에게 공개하면 혐의가 확정되지 않은
+ * 계정을 공개 지목하고 탐지 기준을 알려주게 된다(ADR 0026). 대사 결과는 계정 id가 나온다.
+ */
 @RestController
 class SurveillanceController {
 

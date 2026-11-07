@@ -67,6 +67,8 @@ test('league tab shows the schedule and only that league, and a team in a match 
 test('home lists every team with server prices and has no accessibility violations', async ({ page }) => {
   await signIn(page)
   await expect(page.locator('.stock-list li')).toHaveCount(18)
+  // 시장감시는 운영자만 보므로 일반 계정의 아래 탭은 홈·내 투자·랭킹
+  await expect(page.locator('.tabbar a')).toHaveText(['홈', '내 투자', '랭킹'])
   await expect(page.locator('.asset-card .big')).toHaveText(/1,000,000P|[\d,]+P/)
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])

@@ -25,9 +25,10 @@ final class ApiDtos {
     private ApiDtos() {
     }
 
-    /** nicknameChangeableAt: 닉네임을 다시 바꿀 수 있는 시각. 지금 바꿀 수 있으면 null */
+    /** nicknameChangeableAt: 닉네임을 다시 바꿀 수 있는 시각. 지금 바꿀 수 있으면 null. admin: 운영자 계정인지 */
     record AccountResponse(String id, String nickname, long availablePoints, long lockedPoints,
-                           long totalValue, double returnRate, List<Holding> holdings, Instant nicknameChangeableAt) {
+                           long totalValue, double returnRate, List<Holding> holdings, Instant nicknameChangeableAt,
+                           boolean admin) {
     }
 
     record NicknameRequest(@NotBlank @Size(max = 40) String nickname) {

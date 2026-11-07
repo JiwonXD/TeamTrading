@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { LEAGUES, type League, TEAMS, type Team } from '../data/teams'
-import { ME, START_POINTS, getConnection, getProfile, mode, totalShares, totalValue, useStore } from '../store'
+import { ME, START_POINTS, canWatch, getConnection, getProfile, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
@@ -60,7 +60,7 @@ export default function DesktopShell({ hash, teamId, banner, toast, children }: 
           팬차트
         </a>
         <nav className="desk-nav" aria-label="주 메뉴">
-          {NAV.map((n) => {
+          {NAV.filter((n) => n.path !== 'watch' || canWatch()).map((n) => {
             // 리그 화면(#league-…)은 홈 안의 카테고리라 홈에 불을 켠다
             const on = hash === n.path || (n.path === 'home' && hash.startsWith('league-'))
             return <a key={n.path} href={`#${n.path}`} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{n.label}</a>

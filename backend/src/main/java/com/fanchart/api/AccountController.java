@@ -98,6 +98,12 @@ class AccountController {
     private AccountResponse view(Account a) {
         long value = trading.totalValue(a);
         return new AccountResponse(a.id(), a.nickname(), a.availablePoints(), a.lockedPoints(),
-                value, (double) value / a.initialValue() - 1, trading.holdings(a.id()), nicknames.changeableAt(a));
+                value, (double) value / a.initialValue() - 1, trading.holdings(a.id()), nicknames.changeableAt(a), isAdmin());
+    }
+
+    /** 지금 요청한 계정이 운영자인지. 화면이 운영자 전용 메뉴(시장감시)를 보일지 정한다. 권한 검사는 SecurityConfig가 한다 */
+    private static boolean isAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(g -> "ROLE_ADMIN".equals(g.getAuthority()));
     }
 }

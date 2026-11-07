@@ -11,6 +11,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.fanchart.auth.TestLogin.admin;
 import static com.fanchart.auth.TestLogin.login;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -125,7 +126,7 @@ class TradingApiTest {
             trading.place(a, "a-" + i, "nc", Side.SELL, OrderType.LIMIT, 11_600, 1);
             trading.place(b, "b-" + i, "nc", Side.BUY, OrderType.LIMIT, 11_600, 1);
         }
-        String alerts = mvc.perform(get("/api/surveillance/alerts")).andReturn().getResponse().getContentAsString();
+        String alerts = mvc.perform(get("/api/surveillance/alerts").with(admin(a))).andReturn().getResponse().getContentAsString();
         org.assertj.core.api.Assertions.assertThat(alerts).contains("pair-a", "pair-b").doesNotContain(a).doesNotContain(b);
     }
 
