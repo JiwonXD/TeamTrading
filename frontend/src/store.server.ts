@@ -466,6 +466,41 @@ export async function saveLeagueTabs(prefs: LeagueTabPrefs): Promise<OrderResult
   }
 }
 
+/**
+ * 관심 구단. 계정에 저장한다. 별을 누르면 화면을 먼저 바꾸고 서버에 한 구단씩 넣고 뺀다.
+ * 빠르게 여러 번 눌러도 요청은 누른 순서대로 하나씩 보내고(서버 처리 순서가 뒤바뀌지 않게),
+ * 서버가 돌려준 목록은 줄이 빌 때만 반영해 아직 보내지 않은 누름이 화면에서 되돌아가지 않게 한다.
+ */
+let watchlist: string[] = []
+let watchQueue: Promise<unknown> = Promise.resolve()
+let watchPending = 0
+export const getWatchlist = () => watchlist
+
+export function toggleWatch(teamId: string): Promise<OrderResult> {
+  const on = !watchlist.includes(teamId)
+  watchlist = on ? [...watchlist, teamId] : watchlist.filter((id) => id !== teamId)
+  update()
+  watchPending++
+  const path = `/api/accounts/me/watchlist/${encodeURIComponent(teamId)}`
+  const done = watchQueue.then(async (): Promise<OrderResult> => {
+    try {
+      const res = await api<{ teamIds: string[] }>(on ? 'PUT' : 'DELETE', path)
+      if (watchPending === 1) { watchlist = res.teamIds; update() }
+      return { ok: true, message: on ? '관심 구단에 담았어요' : '관심 구단에서 뺐어요' }
+    } catch (e) {
+      // 실패하면 서버 목록으로 되돌린다. 그것도 못 받으면 누르기 전으로 돌린다
+      const res = await api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').catch(() => null)
+      watchlist = res ? res.teamIds : on ? watchlist.filter((id) => id !== teamId) : [...watchlist, teamId]
+      update()
+      return { ok: false, message: e instanceof Error ? e.message : '관심 구단을 바꾸지 못했어요' }
+    } finally {
+      watchPending--
+    }
+  })
+  watchQueue = done
+  return done
+}
+
 /** 탈퇴. 서버가 세션을 끝내므로 다시 로그인 화면으로 돌아간다 */
 export async function withdraw(): Promise<OrderResult> {
   try {
@@ -499,9 +534,11 @@ export function start() {
   ensureLogin()
     .then(async (ok) => {
       if (!ok) return
-      // 탭 설정은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
+      // 탭 설정·관심 구단은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
       leagueTabs = DEFAULT_TABS
       api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
+      watchlist = []
+      api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
       await refresh()
       poller = setInterval(() => refresh().catch(onPollError), POLL_MS)
     })

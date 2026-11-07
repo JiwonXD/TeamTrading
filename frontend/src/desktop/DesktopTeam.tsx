@@ -3,6 +3,7 @@ import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
 import { ME, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
+import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { TalkView, TradesView } from '../pages/TeamDetail'
 import { PriceChart } from './PriceChart'
@@ -52,7 +53,7 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
         <div className="dt-title">
           <Logo team={team} size={40} />
           <div>
-            <div className="row-gap"><h1>{team.name}</h1><span className="badge">{team.league}</span></div>
+            <div className="row-gap"><h1>{team.name}</h1><span className="badge">{team.league}</span><WatchStar team={team} /></div>
             <div className="dt-price">
               <b key={flash.key} className={`cell-flash ${flash.className}`}>{fmt(m.last)}P</b>
               {m.listed

@@ -3,6 +3,7 @@ import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
 import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
+import { WatchStar } from '../components/WatchStar'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 type Period = '1d' | '1w' | '1m' | '3m'
@@ -30,7 +31,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
 
   return (
     <>
-      <Header onBack={() => history.length > 1 ? history.back() : go('home')} title={team.name} />
+      <Header onBack={() => history.length > 1 ? history.back() : go('home')} title={team.name} right={<WatchStar team={team} size={24} />} />
       <section className="detail-head">
         <div className="row-gap">
           <Logo team={team} size={28} />

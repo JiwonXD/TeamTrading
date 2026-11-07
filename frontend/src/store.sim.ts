@@ -27,6 +27,7 @@ interface SimState extends State {
 
 const STORAGE_KEY = 'fanchart:v1'
 const TABS_KEY = 'fanchart:league-tabs'
+const WATCH_KEY = 'fanchart:watchlist'
 const BOT_NAMES = [
   '잠실불꽃', '광주호랑이', '보살팬', '페이커장인', '호랑이굴', '쌍둥이아빠', '사직노래방', '대구왕자',
   '마법사의제자', '인천상륙', '창원공룡', '고척돔지기', '스틸야드', '상암직관러', '전주성', 'midgap',
@@ -344,6 +345,33 @@ export function saveLeagueTabs(prefs: LeagueTabPrefs): OrderResult {
   }
   emit()
   return { ok: true, message: '리그 탭을 저장했어요' }
+}
+
+/** 시뮬레이션 미리보기의 관심 구단도 이 브라우저에 둔다 */
+let watchlist: string[] | null = null
+export function getWatchlist(): string[] {
+  if (!watchlist) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(WATCH_KEY) ?? '[]')
+      watchlist = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
+    } catch {
+      watchlist = []
+    }
+  }
+  return watchlist
+}
+
+export function toggleWatch(teamId: string): OrderResult {
+  const list = getWatchlist()
+  const on = !list.includes(teamId)
+  watchlist = on ? [...list, teamId] : list.filter((id) => id !== teamId)
+  try {
+    localStorage.setItem(WATCH_KEY, JSON.stringify(watchlist))
+  } catch {
+    /* 이번 방문 동안만 기억한다 */
+  }
+  emit()
+  return { ok: true, message: on ? '관심 구단에 담았어요' : '관심 구단에서 뺐어요' }
 }
 
 export function start() {
