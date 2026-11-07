@@ -1,2 +1,3 @@
-*
-!build/libs/*.jar
+.gradle
+build
+docker-compose.yml

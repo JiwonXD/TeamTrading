@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Header, go } from '../components/ui'
 
 // 이용약관·개인정보처리방침. 로그인하지 않아도 볼 수 있다.
-// 운영자 이름과 연락처는 저장소에 넣지 않고 빌드할 때 deploy/.env의 OPERATOR_NAME, OPERATOR_EMAIL로 받는다(deploy/build.sh)
+// 운영자 이름과 연락처는 저장소에 넣지 않고 빌드할 때 deploy/.env의 OPERATOR_NAME, OPERATOR_EMAIL로 받는다(frontend/Dockerfile)
 const OPERATOR = import.meta.env.VITE_OPERATOR_NAME?.trim() || ''
 const EMAIL = import.meta.env.VITE_OPERATOR_EMAIL?.trim() || ''
 const LEGAL_EFFECTIVE = '2026-11-02'

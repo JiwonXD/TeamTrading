@@ -171,27 +171,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: deploy/build.sh
-      - name: Start the bundle
+      # 서버 PC처럼 Java·Node 없이 Docker만으로 이미지를 빌드해 띄운다
+      - name: Build and start the bundle
         working-directory: deploy
         run: |
-          printf 'DB_PASSWORD=ci\nDB_ROOT_PASSWORD=ci-root\nSPRING_PROFILES_ACTIVE=demo\nHTTP_PORT=8088\n' > .env
-          docker compose up -d --wait --wait-timeout 300
+          printf 'DB_PASSWORD=ci\nDB_ROOT_PASSWORD=ci-root\nSPRING_PROFILES_ACTIVE=demo\nHTTP_PORT=8088\nOPERATOR_NAME="CI 운영자"\nOPERATOR_EMAIL=ops@example.com\n' > .env
+          docker compose up -d --build --wait --wait-timeout 600
       # nginx를 거쳐 화면·시세·주문이 되고, Prometheus가 서버 지표를 읽는지 본다
       - name: Smoke test through nginx
         run: |
           curl -sf localhost:8088/ | grep -q '<html'
           curl -sf localhost:8088/api/teams | grep -q '"id":"lg"'
+          # .env의 운영자 정보가 화면 빌드에 들어갔는지
+          curl -sf localhost:8088/ | grep -o 'assets/index-[^"]*\.js' | head -1 | xargs -I{} curl -sf localhost:8088/{} | grep -q 'ops@example.com'
           jar=$(mktemp)
           curl -sf -c $jar -b $jar localhost:8088/api/auth/options > /dev/null
           token() { awk '$6 == "XSRF-TOKEN" { print $7 }' $jar; }
