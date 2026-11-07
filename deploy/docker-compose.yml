@@ -1,7 +1,6 @@
 # 한 대의 서버에 올리는 배포 묶음: MySQL, 서버, 화면(nginx), Prometheus.
 #   cp .env.example .env   # 값 채우기
-#   ./build.sh             # jar·화면 빌드 후 이미지 생성
-#   docker compose up -d
+#   docker compose up -d --build   # 서버·화면 이미지를 컨테이너 안에서 빌드하고 띄운다(Docker만 있으면 된다)
 name: teamtrading
 
 # 컨테이너 로그(접속 기록 포함)는 서비스마다 10MB씩 3개까지만 두고 오래된 것부터 지운다(개인정보처리방침)
@@ -63,11 +62,15 @@ services:
     logging: *logging
 
   web:
-    image: nginx:1.27-alpine
+    build:
+      context: ../frontend
+      args:
+        VITE_OPERATOR_NAME: ${OPERATOR_NAME:-}
+        VITE_OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+    image: teamtrading-web
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
-      - ../frontend/dist:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
@@ -89,8 +92,8 @@ services:
   # 매일 한국 시간 BACKUP_AT에 DB를 덤프해 deploy/backups에 BACKUP_KEEP_DAYS일치 남긴다(docs/deploy.md "백업").
   # 최근 26시간 안의 덤프가 없으면 unhealthy로 보인다
   backup:
-    image: mysql:8.4
-    entrypoint: ["/usr/local/bin/backup.sh"]
+    build: ./backup
+    image: teamtrading-backup
     # 다음 덤프를 기다리는 중에도 종료 신호를 받으면 바로 내려간다
     init: true
     environment:
@@ -98,7 +101,6 @@ services:
       BACKUP_AT: ${BACKUP_AT:-04:00}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
     volumes:
-      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
       - ./backups:/backups
     depends_on:
       mysql:
@@ -122,6 +124,19 @@ services:
     depends_on:
       - web
     profiles: [tunnel]
+    restart: unless-stopped
+    logging: *logging
+
+  # 도메인 없이 바로 시험할 때: Cloudflare가 무료로 주는 임시 주소(https://xxx.trycloudflare.com)를 붙인다.
+  # 토큰·계정이 필요 없지만 다시 띄울 때마다 주소가 바뀐다. 주소는 로그에 나온다
+  #   docker compose --profile quick-tunnel up -d
+  #   docker compose logs quick-tunnel   (trycloudflare.com 주소를 찾는다)
+  quick-tunnel:
+    image: cloudflare/cloudflared:2025.1.0
+    command: tunnel --no-autoupdate --url http://web:80
+    depends_on:
+      - web
+    profiles: [quick-tunnel]
     restart: unless-stopped
     logging: *logging
 

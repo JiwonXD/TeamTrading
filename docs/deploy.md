@@ -5,26 +5,25 @@
 | 구성 | 역할 |
 | --- | --- |
 | `mysql` | MySQL 8.4. 데이터는 `mysql-data` 볼륨 |
-| `backend` | 서버. `backend/Dockerfile`로 만든 이미지. 비루트 사용자로 실행. 8080(서비스)과 8081(관리)은 컨테이너 네트워크 안에서만 열린다 |
-| `web` | nginx. 화면(`frontend/dist`)을 주고 `/api`, `/ws`, 소셜 로그인 경로를 서버로 넘긴다. 바깥에 여는 포트는 이것 하나 |
+| `backend` | 서버. `backend/Dockerfile`이 컨테이너 안에서 빌드한 이미지. 비루트 사용자로 실행. 8080(서비스)과 8081(관리)은 컨테이너 네트워크 안에서만 열린다 |
+| `web` | nginx. `frontend/Dockerfile`이 서버 모드로 빌드한 화면을 주고 `/api`, `/ws`, 소셜 로그인 경로를 서버로 넘긴다. 바깥에 여는 포트는 이것 하나 |
 | `prometheus` | 서버 지표 수집과 경보 규칙(`deploy/prometheus/alerts.yml`). 서버 안(127.0.0.1:9090)에서만 열린다 |
 | `backup` | 매일 DB를 덤프해 `deploy/backups`에 남긴다 |
 
 ## 올리기
 
-필요: Docker(Compose v2), Java 21, Node 22.
+필요: Docker(Compose v2)만. 서버와 화면은 컨테이너 안에서 빌드하므로 Java·Node를 설치하지 않아도 된다. 첫 빌드는 의존성을 받느라 몇 분 걸린다.
 
 ```bash
 cd deploy
 cp .env.example .env      # DB 비밀번호, 소셜 로그인 키를 채운다
-./build.sh                # 서버 jar, 화면(서버 모드) 빌드, 서버 이미지 생성
-docker compose up -d
+docker compose up -d --build
 docker compose ps         # backend가 healthy가 되면 web이 뜬다
 ```
 
 - 키 없이 먼저 시험하려면 `.env`에서 `SPRING_PROFILES_ACTIVE=demo`로 둔다. 닉네임 로그인과 시연용 가상 매매·경기가 켜진다. 운영에서는 `oauth`로 둔다.
 - 운영자 지정: 운영할 계정으로 로그인한 뒤 `/api/accounts/me`의 `id`를 `ADMIN_ACCOUNT_IDS`에 넣고 `docker compose up -d backend`로 다시 띄운다.
-- 공개 전에 `.env`의 `OPERATOR_NAME`, `OPERATOR_EMAIL`(개인정보 보호책임자와 문의 연락처)을 채우고 `./build.sh`를 다시 돌린다. 이용약관·개인정보처리방침 화면에 들어간다. 저장소에는 넣지 않는다. 약관과 방침은 서비스 동작에 맞춘 초안이라 공개 전에 한 번 읽고 고칠 곳을 고친다(`frontend/src/pages/Legal.tsx`).
+- 공개 전에 `.env`의 `OPERATOR_NAME`, `OPERATOR_EMAIL`(개인정보 보호책임자와 문의 연락처)을 채우고 `docker compose up -d --build`로 다시 띄운다(화면 이미지에 들어간다). 이용약관·개인정보처리방침 화면에 들어간다. 저장소에는 넣지 않는다. 약관과 방침은 서비스 동작에 맞춘 초안이라 공개 전에 한 번 읽고 고칠 곳을 고친다(`frontend/src/pages/Legal.tsx`).
 - 실제 경기 일정·결과(KBO·K리그)를 받으려면 API-Sports 무료 키를 `MATCH_FEED_API_KEY`에 넣고 구단과 제공처 팀 번호를 잇는다([운영 점검](operations.md#경기-데이터-수집)). 비워 두면 운영자가 경기를 직접 넣는다.
 - 소셜 로그인 콜백 주소는 `https://{도메인}/login/oauth2/code/{kakao|naver|google}`이다. 서버는 nginx가 넘기는 `X-Forwarded-*`를 믿는다(`SERVER_FORWARD_HEADERS_STRATEGY=native`). 그래서 콜백 주소와 쿠키의 Secure 속성이 바깥 주소 기준으로 정해진다.
 
@@ -32,7 +31,19 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 
 사용자가 적은 동안은 유료 서버 없이 집 PC에서 같은 묶음을 돌린다. 바깥 연결은 Cloudflare Tunnel(무료)로 한다. PC가 Cloudflare 쪽으로 연결을 거는 방식이다. 그래서 공유기 포트를 열지 않고, 집 IP도 드러나지 않으며, HTTPS 인증서도 Cloudflare가 붙인다.
 
-1. Docker Desktop을 설치하고 "로그인 시 시작"을 켠다. Windows에서는 WSL2(Ubuntu)에서 저장소를 받고 아래 명령을 실행한다.
+### 도메인 없이 먼저 시험하기
+
+도메인과 Cloudflare 계정 없이도 임시 주소로 바로 열 수 있다. 지인 테스트용이다. 다시 띄울 때마다 주소가 바뀌고, 주소가 고정되지 않아 소셜 로그인은 쓸 수 없으므로 `SPRING_PROFILES_ACTIVE=demo`(닉네임 로그인)로 둔다.
+
+```bash
+cd deploy
+docker compose --profile quick-tunnel up -d --build
+docker compose logs quick-tunnel     # https://xxx.trycloudflare.com 주소가 나온다
+```
+
+### 도메인으로 열기
+
+1. Docker Desktop을 설치하고 "로그인 시 시작"을 켠다. Windows에서는 PowerShell에서 같은 명령을 쓴다(`cp` 대신 `copy`). `restore.sh`는 Git Bash나 WSL에서 실행한다.
 2. 도메인(.kr 등)을 Cloudflare에 연결한다(네임서버 변경).
 3. Cloudflare Zero Trust → Networks → Tunnels에서 터널을 만든다.
    - 커넥터 종류는 Docker를 고르고, 화면에 나오는 토큰을 `.env`의 `CLOUDFLARE_TUNNEL_TOKEN`에 넣는다.
@@ -40,8 +51,7 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 4. 묶음과 터널을 함께 띄운다.
    ```bash
    cd deploy
-   ./build.sh
-   docker compose --profile tunnel up -d
+   docker compose --profile tunnel up -d --build
    ```
 5. 소셜 로그인 콜백 주소를 `https://{도메인}/login/oauth2/code/{kakao|naver|google}`로 등록한다. 키가 준비되기 전에는 `SPRING_PROFILES_ACTIVE=demo`로 닉네임 로그인만 열어 지인 테스트를 한다.
 
@@ -62,8 +72,7 @@ nginx는 80번만 연다. TLS는 앞단에서 끝낸다.
 
 ```bash
 git pull
-deploy/build.sh
-docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 서버는 종료 신호를 받으면 처리 중인 요청을 끝내고 내려간다(최대 30초). 기동할 때 DB에서 호가창을 다시 쌓는다. 그동안 들어온 주문은 nginx가 502로 돌려준다. 클라이언트는 같은 `clientOrderId`로 다시 보내면 된다. 강제 종료 중에도 장부가 맞는지는 `tools/chaos/run.sh`로 확인한다(운영 점검 문서 참고).
