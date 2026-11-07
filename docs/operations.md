@@ -96,19 +96,35 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 
 ## 경기 데이터 수집
 
-KBO·K리그 일정과 결과는 API-Sports에서 받는다(ADR 0024). 키가 없으면 수집하지 않고, 운영자가 `/api/admin/matches`로 넣는다.
+리그마다 제공처와 키를 따로 둔다(ADR 0024, 0027). 키를 비운 리그만 수집하지 않고, 그 리그는 운영자가 `/api/admin/matches`로 넣는다.
 
-1. https://dashboard.api-sports.io 에서 무료 계정을 만들고 키를 `.env`의 `MATCH_FEED_API_KEY`에 넣은 뒤 다시 띄운다. 같은 키로 API-Baseball과 API-Football을 둘 다 쓴다(각각 하루 100회).
-2. 리그 번호와 시즌을 확인한다. 기본값은 KBO 5, K리그1 292다. 다르면 `fanchart.match-feed.leagues`를 고친다. 무료 요금제에서 올해 시즌이 막혀 있으면 응답의 `errors`에 이유가 온다.
+| 리그 | 제공처(source) | 키 변수 | 리그 번호 | 무료 한도 |
+| --- | --- | --- | --- | --- |
+| KBO | API-Sports API-Baseball(`api-baseball`) | `KBO_API_KEY` | 5 | 하루 100회 |
+| K리그 | API-Sports API-Football(`api-football`) | `KLEAGUE_API_KEY` | 292 | 하루 100회 |
+| LCK | PandaScore(`pandascore`) | `LCK_API_KEY` | 293 | 시간당 1,000회 |
+| 프리미어리그·라리가·세리에A·분데스리가 | football-data.org(`football-data`) | `EPL_API_KEY`, `LALIGA_API_KEY`, `SERIEA_API_KEY`, `BUNDESLIGA_API_KEY` | PL, PD, SA, BL1 | 분당 10회 |
+
+1. 키를 받아 `.env`에 넣고 다시 띄운다. API-Sports 키 하나로 API-Baseball과 API-Football을 둘 다 쓴다(한도는 API마다 따로). football-data 키 하나를 유럽 네 줄에 똑같이 넣어도 된다.
+   - API-Sports: https://dashboard.api-sports.io 가입 → 대시보드의 API Key
+   - PandaScore: https://app.pandascore.co 가입 → 대시보드의 access token
+   - football-data.org: https://www.football-data.org/client/register 가입 → 메일로 온 API token
+2. 운영자 세션으로 리그별 수집 여부를 본다. `enabled`가 false면 그 리그 키가 비었다.
+   ```
+   GET /api/admin/match-feed
+   ```
+3. 리그 번호와 올해 시즌이 무료 요금제로 열리는지 확인한다. 다르면 `fanchart.match-feed.leagues`를 고친다. 막혀 있으면 API-Sports는 응답의 `errors`에, 나머지는 HTTP 403과 `message`에 이유가 온다.
    ```
    curl -H "x-apisports-key: $KEY" "https://v1.baseball.api-sports.io/leagues?country=South-Korea"
    curl -H "x-apisports-key: $KEY" "https://v3.football.api-sports.io/leagues?country=South-Korea"
+   curl -H "Authorization: Bearer $KEY" "https://api.pandascore.co/lol/leagues?search%5Bname%5D=LCK"
+   curl -H "X-Auth-Token: $KEY" "https://api.football-data.org/v4/competitions/PL"
    ```
-3. 운영자 세션으로 지금 바로 받아 본다. 연결하지 않은 팀은 `unmappedTeams`에 "팀 번호 이름"으로 나온다.
+4. 지금 바로 받아 본다. 연결하지 않은 팀은 리그별 `unmappedTeams`에 "팀 번호 이름"으로 나온다. 아직 등록하지 않은 구단(유럽 리그 등)의 경기도 여기 나오므로, 먼저 구단을 등록하고 첫 상장 공모를 연다(위 "리그 확장: 구단 등록과 첫 상장").
    ```
    POST /api/admin/match-feed/sync
    ```
-4. 구단마다 제공처 팀 번호를 잇고 3을 다시 한다. 한 팀 번호는 한 구단에만 이을 수 있다.
+5. 구단마다 제공처 팀 번호를 잇고 4를 다시 한다. 한 제공처의 한 팀 번호는 한 구단에만 이을 수 있다.
    ```
    PUT /api/admin/teams/lg/feed
    {"source":"api-baseball","externalId":"<팀 번호>"}
@@ -119,4 +135,4 @@ KBO·K리그 일정과 결과는 API-Sports에서 받는다(ADR 0024). 키가 �
 - `conflicts`: 끝난 경기의 취소, 취소한 경기의 결과, 팀이 바뀐 경기 번호. 자동으로 바꾸지 않았으니 사실을 확인하고 운영자 API로 고친다.
 - `moved later ... keeping`: 경기 중에 시작 시각을 늦춘 변경을 받지 않았다. 실제로 늦게 시작했는지 확인한다.
 - 시작하고 48시간이 지나도 결과가 없는 경기는 더 묻지 않는다. `GET /api/matches`에서 SCHEDULED로 남은 지난 경기를 보고 결과를 넣거나 취소한다.
-- `daily request limit reached`: 그날 요청을 다 썼다. 한국 시간 자정에 다시 센다.
+- `daily request limit reached`: 그 제공처·키로 그날 요청을 다 썼다. 같은 키를 쓰는 리그끼리 함께 센다. 한국 시간 자정에 다시 센다.

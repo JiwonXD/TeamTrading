@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
+import { LEAGUES, type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
 import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
@@ -58,6 +58,7 @@ export default function Home({ league }: { league: League | null }) {
           ]}
         />
         <ul className="stock-list">
+          {rows.length === 0 && <li className="empty">아직 상장한 구단이 없어요</li>}
           {rows.map(({ t, m, chg }, i) => (
             <li key={t.id} onClick={() => go(`team-${t.id}`)}>
               <span className="rank">{i + 1}</span>
@@ -113,7 +114,7 @@ export function SimMatches() {
   )
 }
 
-const LEAGUE_LABEL: Record<MatchDto['league'], string> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
+const LEAGUE_LABEL = Object.fromEntries(LEAGUES.map((l) => [l.code, l.id])) as Record<MatchDto['league'], string>
 
 export function matchState(m: MatchDto) {
   if (m.status === 'CANCELED') return '경기 취소'
@@ -148,7 +149,7 @@ export function ServerMatches({ matches }: { matches: MatchDto[] }) {
         })}
       </div>
       <p className="hint">
-        이긴 구단 주식 1주당 KBO 40P · K리그 210P · LCK 160P, 무승부는 절반을 배당해요. 경기 시작 시각에 가진 주식에만
+        이긴 구단 주식 1주당 KBO 40P · LCK 160P · 분데스리가 240P · 그 밖의 축구 리그 210P, 무승부는 절반을 배당해요. 경기 시작 시각에 가진 주식에만
         배당하고, 결과가 나온 뒤 정정 여부를 확인하는 시간을 두고 지급해요.
       </p>
     </section>

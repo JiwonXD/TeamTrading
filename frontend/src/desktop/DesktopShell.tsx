@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { LEAGUES, type League, TEAMS, type Team } from '../data/teams'
+import { type League, TEAMS, type Team, leaguesWithTeams } from '../data/teams'
 import { ME, START_POINTS, canWatch, getConnection, getProfile, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
@@ -121,7 +121,7 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
         </button>
       </div>
       <div className="side-filter">
-        {(['all', 'KBO', 'K리그', 'LCK'] as const).map((l) => (
+        {(['all', ...leaguesWithTeams().map((l) => l.id)] as const).map((l) => (
           <button key={l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
         ))}
         <span className="muted xs side-sort">거래대금순</span>
@@ -162,7 +162,7 @@ function Ticker() {
   return (
     <footer className="desk-ticker xs">
       <span className={`live-dot ${conn.status === 'live' ? 'on' : ''}`}>{conn.status === 'live' ? '실시간' : '연결 확인 중'}</span>
-      {LEAGUES.map((l) => (
+      {leaguesWithTeams().map((l) => (
         <a key={l.slug} href={`#league-${l.slug}`}>{l.id} 평균 <b className={tone(leagueAvg(s, l.id))}>{pct(leagueAvg(s, l.id))}</b></a>
       ))}
       <span>내 자산 <b>{fmt(value)}P</b> <span className={tone(value - START_POINTS)}>{signed(value - START_POINTS)}P</span></span>

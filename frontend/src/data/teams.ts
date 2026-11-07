@@ -1,6 +1,9 @@
 // 목업 데이터. 가격은 포인트(P) 단위이며 실제 구단 가치와 무관하다.
 
-export type League = 'KBO' | 'K리그' | 'LCK'
+export type League = 'KBO' | 'LCK' | '프리미어리그' | '라리가' | '세리에A' | '분데스리가' | 'K리그'
+
+/** 서버 API의 리그 이름(backend League enum) */
+export type LeagueCode = 'KBO' | 'LCK' | 'EPL' | 'LA_LIGA' | 'SERIE_A' | 'BUNDESLIGA' | 'K_LEAGUE'
 
 export interface Team {
   id: string
@@ -35,11 +38,18 @@ export const TEAMS: Team[] = [
 export const teamById = (id: string) => TEAMS.find((t) => t.id === id)!
 
 /** 리그 카테고리. slug는 주소(#league-kbo)에, code는 서버 API에 쓴다 */
-export const LEAGUES: { id: League; slug: string; code: 'KBO' | 'K_LEAGUE' | 'LCK'; sport: string }[] = [
+export const LEAGUES: { id: League; slug: string; code: LeagueCode; sport: string }[] = [
   { id: 'KBO', slug: 'kbo', code: 'KBO', sport: '야구' },
-  { id: 'K리그', slug: 'kleague', code: 'K_LEAGUE', sport: '축구' },
   { id: 'LCK', slug: 'lck', code: 'LCK', sport: 'e스포츠' },
+  { id: '프리미어리그', slug: 'epl', code: 'EPL', sport: '축구' },
+  { id: '라리가', slug: 'laliga', code: 'LA_LIGA', sport: '축구' },
+  { id: '세리에A', slug: 'seriea', code: 'SERIE_A', sport: '축구' },
+  { id: '분데스리가', slug: 'bundesliga', code: 'BUNDESLIGA', sport: '축구' },
+  { id: 'K리그', slug: 'kleague', code: 'K_LEAGUE', sport: '축구' },
 ]
+
+/** 구단이 하나라도 있는 리그(시세 띠·구단 목록 필터용) */
+export const leaguesWithTeams = () => LEAGUES.filter((l) => TEAMS.some((t) => t.league === l.id))
 
 export interface Match {
   id: string
