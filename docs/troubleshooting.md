@@ -30,10 +30,10 @@
 | 18 | 첫 자동 백업이 MySQL 기동 전에 실패 | 버그 | 운영 | [#29](https://github.com/JiwonXD/TeamTrading/pull/29) |
 | 19 | 하이픈이 든 구단 id가 다른 구단 화면으로 열림 | 버그 | 화면 | [#22](https://github.com/JiwonXD/TeamTrading/pull/22) |
 | 20 | 집 PC(Windows)에서 배포 묶음이 80번 포트를 못 열고 멈춤 | 버그 | 배포 | [#35](https://github.com/JiwonXD/TeamTrading/pull/35) |
-| 21 | PC로 접속해도 휴대폰 화면(480px 한 줄)만 보임 | 설계 | 화면, 반응형 | [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM) |
-| 22 | PC 주문창의 가격·수량 입력칸이 패널 밖으로 넘침 | 버그 | 화면, CSS | [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM) |
-| 23 | 1280px 노트북에서 차트·호가·주문 3열이 찌그러짐 | 버그 | 화면, 반응형 | [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM) |
-| 24 | 다크 모드에서 빨강·파랑 바탕 흰 글자 대비 부족(2.92:1) | 버그 | 접근성 | [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM) |
+| 21 | PC로 접속해도 휴대폰 화면(480px 한 줄)만 보임 | 설계 | 화면, 반응형 | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
+| 22 | PC 주문창의 가격·수량 입력칸이 패널 밖으로 넘침 | 버그 | 화면, CSS | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
+| 23 | 1280px 노트북에서 차트·호가·주문 3열이 찌그러짐 | 버그 | 화면, 반응형 | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
+| 24 | 다크 모드에서 빨강·파랑 바탕 흰 글자 대비 부족(2.92:1) | 버그 | 접근성 | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
 
 자기소개서 소재로 먼저 볼 항목은 1, 2, 3, 4, 7이다. 금융 시스템에서 중요한 멱등성, 장애 복구, 장부 검증, 감사 기록, 성능 측정이 각각 한 건씩이다.
 
@@ -423,7 +423,7 @@
 ## 21. PC로 접속해도 휴대폰 화면(480px 한 줄)만 보임
 
 - 구분: 설계 / 주제: 화면, 반응형
-- 관련: [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM), [PC 화면 분석](desktop-ui-analysis.md)
+- 관련: [#43](https://github.com/JiwonXD/TeamTrading/pull/43), [PC 화면 분석](desktop-ui-analysis.md)
 
 **문제.** 베타를 연 뒤 PC 브라우저로 접속하면 1920px 모니터 가운데에 폭 480px짜리 휴대폰 화면이 떠 있었다. 아래 탭바, 호가를 누르면 아래에서 올라오는 주문 시트까지 모바일 그대로라 차트·호가·주문을 한 번에 볼 수 없었다. HTS와 비슷한 경험이 목표인데 PC에서 가장 거리가 멀었다.
 
@@ -440,7 +440,7 @@
 ## 22. PC 주문창의 가격·수량 입력칸이 패널 밖으로 넘침
 
 - 구분: 버그 / 주제: 화면, CSS
-- 관련: [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM)
+- 관련: [#43](https://github.com/JiwonXD/TeamTrading/pull/43)
 
 **문제.** 첫 PC 구단 화면 스크린샷에서 주문창의 가격·수량 입력칸이 패널 오른쪽 밖으로 삐져나가 −/+ 버튼이 안 보였고, 입력한 가격 글자도 잘려 보이지 않았다.
 
@@ -457,7 +457,7 @@
 ## 23. 1280px 노트북에서 차트·호가·주문 3열이 찌그러짐
 
 - 구분: 버그 / 주제: 화면, 반응형
-- 관련: [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM)
+- 관련: [#43](https://github.com/JiwonXD/TeamTrading/pull/43)
 
 **문제.** 1600px에서는 괜찮던 구단 화면이 1280px 창에서는 차트 열이 200px 남짓으로 줄어 기간 버튼이 세로로 꺾이고 차트가 막대처럼 보였다. 1279px까지만 적용하는 미디어 쿼리를 걸어 두었는데 정확히 1280px에서는 빠져 있었고, 오른쪽 구단 목록(320px)을 접으면 본문이 넓어지는데도 화면 폭 기준이라 배치가 그대로였다.
 
@@ -474,7 +474,7 @@
 ## 24. 다크 모드에서 빨강·파랑 바탕 흰 글자 대비 부족(2.92:1)
 
 - 구분: 버그 / 주제: 접근성
-- 관련: [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM)
+- 관련: [#43](https://github.com/JiwonXD/TeamTrading/pull/43)
 
 **문제.** PC 화면을 axe로 검사하니 라이트 모드는 통과했지만 다크 모드 구단 화면에서 `color-contrast` 위반이 나왔다. 차트 오른쪽 현재가 표(흰 글자 / 파랑 #4c97ff, 2.92:1)와 주문창 구매 탭(흰 글자 / 빨강 #ff5a66, 3.04:1)이 기준 4.5:1에 못 미쳤다.
 
