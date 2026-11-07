@@ -110,6 +110,17 @@ main.with-cta { padding-bottom: 96px; }
 .league-tabs { display: flex; gap: 18px; padding: 0 20px 12px; overflow-x: auto; scrollbar-width: none; }
 .league-tabs a { font-size: 18px; font-weight: 800; color: var(--text-3); white-space: nowrap; }
 .league-tabs a.on { color: var(--text); }
+/* 탭 줄이 넘쳐 옆으로 밀려도 편집 버튼은 늘 오른쪽 끝에 보인다 */
+.league-bar { display: flex; align-items: flex-start; }
+.league-bar .league-tabs { flex: 1; min-width: 0; padding-right: 12px; mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.league-edit { flex: none; display: grid; place-items: center; width: 32px; height: 28px; margin: -2px 12px 0 0; color: var(--text-3); border-radius: 8px; }
+.league-edit:hover { color: var(--text-2); }
+.league-edit-list { list-style: none; margin: 12px 0 4px; padding: 0; }
+.league-edit-list li { display: flex; align-items: center; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.league-edit-list label { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 36px; font-weight: 700; cursor: pointer; }
+.league-edit-list input { width: 18px; height: 18px; accent-color: var(--blue); }
+.league-edit-list .icon-btn { margin: 0; color: var(--text-2); border-radius: 8px; }
+.league-edit-list .icon-btn:disabled { color: var(--line); cursor: default; }
 .league-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: -4px 0 12px; color: var(--text-2); }
 
 /* 리그 화면 일정: 주간 달력과 경기(구단을 누르면 주문 화면) */
