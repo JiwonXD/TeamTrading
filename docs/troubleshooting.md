@@ -528,7 +528,7 @@
 ## 27. 리그가 여섯 개로 늘자 제공처 하나·키 하나 구조가 버티지 못했다
 
 - 구분: 설계 / 주제: 외부 연동, 장애 격리, 요청 한도
-- 관련: [#PR](https://github.com/JiwonXD/TeamTrading/pulls), [ADR 0027](adr/0027-per-league-feed-providers.md)
+- 관련: [#48](https://github.com/JiwonXD/TeamTrading/pull/48), [ADR 0027](adr/0027-per-league-feed-providers.md)
 
 **문제.** KBO·LCK·프리미어리그·라리가·세리에A·분데스리가의 일정·결과를 받아야 했다. 기존 수집(ADR 0024)은 API-Sports 키 하나(`MATCH_FEED_API_KEY`)로 KBO와 K리그만 받았다. 키를 넣으면 모든 리그가 켜지고 빼면 모두 꺼지는 구조였다.
 
