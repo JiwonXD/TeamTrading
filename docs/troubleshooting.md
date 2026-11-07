@@ -34,7 +34,7 @@
 | 22 | PC 주문창의 가격·수량 입력칸이 패널 밖으로 넘침 | 버그 | 화면, CSS | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
 | 23 | 1280px 노트북에서 차트·호가·주문 3열이 찌그러짐 | 버그 | 화면, 반응형 | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
 | 24 | 다크 모드에서 빨강·파랑 바탕 흰 글자 대비 부족(2.92:1) | 버그 | 접근성 | [#43](https://github.com/JiwonXD/TeamTrading/pull/43) |
-| 25 | 이상거래 탐지 기록(의심 계정 닉네임)이 모든 유저에게 공개돼 있었음 | 설계 | 보안, 감시 | [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM) |
+| 25 | 이상거래 탐지 기록(의심 계정 닉네임)이 모든 유저에게 공개돼 있었음 | 설계 | 보안, 감시 | [#45](https://github.com/JiwonXD/TeamTrading/pull/45) |
 
 자기소개서 소재로 먼저 볼 항목은 1, 2, 3, 4, 7이다. 금융 시스템에서 중요한 멱등성, 장애 복구, 장부 검증, 감사 기록, 성능 측정이 각각 한 건씩이다.
 
@@ -492,7 +492,7 @@
 ## 25. 이상거래 탐지 기록(의심 계정 닉네임)이 모든 유저에게 공개돼 있었음
 
 - 구분: 설계 / 주제: 보안, 감시
-- 관련: [#PR_NUM](https://github.com/JiwonXD/TeamTrading/pull/PR_NUM), [ADR 0026](adr/0026-surveillance-admin-only.md)
+- 관련: [#45](https://github.com/JiwonXD/TeamTrading/pull/45), [ADR 0026](adr/0026-surveillance-admin-only.md)
 
 **문제.** 베타 서버를 열고 나서 "시장감시 탭은 운영자 계정에만 보이나?"라는 질문을 받고 확인해 보니, 일반 계정에도 아래 탭(PC는 위 메뉴)에 시장감시가 보였다. `GET /api/surveillance/alerts`도 로그인 없이 부를 수 있어서 반복 상대 체결·가격 괴리로 기록된 양쪽 계정의 닉네임을 누구나 볼 수 있었다.
 
