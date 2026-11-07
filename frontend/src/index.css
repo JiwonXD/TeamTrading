@@ -267,14 +267,35 @@ main.with-cta { padding-bottom: 96px; }
   animation: up 0.2s ease-out;
 }
 
-.login h2 { font-size: 20px; line-height: 1.4; margin-bottom: 8px; }
+/* 로그인 */
+.login-page { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.login { padding: 12vh 24px 32px; }
+.login-title { font-size: 44px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.15; margin: 0; }
+.login-sub { margin: 10px 0 28px; color: var(--text-2); font-size: 16px; }
+.login-providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
 .login-provider {
-  display: block; margin-top: 12px; padding: 15px; border-radius: 14px; text-align: center;
-  font-weight: 700; background: var(--surface-2); color: var(--text); text-decoration: none;
+  display: flex; align-items: center; justify-content: center; gap: 8px; height: 52px; padding: 0 12px; border-radius: 14px;
+  font-weight: 700; background: var(--surface-2); color: var(--text); white-space: nowrap;
 }
+.login-provider.google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+.login-provider.kakao { background: #fee500; color: rgba(0, 0, 0, 0.85); }
+.login-or { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--text-3); font-size: 13px; }
+.login-or::before, .login-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.login-guest { display: flex; flex-direction: column; gap: 8px; }
+.login-guest .btn { flex: none; height: 52px; font-size: 16px; }
+.login-guest .muted { text-align: center; }
+.login-input { height: 52px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; outline: none; }
+.login-input:focus { border-color: var(--blue); }
+.login-features { display: flex; flex-wrap: wrap; gap: 8px 16px; list-style: none; margin: 24px 0 0; padding: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.login-features li { display: flex; align-items: center; gap: 5px; }
+.login-features svg { color: var(--blue); }
+.login-consent { margin-top: 20px; word-break: keep-all; }
+.login-footer { margin-top: auto; padding: 0 16px 24px; text-align: center; }
+.login-footer .legal-links { padding: 0 0 6px; }
+.login-footer .legal-links a { text-decoration: none; }
+.login-footer .legal-links a.strong { color: var(--text); }
 .login-error { margin-top: 12px; color: var(--red); font-size: 14px; }
 .match-status { grid-column: 2 / -1; text-align: center; font-size: 12px; color: var(--text-3); margin-top: -2px; }
-.login .btn { flex: none; }
 .btn.primary { background: var(--blue); }
 .btn.plain { background: var(--surface-2); color: var(--text-2); }
 .btn.danger { background: var(--red); }
@@ -306,8 +327,7 @@ main.with-cta { padding-bottom: 96px; }
 .legal p, .legal li { font-size: 14px; line-height: 1.6; color: var(--text-2); word-break: keep-all; }
 .legal p { margin: 0 0 8px; }
 .legal ul, .withdraw-notes { margin: 0 0 8px; padding-left: 18px; }
-.legal a, .legal-consent a, .legal-links a { color: var(--text-2); text-decoration: underline; }
-.legal-consent { margin: 16px 0 0; text-align: center; word-break: keep-all; }
+.legal a, .legal-links a { color: var(--text-2); text-decoration: underline; }
 .legal-links { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 8px 16px 24px; color: var(--text-3); }
 .legal-links .text-btn { font-size: 13px; }
 .withdraw-notes li { line-height: 1.6; }
