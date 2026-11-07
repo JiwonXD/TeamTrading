@@ -4,10 +4,10 @@ import com.fanchart.match.Match;
 import com.fanchart.match.MatchService;
 import com.fanchart.match.DividendRow;
 import com.fanchart.match.MyDividend;
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -30,13 +30,17 @@ import java.util.UUID;
 @RestController
 class MatchController {
 
-    record MatchResponse(long id, String league, String homeTeamId, String awayTeamId, Instant scheduledAt,
+    /** 구단 id가 null인 쪽은 상장하지 않은 팀이고 이름(homeName, awayName)만 있다 */
+    record MatchResponse(long id, String league, String competition, String homeTeamId, String homeName,
+                         String awayTeamId, String awayName, Instant scheduledAt,
                          String status, Integer homeScore, Integer awayScore, String dividendStatus,
                          List<DividendRow> dividends) {
     }
 
-    record ScheduleRequest(@NotBlank String homeTeamId, @NotBlank String awayTeamId, @NotNull Instant scheduledAt,
-                           @Size(max = 64) String sourceRef) {
+    /** 컵대회는 한쪽을 상장하지 않은 팀(구단 id 대신 이름)으로 넣을 수 있다. competition을 비우면 리그 정규 시즌 */
+    record ScheduleRequest(Competition competition, @Size(max = 20) String homeTeamId, @Size(max = 60) String homeName,
+                           @Size(max = 20) String awayTeamId, @Size(max = 60) String awayName,
+                           @NotNull Instant scheduledAt, @Size(max = 64) String sourceRef) {
     }
 
     record ResultRequest(@NotNull @Min(0) Integer homeScore, @NotNull @Min(0) Integer awayScore) {
@@ -83,7 +87,8 @@ class MatchController {
     @ResponseStatus(HttpStatus.CREATED)
     MatchResponse schedule(@Valid @RequestBody ScheduleRequest req) {
         String ref = req.sourceRef() == null ? UUID.randomUUID().toString() : req.sourceRef();
-        return view(matches.schedule(req.homeTeamId(), req.awayTeamId(), req.scheduledAt(), "manual", ref));
+        return view(matches.schedule(req.competition(), blankToNull(req.homeTeamId()), req.homeName(),
+                blankToNull(req.awayTeamId()), req.awayName(), req.scheduledAt(), "manual", ref));
     }
 
     @PostMapping("/api/admin/matches/{matchId}/result")
@@ -103,8 +108,13 @@ class MatchController {
         return view(matches.match(matchId));
     }
 
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.strip();
+    }
+
     private MatchResponse view(Match m) {
-        return new MatchResponse(m.id(), m.league().name(), m.homeTeamId(), m.awayTeamId(), m.scheduledAt(),
+        return new MatchResponse(m.id(), m.league().name(), m.competition().name(), m.homeTeamId(), m.homeName(),
+                m.awayTeamId(), m.awayName(), m.scheduledAt(),
                 m.status().name(), m.homeScore(), m.awayScore(), m.dividendStatus().name(),
                 matches.dividends(m.id()));
     }

@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS } from './data/teams'
+import { COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -20,12 +20,15 @@ interface RankingDto { rank: number; nickname: string; totalValue: number; retur
 interface AlertDto { kind: string; teamId: string; tradeId: number; nicknameA: string; nicknameB: string; message: string; detectedAt: string }
 interface ReceiptDto { message: string }
 /** 경기 배당이면 matchId와 WIN·DRAW, 대회 성적 수당이면 awardId와 성적 */
-interface MyDividendDto { matchId: number | null; awardId: number | null; teamId: string; kind: string; shares: number; amount: number; paidAt: string }
+interface MyDividendDto { matchId: number | null; awardId: number | null; competition: string; teamId: string; kind: string; shares: number; amount: number; paidAt: string }
 const AWARD_LABELS: Record<string, string> = {
-  CHAMPION: '우승 수당', RUNNER_UP: '준우승 수당', SEMIFINAL: '4강 수당', POSTSEASON: '포스트시즌 수당', REGULAR_FIRST: '정규 시즌 1위 수당',
+  CHAMPION: '우승 수당', RUNNER_UP: '준우승 수당', SEMIFINAL: '4강 수당', QUARTERFINAL: '8강 수당', POSTSEASON: '포스트시즌 수당',
+  REGULAR_FIRST: '정규 시즌 1위 수당',
 }
 export interface MatchDto {
-  id: number; league: LeagueCode; homeTeamId: string; awayTeamId: string; scheduledAt: string
+  /** 구단 id가 null인 쪽은 상장하지 않은 팀(컵대회)이고 이름만 있다 */
+  id: number; league: LeagueCode; competition: string; homeTeamId: string | null; homeName: string | null
+  awayTeamId: string | null; awayName: string | null; scheduledAt: string
   status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
   dividendStatus: 'NONE' | 'PAID' | 'VOID' | 'REVIEW'
 }
@@ -278,10 +281,18 @@ function build(): State {
 
   const dividends = myDividends.map((d) => ({
     matchId: d.awardId != null ? `award-${d.awardId}` : String(d.matchId), teamId: d.teamId, qty: d.shares, amount: d.amount,
-    ts: Date.parse(d.paidAt), kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const), label: AWARD_LABELS[d.kind],
+    ts: Date.parse(d.paidAt), kind: d.kind === 'DRAW' ? ('draw' as const) : ('win' as const), label: dividendLabel(d),
   }))
   const posts = Object.values(postsByTeam).flat()
   return { users, books, markets, trades, alerts: alertList, posts, dividends, settled: [] }
+}
+
+/** 컵대회 배당은 대회 이름을 앞에 붙인다(예: 롤드컵 승리, 챔스 8강 수당). 리그 경기 배당은 화면 기본 문구 */
+function dividendLabel(d: MyDividendDto) {
+  const award = AWARD_LABELS[d.kind]
+  if (!isCup(d.competition)) return award
+  const comp = COMPETITION_LABEL[d.competition] ?? d.competition
+  return `${comp} ${award ?? (d.kind === 'DRAW' ? '무승부' : '승리')}`
 }
 
 function update() {

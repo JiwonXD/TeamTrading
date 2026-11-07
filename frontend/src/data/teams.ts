@@ -48,6 +48,15 @@ export const LEAGUES: { id: League; slug: string; code: LeagueCode; sport: strin
   { id: 'K리그', slug: 'kleague', code: 'K_LEAGUE', sport: '축구' },
 ]
 
+/** 대회(서버 Competition). 리그 정규 시즌은 리그 이름, 컵대회는 짧은 이름 */
+export const COMPETITION_LABEL: Record<string, string> = {
+  KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK', EPL: '프리미어리그', LA_LIGA: '라리가', SERIE_A: '세리에A', BUNDESLIGA: '분데스리가',
+  LCK_CUP: 'LCK컵', MSI: 'MSI', WORLDS: '롤드컵', EWC: 'EWC',
+  UCL: '챔스', UEL: '유로파', UECL: '컨퍼런스', FA_CUP: 'FA컵', EFL_CUP: 'EFL컵', COPA_DEL_REY: '코파 델 레이',
+  COPPA_ITALIA: '코파 이탈리아', DFB_POKAL: 'DFB 포칼', KOREA_CUP: '코리아컵', ACL: 'ACL',
+}
+export const isCup = (competition: string) => !LEAGUES.some((l) => l.code === competition)
+
 /** 구단이 하나라도 있는 리그(시세 띠·구단 목록 필터용) */
 export const leaguesWithTeams = () => LEAGUES.filter((l) => TEAMS.some((t) => t.league === l.id))
 

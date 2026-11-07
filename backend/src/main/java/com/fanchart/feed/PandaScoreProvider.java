@@ -1,7 +1,7 @@
 package com.fanchart.feed;
 
 import com.fanchart.feed.FeedGame.State;
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
@@ -41,13 +41,14 @@ final class PandaScoreProvider implements FeedProvider {
     }
 
     @Override
-    public HttpRequest request(LeagueFeed feed, URI base, LocalDate date, LocalDate today) {
+    public HttpRequest request(CompetitionFeed feed, String key, URI base, LocalDate date,
+                               LocalDate today) {
         Instant from = (date != null ? date : today.minusDays(DAYS_BACK)).atStartOfDay(FeedClient.KST).toInstant();
         Instant to = (date != null ? date.plusDays(1) : today.plusDays(DAYS_AHEAD)).atStartOfDay(FeedClient.KST).toInstant();
         String query = q("filter[league_id]", feed.leagueId()) + "&" + q("range[scheduled_at]", from + "," + to)
                 + "&sort=scheduled_at&" + q("page[size]", "100");
         return HttpRequest.newBuilder(URI.create(base + "/lol/matches?" + query)).timeout(Duration.ofSeconds(10))
-                .header("Authorization", "Bearer " + feed.apiKey()).GET().build();
+                .header("Authorization", "Bearer " + key).GET().build();
     }
 
     private static String q(String key, String value) {

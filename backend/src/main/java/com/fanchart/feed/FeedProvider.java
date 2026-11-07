@@ -1,6 +1,6 @@
 package com.fanchart.feed;
 
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
@@ -20,10 +20,11 @@ interface FeedProvider {
     int defaultDailyLimit();
 
     /**
+     * @param key   제공처 키
      * @param date  null이면 시즌(또는 가까운 일정) 전체, 있으면 그날(한국 시간) 경기
      * @param today 오늘(한국 시간)
      */
-    HttpRequest request(LeagueFeed feed, URI base, LocalDate date, LocalDate today);
+    HttpRequest request(CompetitionFeed feed, String key, URI base, LocalDate date, LocalDate today);
 
     /** 쓸 수 없는 응답이면 FeedException */
     List<FeedGame> parse(JsonNode body);

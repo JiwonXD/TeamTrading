@@ -2,6 +2,7 @@ package com.fanchart.api;
 
 import com.fanchart.match.SeasonAward;
 import com.fanchart.match.SeasonAwardService;
+import com.fanchart.team.Competition;
 import com.fanchart.trading.TradingException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -22,17 +23,18 @@ import java.util.List;
 @RestController
 class AwardController {
 
-    record AwardResponse(long id, String league, String season, String teamId, SeasonAward.Award award, long dps,
+    record AwardResponse(long id, String league, String competition, String season, String teamId, SeasonAward.Award award, long dps,
                          Instant recordAt, SeasonAward.Status status, String sourceUrl, Instant createdAt,
                          Instant decidedAt, Long shares, Integer holders, Long total) {
         static AwardResponse of(SeasonAward a) {
-            return new AwardResponse(a.id(), a.league().name(), a.season(), a.teamId(), a.award(), a.dps(),
+            return new AwardResponse(a.id(), a.league().name(), a.competition().name(), a.season(), a.teamId(), a.award(), a.dps(),
                     a.recordAt(), a.status(), a.sourceUrl(), a.createdAt(), a.decidedAt(), a.shares(), a.holders(),
                     a.total());
         }
     }
 
-    record RegisterRequest(@NotNull String season, @NotNull String teamId, @NotNull SeasonAward.Award award,
+    /** competition을 비우면 구단 소속 리그의 정규 시즌 */
+    record RegisterRequest(Competition competition, @NotNull String season, @NotNull String teamId, @NotNull SeasonAward.Award award,
                            @NotNull Instant recordAt, @NotNull String sourceUrl) {
     }
 
@@ -50,7 +52,7 @@ class AwardController {
     @PostMapping("/api/admin/awards")
     @ResponseStatus(HttpStatus.CREATED)
     AwardResponse register(@AuthenticationPrincipal String adminId, @Valid @RequestBody RegisterRequest req) {
-        return AwardResponse.of(awards.register(adminId, req.season(), req.teamId(), req.award(), req.recordAt(),
+        return AwardResponse.of(awards.register(adminId, req.competition(), req.season(), req.teamId(), req.award(), req.recordAt(),
                 req.sourceUrl()));
     }
 
