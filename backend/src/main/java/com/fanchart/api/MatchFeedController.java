@@ -21,7 +21,7 @@ import java.util.Map;
 @RestController
 class MatchFeedController {
 
-    record FeedLink(@NotBlank @Pattern(regexp = "api-baseball|api-football|football-data|pandascore") String source,
+    record FeedLink(@NotBlank @Pattern(regexp = "api-baseball|api-football|football-data|pandascore|espn") String source,
                     @NotBlank @Size(max = 40) String externalId) {
     }
 

@@ -97,6 +97,11 @@ public class AccountStore {
                 (rs, i) -> rs.getLong(1), accountId, teamId).stream().findFirst().orElse(0L);
     }
 
+    public long availableShares(String accountId, String teamId) {
+        return jdbc.query("SELECT available FROM positions WHERE account_id = ? AND team_id = ?",
+                (rs, i) -> rs.getLong(1), accountId, teamId).stream().findFirst().orElse(0L);
+    }
+
     /** 주문 가능 포인트가 충분할 때만 묶는다 */
     public boolean lockPoints(String accountId, long amount) {
         return jdbc.update("""

@@ -4,6 +4,7 @@ import com.fanchart.account.Account;
 import com.fanchart.account.AccountStore;
 import com.fanchart.account.Holding;
 import com.fanchart.account.Nicknames;
+import com.fanchart.auth.AuthProperties;
 import com.fanchart.engine.Level;
 import com.fanchart.engine.MatchResult;
 import com.fanchart.engine.Order;
@@ -25,6 +26,7 @@ import com.fanchart.trading.StoredOrder.Status;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -64,6 +66,9 @@ import java.util.function.Supplier;
  * <p>잔고를 바꾸는 트랜잭션은 같은 이동을 원장에도 전표로 남긴다. 잔고 갱신과 전표는 따로 계산하므로
  * 대사({@link com.fanchart.ledger.Reconciliation})로 둘이 맞는지 확인할 수 있다.
  *
+ * <p>운영자 계정(fanchart.auth.admins)의 매도는 증자다. 판매 가능 수량이 모자라면 접수할 때 모자란 만큼 주식을 새로 발행해
+ * 운영자 계정에 넣고 그대로 판다(ADR 0031). 운영자와의 체결은 이상거래 탐지에서 뺀다. 포인트를 몰아줄 상대가 아니다.
+ *
  * <p>호가창이 바뀔 때마다 종목 락 안에서 {@link MarketUpdate}를 발행한다. 락 안에서 번호를 매기고 보내므로
  * 같은 종목의 업데이트는 번호 순서대로 나간다.
  */
@@ -93,10 +98,29 @@ public class TradingService {
     /** 구단이 등록되면 새 맵으로 바꿔 끼운다. 읽기는 잠금 없이 한다 */
     private volatile Map<String, Market> markets;
     private final AtomicLong ids = new AtomicLong();
+    /** 매도가 증자로 작동하는 운영자 계정 */
+    private final Set<String> issuers;
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
                           Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
                           ApplicationEventPublisher events, ListingStore listings, AlertStore alerts) {
+        this(catalog, accounts, orders, trades, ledger, points, tx, clock, events, listings, alerts, Set.of());
+    }
+
+    @Autowired
+    public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
+                          Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
+                          ApplicationEventPublisher events, ListingStore listings, AlertStore alerts,
+                          AuthProperties auth) {
+        this(catalog, accounts, orders, trades, ledger, points, tx, clock, events, listings, alerts,
+                Set.copyOf(auth.admins()));
+    }
+
+    public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
+                          Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
+                          ApplicationEventPublisher events, ListingStore listings, AlertStore alerts,
+                          Set<String> issuers) {
+        this.issuers = Set.copyOf(issuers);
         this.alerts = alerts;
         this.accounts = accounts;
         this.listings = listings;
@@ -293,7 +317,11 @@ public class TradingService {
             });
             // 시장가 매수는 상한가 기준으로 포인트를 묶어두고 체결 후 차액을 돌려준다
             long reservePerShare = type == OrderType.LIMIT ? price : PriceRules.upperLimit(base);
-            Instant listingAt = market.listingAt;
+            boolean issue = side == Side.SELL && isIssuer(accountId);
+            if (issue && type != OrderType.LIMIT) throw new TradingException("운영자 매도(증자)는 지정가로만 낼 수 있어요");
+            // 주식이 없어 막혀 있던 구단은 운영자 매도로 거래를 연다(접수가 커밋된 뒤). 첫 상장 공모가 진행 중이면 공모를 따른다
+            boolean opens = issue && Instant.MAX.equals(market.listingAt) && !listings.holds().containsKey(teamId);
+            Instant listingAt = opens ? null : market.listingAt;
             if (Instant.MAX.equals(listingAt)) throw new TradingException("상장 전인 구단이라 거래할 수 없어요. 공모 청약 중이거나 공모를 기다리고 있어요");
             if (market.book.isCollecting()) {
                 Instant endsAt = auctionEndsAt(market);
@@ -315,12 +343,16 @@ public class TradingService {
 
             Order order = new Order(ids.incrementAndGet(), accountId, teamId, side, type, price, quantity, clock.instant());
             try {
-                tx.executeWithoutResult(s -> accept(order, clientOrderId, reservePerShare));
+                tx.executeWithoutResult(s -> {
+                    if (issue) issueShortfall(order);
+                    accept(order, clientOrderId, reservePerShare);
+                });
             } catch (DuplicateKeyException e) {
                 // 같은 번호의 주문이 다른 종목 락 아래에서 먼저 저장됐다
                 return replay(orders.findByClientOrderId(accountId, clientOrderId).orElseThrow(),
                         teamId, side, type, price, quantity);
             }
+            if (opens) market.listingAt = null;
 
             long[] band = market.viBand();
             MatchResult result = market.book.submit(order, ids::incrementAndGet, order.createdAt(), band[0], band[1]);
@@ -373,6 +405,20 @@ public class TradingService {
     }
 
     // ---------- 트랜잭션 본문 ----------
+
+    /** 운영자 매도는 증자다. 판매 가능 수량이 모자라면 모자란 만큼 공모가(주문 가격)로 새로 발행해 운영자 계정에 넣는다 */
+    private void issueShortfall(Order order) {
+        long shortfall = order.quantity() - accounts.availableShares(order.accountId(), order.teamId());
+        if (shortfall <= 0) return;
+        accounts.applyShares(order.accountId(), order.teamId(), shortfall, 0, shortfall, shortfall * order.price());
+        accounts.addInitialValue(order.accountId(), shortfall * order.price());
+        ledger.post(Journal.grant(order.accountId(), order.teamId(), shortfall), order.createdAt());
+    }
+
+    /** 매도가 증자로 작동하는 운영자 계정인지. 운영자 계정은 순위에서도 뺀다 */
+    public boolean isIssuer(String accountId) {
+        return issuers.contains(accountId);
+    }
 
     private void accept(Order order, String clientOrderId, long reservePerShare) {
         boolean buy = order.side() == Side.BUY;
@@ -615,13 +661,15 @@ public class TradingService {
      *
      * @param reference 가격 괴리 기준. null이면 직전 체결가
      */
-    private static List<Alert> detectAll(Market market, List<Trade> newTrades, Long reference) {
+    private List<Alert> detectAll(Market market, List<Trade> newTrades, Long reference) {
         if (newTrades.isEmpty()) return List.of();
         List<Alert> found = new ArrayList<>();
         List<Trade> recent = new ArrayList<>(market.recentTrades(Integer.MAX_VALUE)); // 최신이 앞
         long last = market.lastPrice();
         for (Trade t : newTrades) {
-            found.addAll(FdsDetector.detect(t, reference != null ? reference : last, recent));
+            // 운영자 매도(증자)를 사는 것은 포인트를 몰아주는 거래가 아니다
+            if (!isIssuer(t.buyerId()) && !isIssuer(t.sellerId()))
+                found.addAll(FdsDetector.detect(t, reference != null ? reference : last, recent));
             recent.addFirst(t);
             last = t.price();
         }

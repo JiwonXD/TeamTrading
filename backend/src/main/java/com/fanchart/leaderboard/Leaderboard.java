@@ -96,6 +96,8 @@ public class Leaderboard {
             String id = e.getKey();
             // 탈퇴한 계정은 순위에서 뺀다. 남은 주식의 평가금은 계속 움직이지만 그 사람은 더 이상 없다
             if (withdrawn.contains(id)) continue;
+            // 운영자 계정은 증자 물량을 들고 있는 발행자라 순위에 넣지 않는다
+            if (trading.isIssuer(id)) continue;
             double[] perf = performance(e.getValue(), from);
             Row row = new Row(id, perf[0], (long) perf[1], trades.getOrDefault(id, 0));
             String why = ineligible(row.trades(), created.get(id), flagged.contains(id));

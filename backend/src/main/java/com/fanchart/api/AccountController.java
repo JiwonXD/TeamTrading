@@ -95,7 +95,8 @@ class AccountController {
         }
         List<Row> rows = new ArrayList<>();
         for (Account a : trading.allAccounts()) {
-            if (a.withdrawn()) continue;
+            // 탈퇴한 계정과 운영자(증자 물량을 든 발행자)는 순위에 넣지 않는다
+            if (a.withdrawn() || trading.isIssuer(a.id())) continue;
             long value = trading.totalValue(a);
             rows.add(new Row(a, value, (double) value / a.initialValue() - 1));
         }
