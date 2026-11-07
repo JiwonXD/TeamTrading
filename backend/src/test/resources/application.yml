@@ -3,7 +3,7 @@ spring:
     url: jdbc:h2:mem:${random.uuid};MODE=MySQL;DATABASE_TO_LOWER=TRUE
     username: sa
     password: ""
-teamtrading:
+fanchart:
   auth:
     dev-login: true
   dividends:

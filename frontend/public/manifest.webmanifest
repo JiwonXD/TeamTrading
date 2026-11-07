@@ -1,6 +1,6 @@
 {
-  "name": "팀트레이딩",
-  "short_name": "팀트",
+  "name": "팬차트",
+  "short_name": "팬차트",
   "description": "응원하는 구단의 주식을 사고파는 모의 거래소",
   "lang": "ko",
   "start_url": "./",

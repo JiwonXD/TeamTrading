@@ -38,7 +38,7 @@ export function Header({ title, onBack, right }: { title?: string; onBack?: () =
           <svg width="24" height="24" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       ) : (
-        title ? <span className="brand">팀트</span> : <h1 className="brand">팀트</h1>
+        title ? <span className="brand">팬차트</span> : <h1 className="brand">팬차트</h1>
       )}
       {title && <h1 className="topbar-title">{title}</h1>}
       <span className="topbar-right">{right}</span>

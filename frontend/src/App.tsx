@@ -76,7 +76,7 @@ export default function App() {
     <div className="app">
       <StatusBanner />
       <main className="connecting" aria-busy="true">
-        <div className="logo">팀트</div>
+        <div className="logo">팬차트</div>
         <p className="muted">{conn.status === 'connecting' ? '서버에 연결하는 중이에요' : '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해요'}</p>
       </main>
     </div>
