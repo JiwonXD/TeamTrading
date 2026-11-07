@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { type League, TEAMS, type Team, leaguesWithTeams } from '../data/teams'
-import { ME, START_POINTS, canWatch, getConnection, getProfile, mode, totalShares, totalValue, useStore } from '../store'
+import { visibleLeagues } from '../data/leagueTabs'
+import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
@@ -121,7 +122,7 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
         </button>
       </div>
       <div className="side-filter">
-        {(['all', ...leaguesWithTeams().map((l) => l.id)] as const).map((l) => (
+        {(['all', ...visibleLeagues(getLeagueTabs()).filter((l) => TEAMS.some((t) => t.league === l.id)).map((l) => l.id)] as const).map((l) => (
           <button key={l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
         ))}
         <span className="muted xs side-sort">거래대금순</span>

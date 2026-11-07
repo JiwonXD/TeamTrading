@@ -27,7 +27,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 탈퇴. 계정 행과 원장은 다른 계정의 잔고·체결과 맞물려 있어 지우지 않는다. 대신
  * <ul>
- * <li>로그인 연결(account_identities)을 지워 그 사람과 계정의 연결을 끊고, 닉네임을 "탈퇴회원+숫자"로 바꾼다.</li>
+ * <li>로그인 연결(account_identities)을 지워 그 사람과 계정의 연결을 끊고, 닉네임을 "탈퇴회원+숫자"로 바꾼다. 화면 설정(리그 탭)도 지운다.</li>
  * <li>대기 주문을 모두 취소한다. 남은 포인트와 주식은 그대로 두어 장부 합계가 바뀌지 않는다(소각하지 않는다).</li>
  * <li>로그인 식별 번호의 SHA-256 해시만 30일 남겨, 탈퇴와 재가입을 되풀이해 가입 포인트를 거듭 받지 못하게 한다.</li>
  * <li>다른 기기에 남은 세션은 WithdrawnSessionFilter가 다음 요청에서 끊는다.</li>
@@ -80,6 +80,7 @@ public class Withdrawal {
                         hash((String) id.get("provider"), (String) id.get("subject")), Timestamp.from(now));
             }
             jdbc.update("DELETE FROM account_identities WHERE account_id = ?", accountId);
+            jdbc.update("DELETE FROM account_league_tabs WHERE account_id = ?", accountId);
         });
         // 이 뒤로 들어오는 요청은 필터가 막으므로, 지금 있는 대기 주문을 취소하면 더 생기지 않는다
         withdrawn.add(accountId);

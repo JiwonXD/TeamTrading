@@ -15,6 +15,7 @@ import {
   validateOrder,
 } from './engine/orderbook'
 import { detect } from './engine/fds'
+import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
 import { DIVIDEND_RATE, LEAGUES, type League, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
 import type { MatchDto } from './store.server'
 import { ME, START_POINTS, type Holding, type Market, type Post, type OrderResult, type State, type User } from './storeTypes'
@@ -25,6 +26,7 @@ interface SimState extends State {
 }
 
 const STORAGE_KEY = 'fanchart:v1'
+const TABS_KEY = 'fanchart:league-tabs'
 const BOT_NAMES = [
   '잠실불꽃', '광주호랑이', '보살팬', '페이커장인', '호랑이굴', '쌍둥이아빠', '사직노래방', '대구왕자',
   '마법사의제자', '인천상륙', '창원공룡', '고척돔지기', '스틸야드', '상암직관러', '전주성', 'midgap',
@@ -323,6 +325,25 @@ export function reset() {
   seedBooks()
   save()
   emit()
+}
+
+/** 시뮬레이션 미리보기는 계정이 없으므로 리그 탭 설정을 이 브라우저에 둔다 */
+export function getLeagueTabs(): LeagueTabPrefs {
+  try {
+    return { ...DEFAULT_TABS, ...JSON.parse(localStorage.getItem(TABS_KEY) ?? '{}') }
+  } catch {
+    return DEFAULT_TABS
+  }
+}
+
+export function saveLeagueTabs(prefs: LeagueTabPrefs): OrderResult {
+  try {
+    localStorage.setItem(TABS_KEY, JSON.stringify(prefs))
+  } catch {
+    return { ok: false, message: '이 브라우저에는 저장할 수 없어요' }
+  }
+  emit()
+  return { ok: true, message: '리그 탭을 저장했어요' }
 }
 
 export function start() {
