@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ApiSportsClientTest {
+class FeedClientTest {
 
     private HttpServer server;
     private final List<String> requests = new CopyOnWriteArrayList<>();
@@ -29,15 +29,22 @@ class ApiSportsClientTest {
     private volatile String body = "{\"errors\": [], \"response\": []}";
     // 한국 시간 2026-04-01 23:00
     private final TestClock clock = new TestClock(Instant.parse("2026-04-01T14:00:00Z"));
-    private ApiSportsClient client;
+    private FeedClient client;
     private LeagueFeed baseball;
     private LeagueFeed football;
+    private LeagueFeed epl;
+    private LeagueFeed laLiga;
+    private LeagueFeed lck;
 
     @BeforeEach
     void start() throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", ex -> {
-            requests.add(ex.getRequestHeaders().getFirst("x-apisports-key") + " " + ex.getRequestURI());
+            var h = ex.getRequestHeaders();
+            String key = h.containsKey("x-apisports-key") ? h.getFirst("x-apisports-key")
+                    : h.containsKey("X-Auth-Token") ? h.getFirst("X-Auth-Token") : h.getFirst("Authorization");
+            requests.add(key + " " + ex.getRequestURI().getRawPath()
+                    + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery()));
             byte[] out = body.getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(status, out.length);
             ex.getResponseBody().write(out);
@@ -45,10 +52,12 @@ class ApiSportsClientTest {
         });
         server.start();
         URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
-        baseball = new LeagueFeed(MatchFeedProperties.BASEBALL, League.KBO, 5, null, base);
-        football = new LeagueFeed(MatchFeedProperties.FOOTBALL, League.K_LEAGUE, 292, 2025, base);
-        client = new ApiSportsClient(new MatchFeedProperties("test-key", 2, List.of(baseball, football)),
-                JsonMapper.builder().build(), clock);
+        baseball = new LeagueFeed(League.KBO, MatchFeedProperties.BASEBALL, "test-key", "5", null, base, 2);
+        football = new LeagueFeed(League.K_LEAGUE, MatchFeedProperties.FOOTBALL, "test-key", "292", 2025, base, 2);
+        epl = new LeagueFeed(League.EPL, MatchFeedProperties.FOOTBALL_DATA, "fd-key", "PL", null, base, 2);
+        laLiga = new LeagueFeed(League.LA_LIGA, MatchFeedProperties.FOOTBALL_DATA, "fd-key", "PD", 2026, base, 2);
+        lck = new LeagueFeed(League.LCK, MatchFeedProperties.PANDASCORE, "ps-key", "293", null, base, null);
+        client = new FeedClient(JsonMapper.builder().build(), clock);
     }
 
     @AfterEach
@@ -67,6 +76,44 @@ class ApiSportsClientTest {
     }
 
     @Test
+    void asksFootballDataForTheCurrentSeasonOrTheUtcDaysCoveringOneKoreanDay() {
+        body = "{\"matches\": []}";
+        client.games(epl, null);
+        client.games(laLiga, LocalDate.parse("2026-11-08"));
+
+        assertThat(requests).containsExactly(
+                "fd-key /v4/competitions/PL/matches",
+                "fd-key /v4/competitions/PD/matches?season=2026&dateFrom=2026-11-07&dateTo=2026-11-08");
+    }
+
+    @Test
+    void asksPandaScoreForTheLeagueMatchesAroundTodayOrOneKoreanDay() {
+        body = "[]";
+        client.games(lck, null);
+        client.games(lck, LocalDate.parse("2026-04-05"));
+
+        assertThat(requests).containsExactly(
+                "Bearer ps-key /lol/matches?filter%5Bleague_id%5D=293"
+                        + "&range%5Bscheduled_at%5D=2026-03-29T15%3A00%3A00Z%2C2026-05-15T15%3A00%3A00Z"
+                        + "&sort=scheduled_at&page%5Bsize%5D=100",
+                "Bearer ps-key /lol/matches?filter%5Bleague_id%5D=293"
+                        + "&range%5Bscheduled_at%5D=2026-04-04T15%3A00%3A00Z%2C2026-04-05T15%3A00%3A00Z"
+                        + "&sort=scheduled_at&page%5Bsize%5D=100");
+    }
+
+    @Test
+    void neverAsksForALeagueWithoutAKey() {
+        LeagueFeed noKey = new LeagueFeed(League.SERIE_A, MatchFeedProperties.FOOTBALL_DATA, " ", "SA", null,
+                epl.baseUrl(), null);
+
+        assertThat(noKey.enabled()).isFalse();
+        assertThat(noKey.toString()).doesNotContain("key");
+        assertThat(epl.toString()).doesNotContain("fd-key");
+        assertThatThrownBy(() -> client.games(noKey, null)).isInstanceOf(FeedException.class);
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
     void failsOnHttpErrorsAndProviderErrors() {
         status = 500;
         assertThatThrownBy(() -> client.games(baseball, null)).isInstanceOf(FeedException.class)
@@ -80,7 +127,7 @@ class ApiSportsClientTest {
     }
 
     @Test
-    void stopsAtTheDailyLimitPerProviderUntilMidnightInKorea() {
+    void stopsAtTheDailyLimitPerProviderAndKeyUntilMidnightInKorea() {
         client.games(baseball, null);
         status = 500;
         // 실패한 요청도 제공처의 한도를 쓴다
@@ -88,14 +135,20 @@ class ApiSportsClientTest {
         status = 200;
         assertThatThrownBy(() -> client.games(baseball, null)).hasMessageContaining("daily request limit");
         assertThat(requests).hasSize(2);
-        assertThat(client.remaining(MatchFeedProperties.BASEBALL)).isZero();
+        assertThat(client.remaining(baseball)).isZero();
         // 다른 제공처(API)는 한도가 따로다
         client.games(football, null);
+        // 같은 제공처·같은 키를 쓰는 리그끼리는 한도를 함께 쓴다
+        body = "{\"matches\": []}";
+        client.games(epl, null);
+        client.games(laLiga, null);
+        assertThatThrownBy(() -> client.games(epl, null)).hasMessageContaining("daily request limit");
+        body = "{\"errors\": [], \"response\": []}";
 
         clock.advance(Duration.ofMinutes(59));
         assertThatThrownBy(() -> client.games(baseball, null)).hasMessageContaining("daily request limit");
         clock.advance(Duration.ofMinutes(1));
         client.games(baseball, null);
-        assertThat(client.remaining(MatchFeedProperties.BASEBALL)).isEqualTo(1);
+        assertThat(client.remaining(baseball)).isEqualTo(1);
     }
 }
