@@ -34,6 +34,7 @@ import static com.fanchart.auth.TestLogin.admin;
 import static com.fanchart.auth.TestLogin.login;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -72,11 +73,16 @@ class MatchFeedSyncTest {
 
     @DynamicPropertySource
     static void feed(DynamicPropertyRegistry r) {
-        r.add("fanchart.match-feed.api-key", () -> "test-key");
+        r.add("fanchart.match-feed.leagues[0].api-key", () -> "test-key");
         r.add("fanchart.match-feed.leagues[0].source", () -> SRC);
         r.add("fanchart.match-feed.leagues[0].league", () -> "KBO");
         r.add("fanchart.match-feed.leagues[0].league-id", () -> "5");
         r.add("fanchart.match-feed.leagues[0].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
+        // 키가 없는 리그는 쉰다
+        r.add("fanchart.match-feed.leagues[1].source", () -> MatchFeedProperties.FOOTBALL_DATA);
+        r.add("fanchart.match-feed.leagues[1].league", () -> "EPL");
+        r.add("fanchart.match-feed.leagues[1].league-id", () -> "PL");
+        r.add("fanchart.match-feed.leagues[1].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
     }
 
     @Autowired MatchFeedSync sync;
@@ -85,7 +91,7 @@ class MatchFeedSyncTest {
     @Autowired TestClock clock;
     @Autowired MockMvc mvc;
 
-    private final LeagueFeed kbo = new LeagueFeed(SRC, League.KBO, 5, null, null);
+    private final LeagueFeed kbo = new LeagueFeed(League.KBO, SRC, "test-key", "5", null, null, null);
 
     @BeforeEach
     void setUp() {
@@ -286,9 +292,20 @@ class MatchFeedSyncTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"api-baseball\",\"externalId\":\"9\"}"))
                 .andExpect(status().isForbidden());
 
-        mvc.perform(post("/api/admin/match-feed/sync").with(admin("ops")))
+        mvc.perform(get("/api/admin/match-feed").with(admin("ops")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].league").value("KBO"))
+                .andExpect(jsonPath("$[0].enabled").value(true))
+                .andExpect(jsonPath("$[1].league").value("EPL"))
+                .andExpect(jsonPath("$[1].source").value("football-data"))
+                .andExpect(jsonPath("$[1].enabled").value(false));
+
+        // 키가 있는 KBO만 받는다
+        mvc.perform(post("/api/admin/match-feed/sync").with(admin("ops")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].league").value("KBO"))
                 .andExpect(jsonPath("$[0].error").doesNotExist());
+        assertThat(REQUESTS).containsExactly("/games?league=5&season=2026&timezone=Asia/Seoul");
     }
 }

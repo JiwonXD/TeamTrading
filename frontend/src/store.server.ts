@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { LEAGUES as LEAGUE_LIST, type League, TEAMS } from './data/teams'
+import { LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -25,7 +25,7 @@ const AWARD_LABELS: Record<string, string> = {
   CHAMPION: '우승 수당', RUNNER_UP: '준우승 수당', SEMIFINAL: '4강 수당', POSTSEASON: '포스트시즌 수당', REGULAR_FIRST: '정규 시즌 1위 수당',
 }
 export interface MatchDto {
-  id: number; league: 'KBO' | 'K_LEAGUE' | 'LCK'; homeTeamId: string; awayTeamId: string; scheduledAt: string
+  id: number; league: LeagueCode; homeTeamId: string; awayTeamId: string; scheduledAt: string
   status: 'SCHEDULED' | 'FINAL' | 'CANCELED'; homeScore: number | null; awayScore: number | null
   dividendStatus: 'NONE' | 'PAID' | 'VOID' | 'REVIEW'
 }
@@ -118,7 +118,7 @@ async function ensureLogin(): Promise<boolean> {
   }
 }
 
-const LEAGUES: Record<string, League> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
+const LEAGUES: Record<string, League> = Object.fromEntries(LEAGUE_LIST.map((l) => [l.code, l.id]))
 
 /** 구단 목록은 서버가 정한다(운영자가 리그 구단을 등록할 수 있다). 목록이 바뀌었을 때만 바꿔 끼운다 */
 function syncTeams(list: QuoteDto[]) {

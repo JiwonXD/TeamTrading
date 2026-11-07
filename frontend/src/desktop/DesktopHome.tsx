@@ -76,6 +76,7 @@ export default function DesktopHome({ league }: { league: League | null }) {
               </tr>
             </thead>
             <tbody onPointerLeave={() => setPreview(null)}>
+              {rows.length === 0 && <tr><td colSpan={COLUMNS.length} className="empty">아직 상장한 구단이 없어요</td></tr>}
               {rows.map((r, i) => (
                 <TeamRow key={r.t.id} team={r.t} rank={i + 1} active={r.t.id === shownId} onHover={() => setPreview(r.t.id)} />
               ))}

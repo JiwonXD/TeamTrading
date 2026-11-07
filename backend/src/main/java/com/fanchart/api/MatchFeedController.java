@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -15,12 +16,16 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 경기 데이터 수집 운영(SecurityConfig의 /api/admin/**): 구단과 제공처 팀 번호 잇기, 지금 바로 받기 */
+/** 경기 데이터 수집 운영(SecurityConfig의 /api/admin/**): 리그별 수집 상태, 구단과 제공처 팀 번호 잇기, 지금 바로 받기 */
 @RestController
 class MatchFeedController {
 
-    record FeedLink(@NotBlank @Pattern(regexp = "api-baseball|api-football") String source,
+    record FeedLink(@NotBlank @Pattern(regexp = "api-baseball|api-football|football-data|pandascore") String source,
                     @NotBlank @Size(max = 40) String externalId) {
+    }
+
+    /** 리그마다 제공처와 수집 여부(키가 있는지) */
+    record FeedLeague(String league, String source, String leagueId, boolean enabled) {
     }
 
     private final FeedTeams teams;
@@ -37,9 +42,15 @@ class MatchFeedController {
         return new FeedLink(req.source(), req.externalId().trim());
     }
 
+    @GetMapping("/api/admin/match-feed")
+    List<FeedLeague> leagues() {
+        return sync.leagues().stream()
+                .map(f -> new FeedLeague(f.league().name(), f.source(), f.leagueId(), f.enabled())).toList();
+    }
+
     @PostMapping("/api/admin/match-feed/sync")
     List<MatchFeedSync.Summary> syncNow() {
-        if (!sync.enabled()) throw new TradingException("경기 데이터 키(MATCH_FEED_API_KEY)가 없어요");
+        if (!sync.enabled()) throw new TradingException("경기 데이터 키가 하나도 없어요(KBO_API_KEY 등 리그별 키)");
         return sync.syncSeason();
     }
 }

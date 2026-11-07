@@ -59,14 +59,14 @@ public class MatchFeedSync {
     }
 
     private final MatchFeedProperties props;
-    private final ApiSportsClient client;
+    private final FeedClient client;
     private final FeedTeams teams;
     private final TeamCatalog catalog;
     private final MatchService matches;
     private final Clock clock;
     private final Map<String, Instant> lastPolled = new ConcurrentHashMap<>();
 
-    MatchFeedSync(MatchFeedProperties props, ApiSportsClient client, FeedTeams teams, TeamCatalog catalog,
+    MatchFeedSync(MatchFeedProperties props, FeedClient client, FeedTeams teams, TeamCatalog catalog,
                   MatchService matches, Clock clock) {
         this.props = props;
         this.client = client;
@@ -80,11 +80,15 @@ public class MatchFeedSync {
         return props.enabled();
     }
 
+    /** 설정한 리그 전부(키가 없어 쉬는 리그 포함) */
+    public List<LeagueFeed> leagues() {
+        return props.leagues();
+    }
+
     /** 리그마다 시즌 전체 일정을 받아 맞춘다. 한 리그가 실패해도 나머지는 한다 */
     public List<Summary> syncSeason() {
         List<Summary> out = new ArrayList<>();
-        if (!props.enabled()) return out;
-        for (LeagueFeed feed : props.leagues()) {
+        for (LeagueFeed feed : props.enabledLeagues()) {
             try {
                 out.add(apply(feed, client.games(feed, null)));
             } catch (FeedException e) {
@@ -99,15 +103,15 @@ public class MatchFeedSync {
     public void pollResults() {
         if (!props.enabled()) return;
         Instant now = clock.instant();
-        LocalDate today = now.atZone(ApiSportsClient.KST).toLocalDate();
+        LocalDate today = now.atZone(FeedClient.KST).toLocalDate();
         lastPolled.keySet().removeIf(k -> LocalDate.parse(k.substring(k.lastIndexOf(':') + 1))
                 .isBefore(today.minusDays(3)));
-        for (LeagueFeed feed : props.leagues()) {
+        for (LeagueFeed feed : props.enabledLeagues()) {
             Set<LocalDate> dates = new TreeSet<>();
             for (Match m : matches.startedWithoutResult(feed.source(), now.minus(FIRST_POLL))) {
                 Duration since = Duration.between(m.scheduledAt(), now);
                 if (m.league() != feed.league() || since.compareTo(GIVE_UP) > 0) continue;
-                LocalDate date = m.scheduledAt().atZone(ApiSportsClient.KST).toLocalDate();
+                LocalDate date = m.scheduledAt().atZone(FeedClient.KST).toLocalDate();
                 Instant last = lastPolled.get(pollKey(feed, date));
                 Duration wait = since.compareTo(FAST_POLL_UNTIL) < 0 ? Duration.ZERO : SLOW_POLL;
                 if (last == null || !last.plus(wait).isAfter(now)) dates.add(date);

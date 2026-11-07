@@ -74,8 +74,8 @@
 .side-tabs button.on { color: var(--text); }
 .side-toggle { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-3); }
 .side-toggle:hover { background: var(--hover); color: var(--text); }
-.side-filter { display: flex; align-items: center; gap: 4px; padding: 4px 16px 8px; border-bottom: 1px solid var(--line); }
-.side-filter button { padding: 4px 8px; border-radius: 6px; font-size: 13px; color: var(--text-3); }
+.side-filter { display: flex; align-items: center; gap: 4px; padding: 4px 16px 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.side-filter button { flex: none; padding: 4px 8px; border-radius: 6px; font-size: 13px; color: var(--text-3); white-space: nowrap; }
 .side-filter button:hover { background: var(--hover); }
 .side-filter button.on { background: var(--surface-2); color: var(--text); font-weight: 700; }
 .side-sort { margin-left: auto; }
