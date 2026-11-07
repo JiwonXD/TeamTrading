@@ -4,7 +4,7 @@
 
 ## 도구
 
-`LoadTest`(`backend/src/test/java/com/teamtrading/load`)는 일반 테스트에서 빠지고 `loadTest` 작업으로만 돈다.
+`LoadTest`(`backend/src/test/java/com/fanchart/load`)는 일반 테스트에서 빠지고 `loadTest` 작업으로만 돈다.
 
 ```bash
 cd backend

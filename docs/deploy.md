@@ -25,7 +25,7 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 - 운영자 지정: 운영할 계정으로 로그인한 뒤 `/api/accounts/me`의 `id`를 `ADMIN_ACCOUNT_IDS`에 넣고 `docker compose up -d backend`로 다시 띄운다.
 - 공개 전에 `.env`의 `OPERATOR_NAME`, `OPERATOR_EMAIL`(개인정보 보호책임자와 문의 연락처)을 채우고 `docker compose up -d --build`로 다시 띄운다(화면 이미지에 들어간다). 이용약관·개인정보처리방침 화면에 들어간다. 저장소에는 넣지 않는다. 약관과 방침은 서비스 동작에 맞춘 초안이라 공개 전에 한 번 읽고 고칠 곳을 고친다(`frontend/src/pages/Legal.tsx`).
 - 실제 경기 일정·결과(KBO·K리그)를 받으려면 API-Sports 무료 키를 `MATCH_FEED_API_KEY`에 넣고 구단과 제공처 팀 번호를 잇는다([운영 점검](operations.md#경기-데이터-수집)). 비워 두면 운영자가 경기를 직접 넣는다.
-- 소셜 로그인 콜백 주소는 `https://{도메인}/login/oauth2/code/{kakao|naver|google}`이다. 서버는 nginx가 넘기는 `X-Forwarded-*`를 믿는다(`SERVER_FORWARD_HEADERS_STRATEGY=native`). 그래서 콜백 주소와 쿠키의 Secure 속성이 바깥 주소 기준으로 정해진다.
+- 소셜 로그인 콜백 주소는 `https://{도메인}/login/oauth2/code/{kakao|google}`이다. 서버는 nginx가 넘기는 `X-Forwarded-*`를 믿는다(`SERVER_FORWARD_HEADERS_STRATEGY=native`). 그래서 콜백 주소와 쿠키의 Secure 속성이 바깥 주소 기준으로 정해진다.
 
 ## 베타: 집 PC에서 돌리기
 
@@ -37,9 +37,14 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 
 ```bash
 cd deploy
+cp .env.example .env
+sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=$(openssl rand -hex 16)/; s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 16)/; s/^SPRING_PROFILES_ACTIVE=.*/SPRING_PROFILES_ACTIVE=demo/" .env
 docker compose --profile quick-tunnel up -d --build
-docker compose logs quick-tunnel     # https://xxx.trycloudflare.com 주소가 나온다
+docker compose logs quick-tunnel | grep trycloudflare   # https://xxx.trycloudflare.com 주소가 나온다
 ```
+
+- Windows에서는 Git Bash에서 그대로 실행한다. DB 비밀번호는 MySQL이 처음 뜰 때 볼륨에 들어가므로 그 뒤에는 바꾸지 않는다.
+- `ports are not available ... 0.0.0.0:80 ... forbidden by its access permissions`가 나면 Windows가 80번을 다른 프로그램에 주었거나 예약해 둔 것이다. `.env`의 `HTTP_PORT`를 `8088`처럼 다른 번호로 바꾼다. 터널은 컨테이너 네트워크 안에서 `web:80`으로 가므로 PC 쪽 포트 번호와 상관없다. PC에서는 `http://localhost:8088`로 연다.
 
 ### 도메인으로 열기
 
@@ -53,7 +58,7 @@ docker compose logs quick-tunnel     # https://xxx.trycloudflare.com 주소가 �
    cd deploy
    docker compose --profile tunnel up -d --build
    ```
-5. 소셜 로그인 콜백 주소를 `https://{도메인}/login/oauth2/code/{kakao|naver|google}`로 등록한다. 키가 준비되기 전에는 `SPRING_PROFILES_ACTIVE=demo`로 닉네임 로그인만 열어 지인 테스트를 한다.
+5. 소셜 로그인 콜백 주소를 `https://{도메인}/login/oauth2/code/{kakao|google}`로 등록한다. 키가 준비되기 전에는 `SPRING_PROFILES_ACTIVE=demo`로 닉네임 로그인만 열어 지인 테스트를 한다.
 
 감수할 점:
 

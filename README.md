@@ -1,4 +1,4 @@
-# TeamTrading (팀트)
+# FanChart (팬차트)
 
 스포츠 구단을 무료 포인트로 사고파는 모의투자 서비스. 유저끼리 호가창에서 매매하는 HTS 경험을 목표로 한다.
 포인트는 무료이고 환전·전송이 불가하다.
@@ -22,7 +22,7 @@
 
 ## 문서
 
-- [매매 규칙서](docs/rulebook.md): 규칙별 KRX 기준, 출처, 팀트 적용값과 다른 점
+- [매매 규칙서](docs/rulebook.md): 규칙별 KRX 기준, 출처, 팬차트 적용값과 다른 점
 - [결정 기록](docs/adr/README.md): 저장소, 동시성, 트랜잭션, 멱등성, 원장, 실시간 시세 설계 결정과 대안
 - [트러블슈팅 기록](docs/troubleshooting.md): 개발 중 겪은 버그·정합성 문제와 해결, 수치
 
@@ -52,7 +52,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 
 - 포인트 발행: 가입·광고·게시글 등 포인트가 새로 생기는 경로는 모두 `point_grants`에 `(source, source_ref)` 멱등키로 기록하고 경로별 하루 한도를 둔다. 대사는 원장 발행 총량과 발행 기록 합도 비교한다.
 - 광고 보상: 앱의 완료 신호가 아니라 AdMob이 서명해 보낸 서버 측 검증 콜백으로만 지급한다. 광고 세션 id를 `custom_data`로 넘겨 한 번만 완료되게 하고, 등록한 광고 단위만 받는다(ADR 0017). 시연 서버는 15초 가짜 광고.
-- 로그인: 카카오·네이버·구글 OAuth 로그인 후 세션 쿠키로 계정을 구분한다. 상태를 바꾸는 요청에는 CSRF 토큰(`XSRF-TOKEN` 쿠키 → `X-XSRF-TOKEN` 헤더)이 필요하다. 소셜 로그인 키는 `oauth` 프로필(`application-oauth.yml`)의 환경 변수로 넣고, `demo` 프로필은 키 없이 닉네임으로 들어가는 개발용 로그인을 연다. 운영자 계정은 `teamtrading.auth.admins`에 계정 id로 지정한다.
+- 로그인: 카카오·구글 OAuth 로그인 후 세션 쿠키로 계정을 구분한다. 상태를 바꾸는 요청에는 CSRF 토큰(`XSRF-TOKEN` 쿠키 → `X-XSRF-TOKEN` 헤더)이 필요하다. 소셜 로그인 키는 `oauth` 프로필(`application-oauth.yml`)의 환경 변수로 넣고, `demo` 프로필은 키 없이 닉네임으로 들어가는 개발용 로그인을 연다. 운영자 계정은 `fanchart.auth.admins`에 계정 id로 지정한다.
 
 - 공모: 구단 주식은 공모 청약으로 처음 푼다. 청약금은 청약할 때 묶고, 마감 뒤 공모 수량 절반은 균등배정, 나머지는 비례배정한다. 배정분 대금은 소각하고 나머지는 돌려준다. 그 구단 주식이 하나도 없을 때 연 공모(첫 상장)는 배정 전에는 주문을 받지 않고, 상장 시각까지 동시호가로 지정가 주문을 모았다가 체결 수량이 가장 많은 한 가격(시초가)에 체결한다. 동시호가 동안에는 지금 체결하면 정해질 예상 체결가와 수량을 실시간 시세로 내보낸다. 대사는 원장의 소각 합과 배정 기록도 비교한다.
 - 경기 데이터: KBO·K리그 일정과 결과를 API-Sports에서 받아 배당에 쓴다. 제공처 팀 번호는 운영자가 구단에 잇고, 배당 기준 시점(예정 시작 시각)을 늦추는 변경은 제공처가 시작 전이라고 할 때만 받는다. 무료 요금제 한도 안에서 묻도록 하루 요청 수를 센다(ADR 0024).
@@ -74,7 +74,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 | GET | `/api/teams/{teamId}/orderbook?depth=10` | 호가창. 실시간 시세와 같은 `epoch`·`seq`를 함께 준다 |
 | GET | `/api/teams/{teamId}/trades?limit=30` | 최근 체결 (익명) |
 | GET | `/api/auth/options` | 로그인 방법 (소셜 로그인 제공자, 개발용 로그인 여부) |
-| GET | `/oauth2/authorization/{kakao\|naver\|google}` | 소셜 로그인 시작. 처음 로그인하면 계정을 만들고 100만P 지급 |
+| GET | `/oauth2/authorization/{kakao\|google}` | 소셜 로그인 시작. 처음 로그인하면 계정을 만들고 100만P 지급 |
 | POST | `/api/auth/dev-login` | 개발용 닉네임 로그인 (`demo` 프로필에서만) |
 | POST | `/api/auth/logout` | 로그아웃 |
 | GET | `/api/accounts/me` | 내 포인트·보유 구단·수익률 |

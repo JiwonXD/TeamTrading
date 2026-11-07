@@ -200,7 +200,7 @@ test('changing my nickname follows the server rules and locks it for a week', as
   expect(axe.violations).toEqual([])
 
   const input = dialog.getByLabel(/2~12자/)
-  await input.fill('팀트운영자')
+  await input.fill('팬차트운영자')
   await dialog.getByRole('button', { name: '바꾸기' }).click()
   await expect(dialog.getByRole('alert')).toContainText('운영자')
 
