@@ -23,7 +23,7 @@ interface SimState extends State {
   bias: Record<string, number>
 }
 
-const STORAGE_KEY = 'teamtrading:v1'
+const STORAGE_KEY = 'fanchart:v1'
 const BOT_NAMES = [
   '잠실불꽃', '광주호랑이', '보살팬', '페이커장인', '호랑이굴', '쌍둥이아빠', '사직노래방', '대구왕자',
   '마법사의제자', '인천상륙', '창원공룡', '고척돔지기', '스틸야드', '상암직관러', '전주성', 'midgap',

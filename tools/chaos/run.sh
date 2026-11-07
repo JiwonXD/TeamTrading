@@ -26,7 +26,7 @@ PID=
 start() {
   java -jar "$JAR" --spring.profiles.active=demo \
     "--spring.datasource.url=jdbc:mysql://localhost:3306/$DB?useLocalSessionState=true&rewriteBatchedStatements=true" \
-    "--teamtrading.auth.admins=${ADMIN:-}" >>"$WORK/server.log" 2>&1 &
+    "--fanchart.auth.admins=${ADMIN:-}" >>"$WORK/server.log" 2>&1 &
   PID=$!
   for _ in $(seq 1 90); do
     curl -sf localhost:8081/actuator/health/readiness >/dev/null && return 0

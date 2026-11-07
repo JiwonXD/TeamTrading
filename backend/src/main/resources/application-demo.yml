@@ -1,5 +1,5 @@
 # 개발·시연용. 소셜 로그인 키 없이 닉네임만으로 로그인할 수 있다. 운영에서는 켜지 않는다.
-teamtrading:
+fanchart:
   auth:
     dev-login: true
   # 시연용 가상 경기(DemoMatches)가 몇 분 안에 배당까지 가도록 확정 대기를 줄인다

@@ -1,18 +1,18 @@
 groups:
-  - name: teamtrading
+  - name: fanchart
     rules:
       - alert: LedgerOutOfBalance
-        expr: teamtrading_reconciliation_balanced == 0
+        expr: fanchart_reconciliation_balanced == 0
         labels: { severity: critical }
         annotations:
           summary: 원장과 잔고가 어긋났다
       - alert: ReconciliationStale
-        expr: time() - teamtrading_reconciliation_last_run > 900
+        expr: time() - fanchart_reconciliation_last_run > 900
         labels: { severity: warning }
         annotations:
           summary: 대사가 15분 넘게 돌지 않았다
       - alert: MarketHalted
-        expr: teamtrading_markets_halted > 0
+        expr: fanchart_markets_halted > 0
         labels: { severity: critical }
         annotations:
           summary: 거래가 멈춘 구단이 있다
