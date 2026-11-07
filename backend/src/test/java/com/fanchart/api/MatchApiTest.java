@@ -90,7 +90,7 @@ class MatchApiTest {
         mvc.perform(get("/api/matches/schedule").param("league", "KBO")
                         .param("from", now.toString()).param("to", now.plus(Duration.ofDays(32)).toString()))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/api/matches/schedule").param("league", "NBA")
+        mvc.perform(get("/api/matches/schedule").param("league", "MLB")
                         .param("from", now.toString()).param("to", now.plusSeconds(60).toString()))
                 .andExpect(status().isBadRequest());
     }

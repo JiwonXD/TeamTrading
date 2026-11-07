@@ -8,14 +8,18 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 대회 설정의 제공처로 경기를 받는다. 요청을 보내기 전에 제공처·키별 하루 상한을 센다.
@@ -30,7 +34,8 @@ public class FeedClient {
             MatchFeedProperties.BASEBALL, ApiSportsProvider.BASEBALL,
             MatchFeedProperties.FOOTBALL, ApiSportsProvider.FOOTBALL,
             MatchFeedProperties.FOOTBALL_DATA, new FootballDataProvider(),
-            MatchFeedProperties.PANDASCORE, new PandaScoreProvider());
+            MatchFeedProperties.PANDASCORE, new PandaScoreProvider(),
+            MatchFeedProperties.ESPN, new EspnProvider());
 
     private final MatchFeedProperties props;
     private final ObjectMapper json;
@@ -48,19 +53,28 @@ public class FeedClient {
     /** @param date null이면 시즌 전체, 있으면 그날(한국 시간) 경기 */
     public List<FeedGame> games(CompetitionFeed feed, LocalDate date) {
         String key = props.keyFor(feed.source());
-        if (key.isBlank()) throw new FeedException(feed.source() + " has no API key");
         FeedProvider provider = PROVIDERS.get(feed.source());
+        if (provider.needsKey() && key.isBlank()) throw new FeedException(feed.source() + " has no API key");
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
         URI base = feed.baseUrl() != null ? feed.baseUrl() : provider.defaultBaseUrl();
 
-        spend(feed, key, provider, today);
-        JsonNode body;
+        List<FeedGame> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (HttpRequest request : provider.requests(feed, key, base, date, today)) {
+            spend(feed, key, provider, today);
+            // 하루씩 묻는 제공처는 날짜 경계의 경기가 두 번 올 수 있다
+            for (FeedGame g : provider.parse(fetch(feed, request)))
+                if (seen.add(g.ref())) out.add(g);
+        }
+        return out;
+    }
+
+    private JsonNode fetch(CompetitionFeed feed, HttpRequest request) {
         try {
-            HttpResponse<String> res = http.send(provider.request(feed, key, base, date, today),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> res = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() != 200)
                 throw new FeedException(feed.source() + " HTTP " + res.statusCode() + reason(res.body()));
-            body = json.readTree(res.body());
+            return json.readTree(res.body());
         } catch (IOException e) {
             throw new FeedException(feed.source() + " request failed: " + e);
         } catch (InterruptedException e) {
@@ -69,7 +83,6 @@ public class FeedClient {
         } catch (tools.jackson.core.JacksonException e) {
             throw new FeedException(feed.source() + " sent invalid JSON");
         }
-        return provider.parse(body);
     }
 
     /**

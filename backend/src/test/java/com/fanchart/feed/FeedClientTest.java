@@ -37,6 +37,7 @@ class FeedClientTest {
     private CompetitionFeed epl;
     private CompetitionFeed laLiga;
     private CompetitionFeed lck;
+    private CompetitionFeed faCup;
     private URI base;
 
     @BeforeEach
@@ -63,11 +64,13 @@ class FeedClientTest {
         laLiga = new CompetitionFeed(Competition.LA_LIGA, MatchFeedProperties.FOOTBALL_DATA, "PD", 2026, null, base, 2,
                 null);
         lck = new CompetitionFeed(Competition.LCK, MatchFeedProperties.PANDASCORE, "293", null, null, base, null, null);
+        faCup = new CompetitionFeed(Competition.FA_CUP, MatchFeedProperties.ESPN, "soccer/eng.fa", null, null, base,
+                null, null);
         client = client(new Keys("test-key", "fd-key", "ps-key"));
     }
 
     private FeedClient client(Keys keys) {
-        return new FeedClient(new MatchFeedProperties(keys, List.of(baseball, football, uel, epl, laLiga, lck)),
+        return new FeedClient(new MatchFeedProperties(keys, List.of(baseball, football, uel, epl, laLiga, lck, faCup)),
                 JsonMapper.builder().build(), clock);
     }
 
@@ -115,6 +118,27 @@ class FeedClientTest {
                 "Bearer ps-key /lol/matches?filter%5Bleague_id%5D=293"
                         + "&range%5Bscheduled_at%5D=2026-04-04T15%3A00%3A00Z%2C2026-04-05T15%3A00%3A00Z"
                         + "&sort=scheduled_at&page%5Bsize%5D=100");
+    }
+
+    @Test
+    void asksEspnOneDayAtATimeWithoutAKeyAndKeepsEachGameOnce() {
+        // 하루씩 물으면 날짜 경계의 경기가 두 번 온다
+        body = "{\"events\": [" + EspnProviderTest.event("7", "STATUS_SCHEDULED", "pre", false, "0", "0") + "]}";
+        FeedClient noKeys = client(new Keys("", "", ""));
+
+        assertThat(noKeys.games(faCup, null)).hasSize(1);
+        assertThat(requests).hasSize(EspnProvider.DAYS_AHEAD + 2).first()
+                .isEqualTo("null /apis/site/v2/sports/soccer/eng.fa/scoreboard?dates=20260331");
+        assertThat(requests.getLast()).endsWith("dates=20260408");
+        requests.clear();
+        // 한국 시간 하루는 미국 동부의 전날과 그날에 걸친다
+        noKeys.games(faCup, LocalDate.parse("2026-04-05"));
+        assertThat(requests).containsExactly(
+                "null /apis/site/v2/sports/soccer/eng.fa/scoreboard?dates=20260404",
+                "null /apis/site/v2/sports/soccer/eng.fa/scoreboard?dates=20260405");
+        assertThat(noKeys.remaining(faCup)).isEqualTo(1500 - EspnProvider.DAYS_AHEAD - 2 - 2);
+        assertThat(new MatchFeedProperties(new Keys("", "", ""), List.of(faCup, epl)).activeFeeds())
+                .containsExactly(faCup);
     }
 
     @Test

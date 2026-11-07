@@ -59,10 +59,13 @@ class DemoMatches {
     @Scheduled(fixedDelay = 20_000, initialDelay = 10_000)
     void finish() {
         for (Match m : matches.startedWithoutResult(SOURCE, clock.instant().minus(LENGTH))) {
-            int max = m.league() == League.KBO ? 10 : m.league() == League.LCK ? 3 : 4;
-            int home = random.nextInt(max);
-            int away = random.nextInt(max);
+            int base = m.league() == League.NBA ? 90 : 0;
+            int max = m.league() == League.KBO ? 10 : m.league() == League.LCK ? 3 : m.league() == League.NBA ? 40 : 4;
+            int home = base + random.nextInt(max);
+            int away = base + random.nextInt(max);
+            // LCK와 NBA는 무승부가 없다
             if (m.league() == League.LCK && home == away) home = (away + 1) % (max + 1);
+            if (m.league() == League.NBA && home == away) home++;
             matches.recordResult(m.id(), home, away);
         }
     }

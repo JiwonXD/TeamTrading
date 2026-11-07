@@ -1,9 +1,9 @@
 // 목업 데이터. 가격은 포인트(P) 단위이며 실제 구단 가치와 무관하다.
 
-export type League = 'KBO' | 'LCK' | '프리미어리그' | '라리가' | '세리에A' | '분데스리가' | 'K리그'
+export type League = 'KBO' | 'LCK' | '프리미어리그' | '라리가' | '세리에A' | '분데스리가' | 'NBA' | 'K리그'
 
 /** 서버 API의 리그 이름(backend League enum) */
-export type LeagueCode = 'KBO' | 'LCK' | 'EPL' | 'LA_LIGA' | 'SERIE_A' | 'BUNDESLIGA' | 'K_LEAGUE'
+export type LeagueCode = 'KBO' | 'LCK' | 'EPL' | 'LA_LIGA' | 'SERIE_A' | 'BUNDESLIGA' | 'NBA' | 'K_LEAGUE'
 
 export interface Team {
   id: string
@@ -45,12 +45,13 @@ export const LEAGUES: { id: League; slug: string; code: LeagueCode; sport: strin
   { id: '라리가', slug: 'laliga', code: 'LA_LIGA', sport: '축구' },
   { id: '세리에A', slug: 'seriea', code: 'SERIE_A', sport: '축구' },
   { id: '분데스리가', slug: 'bundesliga', code: 'BUNDESLIGA', sport: '축구' },
+  { id: 'NBA', slug: 'nba', code: 'NBA', sport: '농구' },
   { id: 'K리그', slug: 'kleague', code: 'K_LEAGUE', sport: '축구' },
 ]
 
 /** 대회(서버 Competition). 리그 정규 시즌은 리그 이름, 컵대회는 짧은 이름 */
 export const COMPETITION_LABEL: Record<string, string> = {
-  KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK', EPL: '프리미어리그', LA_LIGA: '라리가', SERIE_A: '세리에A', BUNDESLIGA: '분데스리가',
+  KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK', EPL: '프리미어리그', LA_LIGA: '라리가', SERIE_A: '세리에A', BUNDESLIGA: '분데스리가', NBA: 'NBA',
   LCK_CUP: 'LCK컵', MSI: 'MSI', WORLDS: '롤드컵', EWC: 'EWC',
   UCL: '챔스', UEL: '유로파', UECL: '컨퍼런스', FA_CUP: 'FA컵', EFL_CUP: 'EFL컵', COPA_DEL_REY: '코파 델 레이',
   COPPA_ITALIA: '코파 이탈리아', DFB_POKAL: 'DFB 포칼', KOREA_CUP: '코리아컵', ACL: 'ACL',

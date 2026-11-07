@@ -96,13 +96,14 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 
 ## 경기 데이터 수집
 
-키는 제공처마다 하나이고, 같은 키로 여러 대회(리그 정규 시즌·컵대회)를 부른다(ADR 0024, 0027, 0028). 키를 비운 제공처의 대회와 설정에서 `enabled: false`로 끈 대회만 수집하지 않고, 그 대회 경기는 운영자가 `/api/admin/matches`로 넣는다.
+키는 제공처마다 하나이고, 같은 키로 여러 대회(리그 정규 시즌·컵대회)를 부른다(ADR 0024, 0027, 0028). ESPN은 키 없이 받는다(ADR 0029). 키를 비운 제공처의 대회와 설정에서 `enabled: false`로 끈 대회만 수집하지 않고, 그 대회 경기는 운영자가 `/api/admin/matches`로 넣는다.
 
 | 키 변수 | 제공처 | 대회(설정의 대회 번호) | 무료 한도 |
 | --- | --- | --- | --- |
-| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 유로파(3), 컨퍼런스(848), FA컵(45), EFL컵(48), 코파 델 레이(143), 코파 이탈리아(137), DFB 포칼(81), 코리아컵(294), ACL(17) | API마다 하루 100회. 무료는 2022~2024 시즌만 열려 올해 일정은 유료(Pro, API마다 월 19달러)가 필요하다 |
+| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 코리아컵(294) | API마다 하루 100회. 무료는 2022~2024 시즌만 열려 올해 일정은 유료(Pro, API마다 월 19달러)가 필요하다 |
 | `FOOTBALL_DATA_KEY` | football-data.org(`football-data`) | 프리미어리그(PL), 라리가(PD), 세리에A(SA), 분데스리가(BL1), 챔피언스리그(CL) | 분당 10회 |
 | `PANDASCORE_KEY` | PandaScore(`pandascore`) | LCK(293), MSI(300), 롤드컵(297). LCK컵·EWC는 번호 확인 뒤 더한다 | 시간당 1,000회 |
+| (키 없음) | ESPN(`espn`, 공개 문서 없음) | NBA(`basketball/nba`), 유로파(`soccer/uefa.europa`), 컨퍼런스(`soccer/uefa.europa.conf`), FA컵(`soccer/eng.fa`), EFL컵(`soccer/eng.league_cup`), 코파 델 레이(`soccer/esp.copa_del_rey`), 코파 이탈리아(`soccer/ita.coppa_italia`), DFB 포칼(`soccer/ger.dfb_pokal`), ACL(`soccer/afc.champions`) | 공식 한도 없음. 하루씩 묻고 우리 쪽 상한 하루 1,500회. 승부차기로 끝난 경기는 운영자가 결과를 넣는다 |
 
 1. 키를 받아 `.env`에 넣고 다시 띄운다.
    - API-Sports: https://dashboard.api-sports.io 가입 → 대시보드의 API Key
@@ -119,6 +120,7 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
    curl -H "X-Auth-Token: $KEY" "https://api.football-data.org/v4/competitions/CL"
    curl -H "Authorization: Bearer $KEY" "https://api.pandascore.co/lol/leagues?search%5Bname%5D=LCK"
    curl -H "Authorization: Bearer $KEY" "https://api.pandascore.co/lol/leagues?search%5Bname%5D=MSI"
+   curl "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261106"   # ESPN 팀 번호는 competitors[].team.id
    ```
 4. 구단마다 **대회에 쓰는 제공처 번호를 모두** 잇는다. 한 구단은 제공처마다 번호 하나를 가진다(예: 리버풀은 리그·챔스용 `football-data`와 FA컵용 `api-football`). 컵대회는 잇지 않은 우리 구단을 상장하지 않은 팀으로 들이므로, 컵대회 일정을 받기 전에 먼저 잇는다. 한 제공처의 한 팀 번호는 한 구단에만 이을 수 있다.
    ```
