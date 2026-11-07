@@ -545,7 +545,7 @@
 ## 28. 리그 중심 모델로는 구단의 컵대회 성적을 담을 수 없었다
 
 - 구분: 설계 / 주제: 데이터 모델, 정합성, 마이그레이션
-- 관련: [#PR](https://github.com/JiwonXD/TeamTrading/pulls), [ADR 0028](adr/0028-team-centric-competitions.md)
+- 관련: [#50](https://github.com/JiwonXD/TeamTrading/pull/50), [ADR 0028](adr/0028-team-centric-competitions.md)
 
 **문제.** 사용자가 서비스의 중심을 "리그"에서 "리그에 소속된 구단"으로 바꿨다. T1의 MSI·롤드컵, 리버풀의 챔스·FA컵 성적도 그 구단 주식의 배당(경기 승리 배당 + 최종 성적 수당)이 되어야 했다. 기존 모델에서는 넣을 자리가 없었다.
 
