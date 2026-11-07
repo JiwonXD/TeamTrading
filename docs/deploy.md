@@ -53,7 +53,7 @@ docker compose logs quick-tunnel | grep trycloudflare   # https://xxx.trycloudfl
 3. Cloudflare Zero Trust → Networks → Tunnels에서 터널을 만든다.
    - 커넥터 종류는 Docker를 고르고, 화면에 나오는 토큰을 `.env`의 `CLOUDFLARE_TUNNEL_TOKEN`에 넣는다.
    - Public Hostname에서 도메인을 서비스 `http://web:80`으로 연결한다.
-4. 묶음과 터널을 함께 띄운다.
+4. 묶음과 터널을 함께 띄운다. `.env`에 `COMPOSE_PROFILES=tunnel`을 넣어 두면 이후에는 `--profile` 없이 `docker compose up -d`만으로 터널까지 뜬다.
    ```bash
    cd deploy
    docker compose --profile tunnel up -d --build
@@ -79,6 +79,8 @@ nginx는 80번만 연다. TLS는 앞단에서 끝낸다.
 git pull
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
+
+Windows 서버 PC에서는 `deploy/update.cmd`를 더블클릭하면 같은 일을 하고 상태까지 보여 준다. 평소 켜고 끄기와 로그 보기는 Docker Desktop의 Containers 화면에서 `teamtrading` 묶음으로 할 수 있다.
 
 서버는 종료 신호를 받으면 처리 중인 요청을 끝내고 내려간다(최대 30초). 기동할 때 DB에서 호가창을 다시 쌓는다. 그동안 들어온 주문은 nginx가 502로 돌려준다. 클라이언트는 같은 `clientOrderId`로 다시 보내면 된다. 강제 종료 중에도 장부가 맞는지는 `tools/chaos/run.sh`로 확인한다(운영 점검 문서 참고).
 
