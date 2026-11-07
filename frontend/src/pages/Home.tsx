@@ -18,7 +18,6 @@ export default function Home() {
     .sort((a, b) =>
       sort === 'volume' ? b.m.volume * b.m.last - a.m.volume * a.m.last : sort === 'up' ? b.chg - a.chg : a.chg - b.chg,
     )
-  const allSettled = TODAY_MATCHES.every((m) => s.settled.includes(m.id))
   const serverMatches = getMatches()
   const offerings = getOfferings()
 
@@ -39,31 +38,7 @@ export default function Home() {
 
       {offerings && <OfferingList offerings={offerings} />}
 
-      {serverMatches ? <ServerMatches matches={serverMatches} /> : (
-        <section className="card">
-          <div className="row-between">
-            <h2>오늘의 경기</h2>
-            <button className="chip-btn" disabled={allSettled} onClick={() => showToast(settleMatches())}>
-              {allSettled ? '정산 완료' : '배당 정산하기'}
-            </button>
-          </div>
-          <div className="match-list">
-            {TODAY_MATCHES.map((m) => {
-              const h = teamById(m.home)
-              const a = teamById(m.away)
-              return (
-                <div key={m.id} className="match">
-                  <span className="match-league">{m.league}</span>
-                  <span className={`match-team ${m.homeScore > m.awayScore ? 'win' : ''}`}>{h.short}</span>
-                  <span className="match-score">{m.homeScore} : {m.awayScore}</span>
-                  <span className={`match-team ${m.awayScore > m.homeScore ? 'win' : ''}`}>{a.short}</span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="hint">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</p>
-        </section>
-      )}
+      {serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />}
 
       <section className="card list-card">
         <h2>구단 시세</h2>
@@ -108,6 +83,37 @@ export default function Home() {
   )
 }
 
+/** 시뮬레이션 모드: 목업 경기와 배당 정산 버튼 */
+export function SimMatches() {
+  const s = useStore()
+  const allSettled = TODAY_MATCHES.every((m) => s.settled.includes(m.id))
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>오늘의 경기</h2>
+        <button className="chip-btn" disabled={allSettled} onClick={() => showToast(settleMatches())}>
+          {allSettled ? '정산 완료' : '배당 정산하기'}
+        </button>
+      </div>
+      <div className="match-list">
+        {TODAY_MATCHES.map((m) => {
+          const h = teamById(m.home)
+          const a = teamById(m.away)
+          return (
+            <div key={m.id} className="match">
+              <span className="match-league">{m.league}</span>
+              <span className={`match-team ${m.homeScore > m.awayScore ? 'win' : ''}`}>{h.short}</span>
+              <span className="match-score">{m.homeScore} : {m.awayScore}</span>
+              <span className={`match-team ${m.awayScore > m.homeScore ? 'win' : ''}`}>{a.short}</span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="hint">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</p>
+    </section>
+  )
+}
+
 const LEAGUE_LABEL: Record<MatchDto['league'], string> = { KBO: 'KBO', K_LEAGUE: 'K리그', LCK: 'LCK' }
 
 function matchState(m: MatchDto) {
@@ -121,7 +127,7 @@ function matchState(m: MatchDto) {
 }
 
 // 서버 모드: 서버가 받은 경기(실제 또는 demo 프로필의 시연용 가상 경기)와 배당 처리 상태
-function ServerMatches({ matches }: { matches: MatchDto[] }) {
+export function ServerMatches({ matches }: { matches: MatchDto[] }) {
   return (
     <section className="card">
       <h2>최근 경기</h2>

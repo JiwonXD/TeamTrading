@@ -7,6 +7,10 @@ import Ranking from './pages/Ranking'
 import Watch from './pages/Watch'
 import Login from './pages/Login'
 import { Privacy, Terms } from './pages/Legal'
+import DesktopShell from './desktop/DesktopShell'
+import DesktopHome from './desktop/DesktopHome'
+import DesktopTeam from './desktop/DesktopTeam'
+import { useDesktop } from './desktop/useDesktop'
 
 function useOnline() {
   const [online, setOnline] = useState(() => navigator.onLine)
@@ -57,6 +61,7 @@ const TABS = [
 export default function App() {
   useStore()
   const hash = useHash()
+  const desktop = useDesktop()
   const toast = getToast()
   // 구단 id에는 하이픈이 들어갈 수 있다(운영자가 등록한 구단)
   const teamMatch = hash.match(/^team-([a-z0-9-]+)$/)
@@ -89,6 +94,26 @@ export default function App() {
       {toast && <div key={toast.id} className="toast" role="status">{toast.msg}</div>}
     </div>
   )
+
+  // PC(1024px 이상): 위 메뉴 · 가운데 본문 · 오른쪽 구단 목록 · 아래 시세 띠로 된 넓은 화면
+  if (desktop) {
+    let deskPage
+    if (teamMatch) deskPage = <DesktopTeam key={teamMatch[1]} teamId={teamMatch[1]} />
+    else if (hash === 'portfolio') deskPage = <div className="desk-page"><Portfolio /></div>
+    else if (hash === 'ranking') deskPage = <div className="desk-page"><Ranking /></div>
+    else if (hash === 'watch') deskPage = <div className="desk-page"><Watch /></div>
+    else deskPage = <DesktopHome />
+    return (
+      <DesktopShell
+        hash={hash}
+        teamId={teamMatch?.[1] ?? null}
+        banner={<StatusBanner />}
+        toast={toast && <div key={toast.id} className="toast" role="status">{toast.msg}</div>}
+      >
+        {deskPage}
+      </DesktopShell>
+    )
+  }
 
   let page
   if (teamMatch) page = <TeamDetail teamId={teamMatch[1]} />
