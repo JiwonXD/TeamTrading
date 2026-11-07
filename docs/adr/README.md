@@ -32,3 +32,5 @@
 | [0026](0026-surveillance-admin-only.md) | 시장감시(이상거래 탐지 기록)는 운영자만 본다 | 2026-11-07 |
 | [0027](0027-per-league-feed-providers.md) | 경기 데이터 제공처와 키를 리그마다 따로 둔다 | 2026-11-07 |
 | [0028](0028-team-centric-competitions.md) | 구단이 참가하는 모든 대회(컵대회 포함)를 배당에 반영하고, 수집 키는 제공처마다 하나로 둔다 | 2026-11-07 |
+| [0029](0029-espn-for-cups-and-nba.md) | 유럽 컵대회·ACL·NBA는 ESPN scoreboard로 받는다 | 2026-11-07 |
+| [0030](0030-league-tab-prefs.md) | 홈 리그 탭의 순서와 보일 리그는 계정에 저장한다 | 2026-11-07 |

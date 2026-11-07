@@ -6,6 +6,7 @@ import com.fanchart.engine.OrderType;
 import com.fanchart.engine.Side;
 import com.fanchart.engine.Trade;
 import com.fanchart.fds.Alert;
+import com.fanchart.team.League;
 import com.fanchart.trading.MarketUpdate;
 import com.fanchart.trading.Quote;
 import com.fanchart.trading.StoredOrder;
@@ -32,6 +33,10 @@ final class ApiDtos {
     }
 
     record NicknameRequest(@NotBlank @Size(max = 40) String nickname) {
+    }
+
+    /** 홈 리그 탭: order는 보일 순서, hidden은 그중 숨긴 리그 */
+    record LeagueTabsRequest(@NotNull List<League> order, @NotNull List<League> hidden) {
     }
 
     record PlaceOrderRequest(@NotBlank @Size(max = 64) String clientOrderId, @NotBlank String teamId,

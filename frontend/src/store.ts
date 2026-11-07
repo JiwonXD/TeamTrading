@@ -6,6 +6,7 @@ import * as sim from './store.sim'
 import { getVersion, subscribe } from './storeCore'
 import type { OrderType, Side } from './engine/orderbook'
 import type { OrderResult, State } from './storeTypes'
+import type { LeagueTabPrefs } from './data/leagueTabs'
 
 export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
@@ -72,6 +73,10 @@ export const changeNickname = server.changeNickname
 /** 시장감시(이상거래 탐지 기록)를 볼 수 있는지. 서버 모드는 운영자만, 시뮬레이션 미리보기는 운영자 화면 예시로 보여준다 */
 export const canWatch = (): boolean => (mode === 'server' ? server.isAdmin() : true)
 export const withdraw = server.withdraw
+
+/** 홈 리그 탭 순서·숨김. 서버 모드는 계정에, 시뮬레이션 모드는 이 브라우저에 저장한다 */
+export const getLeagueTabs = impl.getLeagueTabs
+export const saveLeagueTabs = (prefs: LeagueTabPrefs): Promise<OrderResult> => Promise.resolve(impl.saveLeagueTabs(prefs))
 
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})

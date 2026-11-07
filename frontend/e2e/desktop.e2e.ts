@@ -38,6 +38,18 @@ test('desktop home shows the market table, side list and no accessibility violat
   expect(axe.violations).toEqual([])
 })
 
+test('hiding a league in the tab editor also hides it from the side list filter', async ({ page }) => {
+  await signIn(page)
+  await expect(page.locator('.side-filter button', { hasText: 'LCK' })).toHaveCount(1)
+  await page.getByRole('button', { name: '리그 탭 편집' }).click()
+  const sheet = page.getByRole('dialog', { name: '리그 탭 편집' })
+  await sheet.getByRole('checkbox', { name: /^LCK/ }).uncheck()
+  await sheet.getByRole('button', { name: '저장' }).click()
+  await expect(sheet).toBeHidden()
+  await expect(page.locator('.league-tabs')).not.toContainText('LCK')
+  await expect(page.locator('.side-filter button', { hasText: 'LCK' })).toHaveCount(0)
+})
+
 test('league tab shows that league\'s schedule and prices while the logo and 홈 menu stay', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()

@@ -2,6 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
+import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
 import { COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
@@ -451,6 +452,20 @@ export async function changeNickname(nickname: string): Promise<OrderResult> {
   }
 }
 
+/** 홈 리그 탭 순서·숨김. 계정에 저장해 웹·PC·앱 어디서 열어도 같다. 로그인할 때 한 번 받아 온다 */
+let leagueTabs: LeagueTabPrefs = DEFAULT_TABS
+export const getLeagueTabs = () => leagueTabs
+
+export async function saveLeagueTabs(prefs: LeagueTabPrefs): Promise<OrderResult> {
+  try {
+    leagueTabs = await api<LeagueTabPrefs>('PUT', '/api/accounts/me/league-tabs', prefs)
+    update()
+    return { ok: true, message: '리그 탭을 저장했어요' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '리그 탭을 저장하지 못했어요' }
+  }
+}
+
 /** 탈퇴. 서버가 세션을 끝내므로 다시 로그인 화면으로 돌아간다 */
 export async function withdraw(): Promise<OrderResult> {
   try {
@@ -484,6 +499,9 @@ export function start() {
   ensureLogin()
     .then(async (ok) => {
       if (!ok) return
+      // 탭 설정은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
+      leagueTabs = DEFAULT_TABS
+      api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
       await refresh()
       poller = setInterval(() => refresh().catch(onPollError), POLL_MS)
     })

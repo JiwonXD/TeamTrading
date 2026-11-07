@@ -64,6 +64,43 @@ test('league tab shows the schedule and only that league, and a team in a match 
   await expect(page.locator('.cta')).toBeVisible()
 })
 
+test('league tabs can be reordered and hidden, and the choice is kept on the account', async ({ page }) => {
+  await signIn(page)
+  const tabs = page.locator('.league-tabs a')
+  await expect(tabs.nth(1)).toHaveText('KBO')
+  await page.getByRole('button', { name: '리그 탭 편집' }).click()
+  const sheet = page.getByRole('dialog', { name: '리그 탭 편집' })
+  await expect(sheet.getByRole('button', { name: 'KBO 위로' })).toBeDisabled()
+  await sheet.getByRole('button', { name: 'LCK 위로' }).click()
+  await sheet.getByRole('checkbox', { name: /^K리그/ }).uncheck()
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+  await sheet.getByRole('button', { name: '저장' }).click()
+  await expect(sheet).toBeHidden()
+  await expect(tabs.nth(1)).toHaveText('LCK')
+  await expect(tabs.nth(2)).toHaveText('KBO')
+  await expect(page.locator('.league-tabs')).not.toContainText('K리그')
+
+  // 계정에 저장되므로 새로 열어도 그대로다
+  await page.reload()
+  await expect(tabs.nth(1)).toHaveText('LCK')
+  await expect(page.locator('.league-tabs')).not.toContainText('K리그')
+  // 숨긴 리그도 주소로 들어오면 그 탭은 보인다
+  await page.goto('/#league-kleague')
+  await expect(page.locator('.league-tabs a.on')).toHaveText('K리그')
+
+  // 취소하면 바뀌지 않고, 기본 순서로 되돌릴 수 있다
+  await page.getByRole('button', { name: '리그 탭 편집' }).click()
+  await sheet.getByRole('button', { name: '기본 순서로 되돌리기' }).click()
+  await sheet.getByRole('button', { name: '취소' }).click()
+  await expect(tabs.nth(1)).toHaveText('LCK')
+  await page.getByRole('button', { name: '리그 탭 편집' }).click()
+  await sheet.getByRole('button', { name: '기본 순서로 되돌리기' }).click()
+  await sheet.getByRole('button', { name: '저장' }).click()
+  await expect(tabs.nth(1)).toHaveText('KBO')
+  await expect(page.locator('.league-tabs')).toContainText('K리그')
+})
+
 test('home lists every team with server prices and has no accessibility violations', async ({ page }) => {
   await signIn(page)
   await expect(page.locator('.stock-list li')).toHaveCount(18)

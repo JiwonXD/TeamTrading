@@ -25,7 +25,9 @@ public record MatchFeedProperties(Keys keys, List<CompetitionFeed> competitions)
     public static final String FOOTBALL_DATA = "football-data";
     /** PandaScore(리그 오브 레전드) */
     public static final String PANDASCORE = "pandascore";
-    public static final Set<String> SOURCES = Set.of(BASEBALL, FOOTBALL, FOOTBALL_DATA, PANDASCORE);
+    /** ESPN 사이트 scoreboard(키 없음, 공개 문서 없음). 컵대회용 */
+    public static final String ESPN = "espn";
+    public static final Set<String> SOURCES = Set.of(BASEBALL, FOOTBALL, FOOTBALL_DATA, PANDASCORE, ESPN);
 
     public MatchFeedProperties {
         if (keys == null) keys = new Keys(null, null, null);
@@ -46,9 +48,9 @@ public record MatchFeedProperties(Keys keys, List<CompetitionFeed> competitions)
         };
     }
 
-    /** 켜져 있고 제공처 키가 있는 대회 */
+    /** 켜져 있고 제공처 키가 있는 대회. 키가 없는 제공처(ESPN)는 켜져 있으면 받는다 */
     public boolean active(CompetitionFeed feed) {
-        return feed.enabled() && !keyFor(feed.source()).isBlank();
+        return feed.enabled() && (feed.source().equals(ESPN) || !keyFor(feed.source()).isBlank());
     }
 
     public List<CompetitionFeed> activeFeeds() {
