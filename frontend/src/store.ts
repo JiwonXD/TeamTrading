@@ -52,6 +52,7 @@ export const getConnection = (): server.Connection =>
 export const getMatches = (): server.MatchDto[] | null => (mode === 'server' ? server.getMatches() : null)
 
 export const fetchLeaderboard = server.fetchLeaderboard
+export const fetchSchedule = impl.fetchSchedule
 
 /** 서버 모드의 공모 목록과 내 청약. 시뮬레이션 모드는 null */
 export const getOfferings = (): server.OfferingDto[] | null => (mode === 'server' ? server.getOfferings() : null)

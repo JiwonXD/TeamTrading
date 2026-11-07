@@ -101,6 +101,13 @@ class MatchStore {
         return jdbc.query("SELECT * FROM matches ORDER BY scheduled_at DESC, id DESC LIMIT ?", MATCH, limit);
     }
 
+    /** 한 리그의 [from, to) 사이 일정. 시작 시각 순 */
+    List<Match> between(League league, Instant from, Instant to) {
+        return jdbc.query("""
+                SELECT * FROM matches WHERE league = ? AND scheduled_at >= ? AND scheduled_at < ?
+                ORDER BY scheduled_at, id""", MATCH, league.name(), Timestamp.from(from), Timestamp.from(to));
+    }
+
     /** 시작한 지 오래됐는데 결과가 없는 경기 */
     List<Match> startedWithoutResult(String source, Instant startedBefore) {
         return jdbc.query("SELECT * FROM matches WHERE source = ? AND status = 'SCHEDULED' AND scheduled_at <= ?",

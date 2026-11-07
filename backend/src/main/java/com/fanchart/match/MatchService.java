@@ -174,6 +174,10 @@ public class MatchService {
         return store.latest(limit);
     }
 
+    public List<Match> schedule(League league, Instant from, Instant to) {
+        return store.between(league, from, to);
+    }
+
     public List<Match> startedWithoutResult(String source, Instant startedBefore) {
         return store.startedWithoutResult(source, startedBefore);
     }
