@@ -31,7 +31,19 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 
 사용자가 적은 동안은 유료 서버 없이 집 PC에서 같은 묶음을 돌린다. 바깥 연결은 Cloudflare Tunnel(무료)로 한다. PC가 Cloudflare 쪽으로 연결을 거는 방식이다. 그래서 공유기 포트를 열지 않고, 집 IP도 드러나지 않으며, HTTPS 인증서도 Cloudflare가 붙인다.
 
-1. Docker Desktop을 설치하고 "로그인 시 시작"을 켠다. Windows에서는 WSL2(Ubuntu)에서 저장소를 받고 아래 명령을 실행한다.
+### 도메인 없이 먼저 시험하기
+
+도메인과 Cloudflare 계정 없이도 임시 주소로 바로 열 수 있다. 지인 테스트용이다. 다시 띄울 때마다 주소가 바뀌고, 주소가 고정되지 않아 소셜 로그인은 쓸 수 없으므로 `SPRING_PROFILES_ACTIVE=demo`(닉네임 로그인)로 둔다.
+
+```bash
+cd deploy
+docker compose --profile quick-tunnel up -d --build
+docker compose logs quick-tunnel     # https://xxx.trycloudflare.com 주소가 나온다
+```
+
+### 도메인으로 열기
+
+1. Docker Desktop을 설치하고 "로그인 시 시작"을 켠다. Windows에서는 PowerShell에서 같은 명령을 쓴다(`cp` 대신 `copy`). `restore.sh`는 Git Bash나 WSL에서 실행한다.
 2. 도메인(.kr 등)을 Cloudflare에 연결한다(네임서버 변경).
 3. Cloudflare Zero Trust → Networks → Tunnels에서 터널을 만든다.
    - 커넥터 종류는 Docker를 고르고, 화면에 나오는 토큰을 `.env`의 `CLOUDFLARE_TUNNEL_TOKEN`에 넣는다.

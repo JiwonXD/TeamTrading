@@ -127,6 +127,19 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # 도메인 없이 바로 시험할 때: Cloudflare가 무료로 주는 임시 주소(https://xxx.trycloudflare.com)를 붙인다.
+  # 토큰·계정이 필요 없지만 다시 띄울 때마다 주소가 바뀐다. 주소는 로그에 나온다
+  #   docker compose --profile quick-tunnel up -d
+  #   docker compose logs quick-tunnel   (trycloudflare.com 주소를 찾는다)
+  quick-tunnel:
+    image: cloudflare/cloudflared:2025.1.0
+    command: tunnel --no-autoupdate --url http://web:80
+    depends_on:
+      - web
+    profiles: [quick-tunnel]
+    restart: unless-stopped
+    logging: *logging
+
 volumes:
   mysql-data:
   prometheus-data:
