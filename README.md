@@ -95,7 +95,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 | POST | `/api/teams/{teamId}/posts` | 글쓰기 `{body}`. 5~300자, 링크 금지, 20초 간격, 하루 30개 |
 | DELETE | `/api/posts/{postId}` | 내 글 지우기 |
 | POST | `/api/posts/{postId}/reports` | 신고 `{reason: SPAM\|ABUSE\|AD\|OTHER}`. 다른 계정 3명이 신고하면 숨김 |
-| GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (닉네임만 공개) |
+| GET | `/api/surveillance/alerts` | 이상거래 탐지 기록 (운영자만, 계정은 닉네임으로 표시) |
 | GET | `/api/surveillance/reconciliation` | 원장·잔고·발행 기록 대사 결과 (운영자만) |
 
 ### 실시간 시세

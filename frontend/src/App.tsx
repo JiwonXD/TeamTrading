@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConnection, getLogin, getToast, useStore } from './store'
+import { canWatch, getConnection, getLogin, getToast, useStore } from './store'
 import Home from './pages/Home'
 import TeamDetail from './pages/TeamDetail'
 import Portfolio from './pages/Portfolio'
@@ -101,7 +101,7 @@ export default function App() {
     if (teamMatch) deskPage = <DesktopTeam key={teamMatch[1]} teamId={teamMatch[1]} />
     else if (hash === 'portfolio') deskPage = <div className="desk-page"><Portfolio /></div>
     else if (hash === 'ranking') deskPage = <div className="desk-page"><Ranking /></div>
-    else if (hash === 'watch') deskPage = <div className="desk-page"><Watch /></div>
+    else if (hash === 'watch' && canWatch()) deskPage = <div className="desk-page"><Watch /></div>
     else deskPage = <DesktopHome />
     return (
       <DesktopShell
@@ -119,7 +119,7 @@ export default function App() {
   if (teamMatch) page = <TeamDetail teamId={teamMatch[1]} />
   else if (hash === 'portfolio') page = <Portfolio />
   else if (hash === 'ranking') page = <Ranking />
-  else if (hash === 'watch') page = <Watch />
+  else if (hash === 'watch' && canWatch()) page = <Watch />
   else page = <Home />
 
   return (
@@ -128,7 +128,7 @@ export default function App() {
       <main className={teamMatch ? 'with-cta' : 'with-nav'}>{page}</main>
       {!teamMatch && (
         <nav className="tabbar">
-          {TABS.map((t) => (
+          {TABS.filter((t) => t.path !== 'watch' || canWatch()).map((t) => (
             <a key={t.path} href={`#${t.path}`} className={hash === t.path ? 'on' : ''}>
               <svg width="24" height="24" viewBox="0 0 24 24"><path d={t.icon} fill="currentColor" /></svg>
               {t.label}
