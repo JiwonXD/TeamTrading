@@ -71,18 +71,27 @@ class AuthTest {
     }
 
     @Test
-    void reconciliationIsForAdminsOnly() throws Exception {
+    void surveillanceIsForAdminsOnly() throws Exception {
         String id = login.findOrCreate("dev", "someone");
         mvc.perform(get("/api/surveillance/reconciliation")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/surveillance/reconciliation").with(login(id))).andExpect(status().isForbidden());
         mvc.perform(get("/api/surveillance/reconciliation").with(admin(id))).andExpect(status().isOk());
+        mvc.perform(get("/api/surveillance/alerts")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/surveillance/alerts").with(login(id))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/surveillance/alerts").with(admin(id))).andExpect(status().isOk());
+    }
+
+    @Test
+    void accountResponseTellsWhetherTheAccountIsAnAdmin() throws Exception {
+        String id = login.findOrCreate("dev", "admin-flag");
+        mvc.perform(get("/api/accounts/me").with(login(id))).andExpect(jsonPath("$.admin").value(false));
+        mvc.perform(get("/api/accounts/me").with(admin(id))).andExpect(jsonPath("$.admin").value(true));
     }
 
     @Test
     void publicMarketDataNeedsNoLogin() throws Exception {
         mvc.perform(get("/api/teams")).andExpect(status().isOk());
         mvc.perform(get("/api/rankings")).andExpect(status().isOk());
-        mvc.perform(get("/api/surveillance/alerts")).andExpect(status().isOk());
         mvc.perform(get("/api/auth/options"))
                 .andExpect(jsonPath("$.devLogin").value(true))
                 .andExpect(jsonPath("$.providers.length()").value(0));

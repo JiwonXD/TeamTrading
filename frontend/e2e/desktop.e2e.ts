@@ -32,6 +32,8 @@ test('desktop home shows the market table, side list and no accessibility violat
   await expect(page.locator('.tabbar')).toHaveCount(0)
   await expect(page.locator('.dtable tbody tr')).toHaveCount(18)
   await expect(page.locator('.side-row')).toHaveCount(18)
+  // 시장감시는 운영자만 본다
+  await expect(page.getByRole('link', { name: '시장감시' })).toHaveCount(0)
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
 })
