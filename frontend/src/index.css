@@ -11,6 +11,7 @@
   --red: #d22030;
   --red-bg: #ffeeee;
   --warn: #ff9f0a;
+  --star: #f5a700;
   --backdrop: rgba(0, 0, 0, 0.4);
   color-scheme: light;
 }
@@ -27,6 +28,7 @@
     --blue-bg: #1b2a40;
     --red: #ff5a66;
     --red-bg: #3a1e22;
+    --star: #ffc83d;
     --backdrop: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
@@ -43,6 +45,7 @@
   --blue-bg: #1b2a40;
   --red: #ff5a66;
   --red-bg: #3a1e22;
+  --star: #ffc83d;
   --backdrop: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
@@ -97,6 +100,9 @@ main.with-cta { padding-bottom: 96px; }
 .topbar-right { margin-left: auto; }
 .icon-btn { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -6px; }
 .text-btn { color: var(--text-3); font-size: 14px; }
+.star-btn { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 10px; color: var(--text-3); }
+.star-btn:hover { background: var(--surface-2); }
+.star-btn.on { color: var(--star); }
 
 .card {
   background: var(--surface);
@@ -181,6 +187,8 @@ main.with-cta { padding-bottom: 96px; }
 .rank { width: 18px; text-align: center; color: var(--blue); font-weight: 700; font-size: 15px; flex: none; }
 .stock-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 600; }
 .stock-price { display: flex; flex-direction: column; align-items: flex-end; font-weight: 600; }
+.stock-list .star-btn { margin: -6px -6px -6px 0; }
+.watch-card .hint { margin: 4px 0 0; }
 
 .match-list { display: flex; flex-direction: column; gap: 6px; }
 .match { display: grid; grid-template-columns: 54px 1fr 60px 1fr; align-items: center; padding: 8px 0; font-size: 14px; }

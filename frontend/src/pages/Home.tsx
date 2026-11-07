@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
-import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, mode, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 import { LeagueStats, LeagueTabs } from '../components/League'
 import { LeagueSchedule } from '../components/Schedule'
+import { WatchStar } from '../components/WatchStar'
 
 type Sort = 'volume' | 'up' | 'down'
 
@@ -40,6 +41,8 @@ export default function Home({ league }: { league: League | null }) {
           </div>
         </section>
       )}
+
+      {!league && <WatchCard />}
 
       {offerings && <OfferingList offerings={league ? offerings.filter((o) => TEAMS.find((t) => t.id === o.teamId)?.league === league) : offerings} />}
 
@@ -80,6 +83,41 @@ export default function Home({ league }: { league: League | null }) {
         {mode === 'server' ? ' 데모 서버에서는 시뮬레이션 계정도 일반 유저와 같은 방식으로 함께 거래해요.' : ' 이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.'}
       </p>
     </>
+  )
+}
+
+/** 관심 구단: 담은 순서대로. 별을 다시 누르면 목록에서 빠진다 */
+function WatchCard() {
+  const s = useStore()
+  const teams = getWatchlist().flatMap((id) => TEAMS.find((t) => t.id === id) ?? [])
+  return (
+    <section className="card list-card watch-card" aria-labelledby="watch-title">
+      <h2 id="watch-title">관심 구단</h2>
+      {teams.length === 0 ? (
+        <p className="hint">구단 화면 위의 별을 누르면 여기에 모여요.</p>
+      ) : (
+        <ul className="stock-list">
+          {teams.map((t) => {
+            const m = s.markets[t.id]
+            const chg = m.last / m.base - 1
+            return (
+              <li key={t.id} onClick={() => go(`team-${t.id}`)}>
+                <Logo team={t} />
+                <span className="stock-name">
+                  {t.name}
+                  <span className="muted xs">{t.league}</span>
+                </span>
+                <span className="stock-price">
+                  {fmt(m.last)}P
+                  {m.listed ? <span className={`xs ${tone(chg)}`}>{pct(chg)}</span> : <span className="xs muted">상장 전</span>}
+                </span>
+                <WatchStar team={t} />
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 

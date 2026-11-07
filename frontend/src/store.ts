@@ -78,5 +78,9 @@ export const withdraw = server.withdraw
 export const getLeagueTabs = impl.getLeagueTabs
 export const saveLeagueTabs = (prefs: LeagueTabPrefs): Promise<OrderResult> => Promise.resolve(impl.saveLeagueTabs(prefs))
 
+/** 관심 구단(넣은 순서). 서버 모드는 계정에, 시뮬레이션 모드는 이 브라우저에 저장한다 */
+export const getWatchlist = (): string[] => impl.getWatchlist()
+export const toggleWatch = (teamId: string): Promise<OrderResult> => Promise.resolve(impl.toggleWatch(teamId))
+
 /** 서버 모드에서는 보고 있는 구단의 실시간 시세를 구독한다. 반환값은 구독 해제 */
 export const watchTeam = (teamId: string): (() => void) => (mode === 'server' ? server.watchTeam(teamId) : () => {})

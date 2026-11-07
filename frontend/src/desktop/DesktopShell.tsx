@@ -1,10 +1,11 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { type League, TEAMS, type Team, leaguesWithTeams } from '../data/teams'
 import { visibleLeagues } from '../data/leagueTabs'
-import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, mode, totalShares, totalValue, useStore } from '../store'
+import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, getWatchlist, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
+import { WatchStar } from '../components/WatchStar'
 import { useFlash } from './useDesktop'
 import './desktop.css'
 
@@ -90,15 +91,27 @@ export default function DesktopShell({ hash, teamId, banner, toast, children }: 
   )
 }
 
-type SideTab = 'live' | 'mine'
+type SideTab = 'watch' | 'live' | 'mine'
+const SIDE_TABS: [SideTab, string][] = [['watch', '관심'], ['live', '실시간'], ['mine', '보유']]
+const EMPTY: Record<SideTab, string> = {
+  watch: '구단 이름 옆 별을 누르면 여기에 모여요',
+  live: '구단이 없어요',
+  mine: '보유한 구단이 없어요',
+}
 
 function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () => void; currentTeam: string | null }) {
   const s = useStore()
-  const [tab, setTab] = useState<SideTab>('live')
+  const watchlist = getWatchlist()
+  // 고르기 전에는 관심 구단이 있으면 관심, 없으면 실시간을 연다
+  const [picked, setPicked] = useState<SideTab | null>(null)
+  const tab = picked ?? (watchlist.length > 0 ? 'watch' : 'live')
   const [league, setLeague] = useState<League | 'all'>('all')
-  const rows = (tab === 'mine' ? TEAMS.filter((t) => totalShares(ME, t.id) > 0) : TEAMS)
+  const byValue = (a: Team, b: Team) => s.markets[b.id].volume * s.markets[b.id].last - s.markets[a.id].volume * s.markets[a.id].last
+  const rows = (tab === 'watch'
+    // 관심은 담은 순서대로 둔다
+    ? watchlist.flatMap((id) => TEAMS.find((t) => t.id === id) ?? [])
+    : (tab === 'mine' ? TEAMS.filter((t) => totalShares(ME, t.id) > 0) : [...TEAMS]).sort(byValue))
     .filter((t) => league === 'all' || t.league === league)
-    .sort((a, b) => s.markets[b.id].volume * s.markets[b.id].last - s.markets[a.id].volume * s.markets[a.id].last)
 
   if (!open) return (
     <aside className="desk-side closed" aria-label="구단 목록">
@@ -113,8 +126,8 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
     <aside className="desk-side" aria-label="구단 목록">
       <div className="side-head">
         <div className="side-tabs" role="tablist">
-          {([['live', '실시간'], ['mine', '보유']] as [SideTab, string][]).map(([v, l]) => (
-            <button key={v} role="tab" aria-selected={tab === v} className={tab === v ? 'on' : ''} onClick={() => setTab(v)}>{l}</button>
+          {SIDE_TABS.map(([v, l]) => (
+            <button key={v} role="tab" aria-selected={tab === v} className={tab === v ? 'on' : ''} onClick={() => setPicked(v)}>{l}</button>
           ))}
         </div>
         <button className="side-toggle" onClick={onToggle} aria-label="구단 목록 접기" title="구단 목록 접기">
@@ -125,25 +138,27 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
         {(['all', ...visibleLeagues(getLeagueTabs()).filter((l) => TEAMS.some((t) => t.league === l.id)).map((l) => l.id)] as const).map((l) => (
           <button key={l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
         ))}
-        <span className="muted xs side-sort">거래대금순</span>
+        <span className="muted xs side-sort">{tab === 'watch' ? '담은 순' : '거래대금순'}</span>
       </div>
       <ul className="side-list">
-        {rows.length === 0 && <li className="empty">{tab === 'mine' ? '보유한 구단이 없어요' : '구단이 없어요'}</li>}
-        {rows.map((t, i) => <SideRow key={t.id} team={t} rank={i + 1} on={t.id === currentTeam} />)}
+        {rows.length === 0 && <li className="empty">{EMPTY[tab]}</li>}
+        {rows.map((t, i) => <SideRow key={t.id} team={t} rank={tab === 'watch' ? null : i + 1} on={t.id === currentTeam} />)}
       </ul>
     </aside>
   )
 }
 
-function SideRow({ team, rank, on }: { team: Team; rank: number; on: boolean }) {
+/** rank가 없으면(관심 탭) 순위 대신 별을 두어 바로 뺄 수 있게 한다 */
+function SideRow({ team, rank, on }: { team: Team; rank: number | null; on: boolean }) {
   const s = useStore()
   const m = s.markets[team.id]
   const flash = useFlash(m.last)
   const chg = m.last / m.base - 1
   return (
-    <li>
+    <li className={rank === null ? 'side-watch' : undefined}>
+      {rank === null && <WatchStar team={team} size={18} />}
       <a href={`#team-${team.id}`} className={`side-row ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined}>
-        <span className="side-rank">{rank}</span>
+        {rank !== null && <span className="side-rank">{rank}</span>}
         <Logo team={team} size={30} />
         <span className="side-name">{team.name}</span>
         <span className="side-price">

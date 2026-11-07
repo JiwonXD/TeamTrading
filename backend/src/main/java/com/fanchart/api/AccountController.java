@@ -3,6 +3,7 @@ package com.fanchart.api;
 import com.fanchart.account.Account;
 import com.fanchart.account.LeagueTabs;
 import com.fanchart.account.NicknameService;
+import com.fanchart.account.Watchlist;
 import com.fanchart.api.ApiDtos.AccountResponse;
 import com.fanchart.api.ApiDtos.LeagueTabsRequest;
 import com.fanchart.api.ApiDtos.MyTradeResponse;
@@ -19,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,12 +39,15 @@ class AccountController {
     private final NicknameService nicknames;
     private final Withdrawal withdrawal;
     private final LeagueTabs leagueTabs;
+    private final Watchlist watchlist;
 
-    AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal, LeagueTabs leagueTabs) {
+    AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal, LeagueTabs leagueTabs,
+                      Watchlist watchlist) {
         this.trading = trading;
         this.nicknames = nicknames;
         this.withdrawal = withdrawal;
         this.leagueTabs = leagueTabs;
+        this.watchlist = watchlist;
     }
 
     /** 탈퇴. 대기 주문을 취소하고 로그인 연결을 끊은 뒤 이 세션도 끝낸다 */
@@ -73,6 +78,21 @@ class AccountController {
     @PutMapping("/api/accounts/me/league-tabs")
     LeagueTabs.Prefs saveLeagueTabs(@AuthenticationPrincipal String accountId, @Valid @RequestBody LeagueTabsRequest req) {
         return leagueTabs.save(accountId, req.order(), req.hidden());
+    }
+
+    @GetMapping("/api/accounts/me/watchlist")
+    Watchlist.Entries watchlist(@AuthenticationPrincipal String accountId) {
+        return watchlist.get(accountId);
+    }
+
+    @PutMapping("/api/accounts/me/watchlist/{teamId}")
+    Watchlist.Entries watch(@AuthenticationPrincipal String accountId, @PathVariable String teamId) {
+        return watchlist.add(accountId, teamId);
+    }
+
+    @DeleteMapping("/api/accounts/me/watchlist/{teamId}")
+    Watchlist.Entries unwatch(@AuthenticationPrincipal String accountId, @PathVariable String teamId) {
+        return watchlist.remove(accountId, teamId);
     }
 
     @GetMapping("/api/accounts/me/orders")
