@@ -29,6 +29,7 @@
 | 17 | 기동 직후 대사 지연 경보가 잘못 울림 | 버그 | 모니터링 | [#15](https://github.com/JiwonXD/TeamTrading/pull/15) |
 | 18 | 첫 자동 백업이 MySQL 기동 전에 실패 | 버그 | 운영 | [#29](https://github.com/JiwonXD/TeamTrading/pull/29) |
 | 19 | 하이픈이 든 구단 id가 다른 구단 화면으로 열림 | 버그 | 화면 | [#22](https://github.com/JiwonXD/TeamTrading/pull/22) |
+| 20 | 집 PC(Windows)에서 배포 묶음이 80번 포트를 못 열고 멈춤 | 버그 | 배포 | [#35](https://github.com/JiwonXD/TeamTrading/pull/35) |
 
 자기소개서 소재로 먼저 볼 항목은 1, 2, 3, 4, 7이다. 금융 시스템에서 중요한 멱등성, 장애 복구, 장부 검증, 감사 기록, 성능 측정이 각각 한 건씩이다.
 
@@ -395,6 +396,23 @@
 **해결.** `^team-([a-z0-9-]+)$`로 바꿔 접두어 뒤 전체를 구단 id로 읽는다.
 
 **배운 점.** 데이터가 코드에 박혀 있을 때 성립하던 가정이, 데이터를 운영자 입력으로 바꾸는 순간 깨진다.
+
+---
+
+## 20. 집 PC(Windows)에서 배포 묶음이 80번 포트를 못 열고 멈춤
+
+- 구분: 버그 / 주제: 배포
+- 관련: [#33](https://github.com/JiwonXD/TeamTrading/pull/33), [#35](https://github.com/JiwonXD/TeamTrading/pull/35)
+
+**문제.** 베타 서버로 쓸 Windows PC에서 `docker compose --profile quick-tunnel up -d --build`를 실행했다. 이미지 빌드와 MySQL·서버 기동까지는 됐는데 nginx 컨테이너가 `listen tcp 0.0.0.0:80: bind: An attempt was made to access a socket in a way forbidden by its access permissions`로 뜨지 않았다. CI(ubuntu)와 개발 환경에서는 한 번도 나지 않던 오류다.
+
+**원인.** Windows는 80번을 다른 프로그램(IIS 등 http.sys를 쓰는 서비스)에 주었거나, Hyper-V·WSL이 예약한 포트 범위에 넣어 둘 수 있다. 그러면 Docker Desktop이 그 포트를 잡지 못한다. 묶음은 `HTTP_PORT` 기본값 80으로 nginx를 PC에 열고 있었다.
+
+**해결.** 이 구성에서 PC의 80번은 필요 없다. Cloudflare Tunnel은 컨테이너 네트워크 안에서 `web:80`으로 붙고, 바깥 HTTPS는 Cloudflare가 받는다. 그래서 `.env`의 `HTTP_PORT=8088`로 PC 쪽 포트만 바꿨다. 코드의 기본값(80)은 그대로 두었다. 클라우드 VM이나 ALB 앞에서는 80이 맞기 때문이다. 대신 배포 문서에 이 오류 문구와 조치를 적었다.
+
+**결과.** 다시 띄운 뒤 6개 컨테이너가 모두 올라왔고(mysql·backend·backup healthy), 화면은 `0.0.0.0:8088->80`으로 열렸다.
+
+**배운 점.** CI가 리눅스에서만 돌면 운영 PC의 OS 차이는 잡히지 않는다. 바깥 연결이 터널이면 호스트 포트는 로컬 확인용일 뿐이므로, 충돌이 나는 값은 설정으로 빼 두면 된다.
 
 ---
 
