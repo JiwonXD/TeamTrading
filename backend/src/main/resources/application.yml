@@ -58,6 +58,10 @@ fanchart:
       - competition: BUNDESLIGA
         source: football-data
         league-id: BL1
+      # NBA는 ESPN(키 없음). 정규 시즌·NBA컵·플레이인·플레이오프 경기가 모두 NBA 대회로 들어온다
+      - competition: NBA
+        source: espn
+        league-id: basketball/nba
       # 컵대회(번호는 키를 받은 뒤 확인한다). LCK컵·EWC는 PandaScore 번호를 확인한 뒤 더한다
       - competition: MSI
         source: pandascore
@@ -68,38 +72,31 @@ fanchart:
       - competition: UCL
         source: football-data
         league-id: CL
+      # 유럽 컵대회·ACL은 ESPN(키 없음, 공개 문서 없음, ADR 0029). API-Sports 무료는 지난 시즌만 준다
       - competition: UEL
-        source: api-football
-        league-id: "3"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/uefa.europa
       - competition: UECL
-        source: api-football
-        league-id: "848"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/uefa.europa.conf
       - competition: FA_CUP
-        source: api-football
-        league-id: "45"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/eng.fa
       - competition: EFL_CUP
-        source: api-football
-        league-id: "48"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/eng.league_cup
       - competition: COPA_DEL_REY
-        source: api-football
-        league-id: "143"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/esp.copa_del_rey
       - competition: COPPA_ITALIA
-        source: api-football
-        league-id: "137"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/ita.coppa_italia
       - competition: DFB_POKAL
-        source: api-football
-        league-id: "81"
-        season-start-month: 7
+        source: espn
+        league-id: soccer/ger.dfb_pokal
+      - competition: ACL
+        source: espn
+        league-id: soccer/afc.champions
       - competition: KOREA_CUP
         source: api-football
         league-id: "294"
-      - competition: ACL
-        source: api-football
-        league-id: "17"
-        season-start-month: 7
