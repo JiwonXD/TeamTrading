@@ -11,5 +11,9 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'mobile', use: { ...devices['Pixel 7'] } }],
+  projects: [
+    { name: 'mobile', testMatch: 'trading.e2e.ts', use: { ...devices['Pixel 7'] } },
+    // 1024px 이상은 PC 레이아웃(위 메뉴 · 오른쪽 구단 목록 · 차트·호가·주문 동시 배치)
+    { name: 'desktop', testMatch: 'desktop.e2e.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+  ],
 })
