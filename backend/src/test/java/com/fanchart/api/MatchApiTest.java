@@ -9,6 +9,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static com.fanchart.auth.TestLogin.admin;
@@ -55,5 +56,50 @@ class MatchApiTest {
                 .andExpect(jsonPath("$[0].matchId").value(id))
                 .andExpect(jsonPath("$[0].shares").value(7))
                 .andExpect(jsonPath("$[0].amount").value(7 * 40));
+    }
+
+    @Test
+    void scheduleListsOneLeaguesMatchesInTheRangeInStartOrder() throws Exception {
+        String admin = trading.openAccount("schedule-admin").id();
+        Instant base = Instant.parse("2031-04-01T09:00:00Z");
+        long later = schedule(admin, "lg", "kia", base.plusSeconds(7_200));
+        long earlier = schedule(admin, "ssg", "nc", base);
+        long nextWeek = schedule(admin, "kt", "lotte", base.plus(Duration.ofDays(8)));
+        long otherLeague = schedule(admin, "t1", "geng", base.plusSeconds(3_600));
+
+        mvc.perform(get("/api/matches/schedule").param("league", "KBO")
+                        .param("from", base.minusSeconds(3_600).toString()).param("to", base.plus(Duration.ofDays(7)).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(earlier))
+                .andExpect(jsonPath("$[1].id").value(later));
+        mvc.perform(get("/api/matches/schedule").param("league", "LCK")
+                        .param("from", base.toString()).param("to", base.plus(Duration.ofDays(1)).toString()))
+                .andExpect(jsonPath("$[0].id").value(otherLeague));
+        mvc.perform(get("/api/matches/schedule").param("league", "KBO")
+                        .param("from", base.plus(Duration.ofDays(8)).toString()).param("to", base.plus(Duration.ofDays(9)).toString()))
+                .andExpect(jsonPath("$[0].id").value(nextWeek));
+    }
+
+    @Test
+    void scheduleRejectsAnInvertedOrTooLongRange() throws Exception {
+        Instant now = Instant.now();
+        mvc.perform(get("/api/matches/schedule").param("league", "KBO")
+                        .param("from", now.toString()).param("to", now.minusSeconds(1).toString()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/matches/schedule").param("league", "KBO")
+                        .param("from", now.toString()).param("to", now.plus(Duration.ofDays(32)).toString()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/matches/schedule").param("league", "NBA")
+                        .param("from", now.toString()).param("to", now.plusSeconds(60).toString()))
+                .andExpect(status().isBadRequest());
+    }
+
+    private long schedule(String admin, String home, String away, Instant at) throws Exception {
+        String body = "{\"homeTeamId\":\"" + home + "\",\"awayTeamId\":\"" + away + "\",\"scheduledAt\":\"" + at + "\"}";
+        String created = mvc.perform(post("/api/admin/matches").with(admin(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(created, "$.id")).longValue();
     }
 }

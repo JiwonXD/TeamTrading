@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { type League, TEAMS, type Team } from '../data/teams'
+import { LEAGUES, type League, TEAMS, type Team } from '../data/teams'
 import { ME, START_POINTS, getConnection, getProfile, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
+import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
 import { useFlash } from './useDesktop'
 import './desktop.css'
@@ -59,9 +60,11 @@ export default function DesktopShell({ hash, teamId, banner, toast, children }: 
           팬차트
         </a>
         <nav className="desk-nav" aria-label="주 메뉴">
-          {NAV.map((n) => (
-            <a key={n.path} href={`#${n.path}`} className={hash === n.path ? 'on' : ''} aria-current={hash === n.path ? 'page' : undefined}>{n.label}</a>
-          ))}
+          {NAV.map((n) => {
+            // 리그 화면(#league-…)은 홈 안의 카테고리라 홈에 불을 켠다
+            const on = hash === n.path || (n.path === 'home' && hash.startsWith('league-'))
+            return <a key={n.path} href={`#${n.path}`} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{n.label}</a>
+          })}
         </nav>
         <button className="desk-search" onClick={() => setSearch(true)} aria-keyshortcuts="/ Control+K">
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
@@ -155,17 +158,12 @@ function SideRow({ team, rank, on }: { team: Team; rank: number; on: boolean }) 
 function Ticker() {
   const s = useStore()
   const conn = getConnection()
-  const leagues: League[] = ['KBO', 'K리그', 'LCK']
-  const avg = (l: League) => {
-    const ts = TEAMS.filter((t) => t.league === l && s.markets[t.id].listed)
-    return ts.length ? ts.reduce((n, t) => n + s.markets[t.id].last / s.markets[t.id].base - 1, 0) / ts.length : 0
-  }
   const value = totalValue(ME)
   return (
     <footer className="desk-ticker xs">
       <span className={`live-dot ${conn.status === 'live' ? 'on' : ''}`}>{conn.status === 'live' ? '실시간' : '연결 확인 중'}</span>
-      {leagues.map((l) => (
-        <span key={l}>{l} 평균 <b className={tone(avg(l))}>{pct(avg(l))}</b></span>
+      {LEAGUES.map((l) => (
+        <a key={l.slug} href={`#league-${l.slug}`}>{l.id} 평균 <b className={tone(leagueAvg(s, l.id))}>{pct(leagueAvg(s, l.id))}</b></a>
       ))}
       <span>내 자산 <b>{fmt(value)}P</b> <span className={tone(value - START_POINTS)}>{signed(value - START_POINTS)}P</span></span>
       <span className="ticker-right muted">포인트는 현금으로 바꾸거나 보낼 수 없어요 · <a href="#terms">이용약관</a> · <a href="#privacy">개인정보처리방침</a></span>

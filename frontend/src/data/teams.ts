@@ -34,6 +34,13 @@ export const TEAMS: Team[] = [
 
 export const teamById = (id: string) => TEAMS.find((t) => t.id === id)!
 
+/** 리그 카테고리. slug는 주소(#league-kbo)에, code는 서버 API에 쓴다 */
+export const LEAGUES: { id: League; slug: string; code: 'KBO' | 'K_LEAGUE' | 'LCK'; sport: string }[] = [
+  { id: 'KBO', slug: 'kbo', code: 'KBO', sport: '야구' },
+  { id: 'K리그', slug: 'kleague', code: 'K_LEAGUE', sport: '축구' },
+  { id: 'LCK', slug: 'lck', code: 'LCK', sport: 'e스포츠' },
+]
+
 export interface Match {
   id: string
   league: League

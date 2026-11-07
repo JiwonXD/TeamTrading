@@ -2,7 +2,7 @@
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
-import { type League, TEAMS } from './data/teams'
+import { LEAGUES as LEAGUE_LIST, type League, TEAMS } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -293,6 +293,10 @@ export const getState = () => state
 /** 기간별 리더보드. 마감 집계가 들어 있어 3초 주기 갱신에 넣지 않고 화면이 필요할 때 받는다 */
 export const fetchLeaderboard = (period: LeaderboardPeriod, sort: LeaderboardSort) =>
   api<LeaderboardDto>('GET', `/api/leaderboard?period=${period}&sort=${sort}&limit=50`)
+
+/** 리그 화면 달력: 한 리그의 [from, to) 경기를 시작 시각 순으로 */
+export const fetchSchedule = (league: League, from: Date, to: Date) =>
+  api<MatchDto[]>('GET', `/api/matches/schedule?league=${LEAGUE_LIST.find((l) => l.id === league)!.code}&from=${from.toISOString()}&to=${to.toISOString()}`)
 
 // ---------- 화면에서 부르는 동작 ----------
 

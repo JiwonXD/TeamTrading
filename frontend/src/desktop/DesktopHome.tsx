@@ -4,6 +4,8 @@ import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, mode, totalVa
 import { OfferingList } from '../components/Offering'
 import { Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 import { ServerMatches, SimMatches } from '../pages/Home'
+import { LeagueStats, LeagueTabs } from '../components/League'
+import { LeagueSchedule } from '../components/Schedule'
 import { PriceChart } from './PriceChart'
 import { useFlash } from './useDesktop'
 
@@ -18,13 +20,13 @@ const COLUMNS: { key: SortKey | null; label: string; cls?: string }[] = [
   { key: null, label: '오늘 범위', cls: 'range-col' },
 ]
 
-export default function DesktopHome() {
+/** league가 있으면 그 리그 카테고리 화면, 없으면 전체 홈 */
+export default function DesktopHome({ league }: { league: League | null }) {
   const s = useStore()
-  const [league, setLeague] = useState<League | 'all'>('all')
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'value', desc: true })
   const [preview, setPreview] = useState<string | null>(null)
 
-  const rows = TEAMS.filter((t) => league === 'all' || t.league === league)
+  const rows = TEAMS.filter((t) => !league || t.league === league)
     .map((t) => {
       const m = s.markets[t.id]
       return { t, m, chg: m.last / m.base - 1, sortVal: { value: m.volume * m.last, chg: m.last / m.base - 1, last: m.last, volume: m.volume } }
@@ -39,25 +41,24 @@ export default function DesktopHome() {
 
   return (
     <div className="dh">
-      <h1 className="sr-only">팬차트 홈</h1>
-      <section className="dh-top">
-        <AssetCard />
-        <div className="dh-movers">
-          {movers.map((t) => <MoverCard key={t.id} team={t} />)}
-        </div>
-      </section>
+      <h1 className="sr-only">{league ? `팬차트 ${league}` : '팬차트 홈'}</h1>
+      <LeagueTabs current={league} />
+      {league ? <LeagueSchedule league={league} /> : (
+        <section className="dh-top">
+          <AssetCard />
+          <div className="dh-movers">
+            {movers.map((t) => <MoverCard key={t.id} team={t} />)}
+          </div>
+        </section>
+      )}
 
-      {offerings && <OfferingList offerings={offerings} />}
+      {offerings && <OfferingList offerings={league ? offerings.filter((o) => TEAMS.find((t) => t.id === o.teamId)?.league === league) : offerings} />}
 
       <section className="dh-board">
         <div className="panel dh-table-panel">
           <div className="panel-head">
-            <h2>실시간 구단 시세</h2>
-            <div className="pill-tabs" role="tablist" aria-label="리그">
-              {(['all', 'KBO', 'K리그', 'LCK'] as const).map((l) => (
-                <button key={l} role="tab" aria-selected={league === l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
-              ))}
-            </div>
+            <h2>{league ? `${league} 실시간 시세` : '실시간 구단 시세'}</h2>
+            {league && <LeagueStats league={league} />}
           </div>
           <table className="dtable">
             <thead>
@@ -85,7 +86,7 @@ export default function DesktopHome() {
         {shownId && <Preview teamId={shownId} />}
       </section>
 
-      <section className="dh-bottom">
+      {!league && <section className="dh-bottom">
         {serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />}
         <section className="card">
           <h2>팬차트는</h2>
@@ -95,7 +96,7 @@ export default function DesktopHome() {
           </p>
           <p className="hint">단축키: <kbd>/</kbd> 검색 · 구단 화면 차트에서 오른쪽 클릭으로 그 가격에 주문</p>
         </section>
-      </section>
+      </section>}
     </div>
   )
 }
