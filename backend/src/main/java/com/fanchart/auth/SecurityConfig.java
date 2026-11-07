@@ -74,10 +74,9 @@ class SecurityConfig {
         return http.build();
     }
 
-    /** 제공자의 사용자 고유 id. 네이버는 응답이 response 안에 한 번 더 싸여 있다 */
+    /** 제공자의 사용자 고유 id */
     static String subject(String provider, Map<String, Object> attributes) {
         Object id = switch (provider) {
-            case "naver" -> attributes.get("response") instanceof Map<?, ?> r ? r.get("id") : null;
             case "google" -> attributes.get("sub");
             default -> attributes.get("id");
         };

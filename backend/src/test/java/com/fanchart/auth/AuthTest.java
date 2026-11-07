@@ -109,6 +109,5 @@ class AuthTest {
     void readsUserIdFromEachProvider() {
         assertThat(SecurityConfig.subject("kakao", Map.of("id", 4242L))).isEqualTo("4242");
         assertThat(SecurityConfig.subject("google", Map.of("sub", "g-1"))).isEqualTo("g-1");
-        assertThat(SecurityConfig.subject("naver", Map.of("response", Map.of("id", "n-1")))).isEqualTo("n-1");
     }
 }
