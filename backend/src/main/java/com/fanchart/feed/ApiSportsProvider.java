@@ -1,6 +1,6 @@
 package com.fanchart.feed;
 
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
@@ -32,12 +32,17 @@ final class ApiSportsProvider implements FeedProvider {
     }
 
     @Override
-    public HttpRequest request(LeagueFeed feed, URI base, LocalDate date, LocalDate today) {
-        int season = feed.season() != null ? feed.season() : (date != null ? date : today).getYear();
+    public HttpRequest request(CompetitionFeed feed, String key, URI base, LocalDate date, LocalDate today) {
+        int season = feed.season() != null ? feed.season() : season(date != null ? date : today, feed.seasonStartMonth());
         String query = "league=" + feed.leagueId() + "&season=" + season + "&timezone=Asia/Seoul"
                 + (date != null ? "&date=" + date : "");
         return HttpRequest.newBuilder(URI.create(base + (baseball ? "/games?" : "/fixtures?") + query))
-                .timeout(Duration.ofSeconds(10)).header("x-apisports-key", feed.apiKey()).GET().build();
+                .timeout(Duration.ofSeconds(10)).header("x-apisports-key", key).GET().build();
+    }
+
+    /** 시즌이 startMonth에 시작하면 그 전 달까지는 지난해 시즌이다(유럽 축구 7: 2026-03 → 2025) */
+    static int season(LocalDate day, int startMonth) {
+        return day.getMonthValue() >= startMonth ? day.getYear() : day.getYear() - 1;
     }
 
     @Override

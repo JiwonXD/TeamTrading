@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LEAGUES, type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
+import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
 import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
@@ -114,7 +114,6 @@ export function SimMatches() {
   )
 }
 
-const LEAGUE_LABEL = Object.fromEntries(LEAGUES.map((l) => [l.code, l.id])) as Record<MatchDto['league'], string>
 
 export function matchState(m: MatchDto) {
   if (m.status === 'CANCELED') return '경기 취소'
@@ -134,22 +133,24 @@ export function ServerMatches({ matches }: { matches: MatchDto[] }) {
       {matches.length === 0 && <p className="empty">아직 등록된 경기가 없어요</p>}
       <div className="match-list">
         {matches.map((m) => {
-          const h = teamById(m.homeTeamId)
-          const a = teamById(m.awayTeamId)
+          // 컵대회의 상장하지 않은 상대는 구단 id가 없고 이름만 있다
+          const h = m.homeTeamId ? teamById(m.homeTeamId).short : m.homeName
+          const a = m.awayTeamId ? teamById(m.awayTeamId).short : m.awayName
           const done = m.status === 'FINAL' && m.homeScore !== null && m.awayScore !== null
           return (
             <div key={m.id} className="match">
-              <span className="match-league">{LEAGUE_LABEL[m.league]}</span>
-              <span className={`match-team ${done && m.homeScore! > m.awayScore! ? 'win' : ''}`}>{h.short}</span>
+              <span className="match-league">{COMPETITION_LABEL[m.competition] ?? m.competition}</span>
+              <span className={`match-team ${done && m.homeScore! > m.awayScore! ? 'win' : ''}`}>{h}</span>
               <span className="match-score">{done ? `${m.homeScore} : ${m.awayScore}` : 'vs'}</span>
-              <span className={`match-team ${done && m.awayScore! > m.homeScore! ? 'win' : ''}`}>{a.short}</span>
+              <span className={`match-team ${done && m.awayScore! > m.homeScore! ? 'win' : ''}`}>{a}</span>
               <span className="match-status">{matchState(m)}</span>
             </div>
           )
         })}
       </div>
       <p className="hint">
-        이긴 구단 주식 1주당 KBO 40P · LCK 160P · 분데스리가 240P · 그 밖의 축구 리그 210P, 무승부는 절반을 배당해요. 경기 시작 시각에 가진 주식에만
+        이긴 구단 주식 1주당 KBO 40P · LCK 160P · 분데스리가 240P · 그 밖의 축구 리그 210P, 무승부는 절반을 배당해요.
+        컵대회 경기는 여기에 대회 배수(챔스·롤드컵 1.5배, 국내 컵 0.5배 등)를 곱해요. 경기 시작 시각에 가진 주식에만
         배당하고, 결과가 나온 뒤 정정 여부를 확인하는 시간을 두고 지급해요.
       </p>
     </section>

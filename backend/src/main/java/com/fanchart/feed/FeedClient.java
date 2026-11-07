@@ -1,6 +1,6 @@
 package com.fanchart.feed;
 
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.List;
 
 /**
- * 리그 설정의 제공처로 경기를 받는다. 요청을 보내기 전에 제공처·키별 하루 상한을 센다.
- * 실패한 요청도 제공처는 세므로 함께 센다. 같은 키를 여러 리그가 쓰면 상한도 함께 쓴다.
+ * 대회 설정의 제공처로 경기를 받는다. 요청을 보내기 전에 제공처·키별 하루 상한을 센다.
+ * 실패한 요청도 제공처는 세므로 함께 센다. 같은 키로 여러 대회를 부르므로 상한도 함께 쓴다.
  */
 @Component
 public class FeedClient {
@@ -32,28 +32,31 @@ public class FeedClient {
             MatchFeedProperties.FOOTBALL_DATA, new FootballDataProvider(),
             MatchFeedProperties.PANDASCORE, new PandaScoreProvider());
 
+    private final MatchFeedProperties props;
     private final ObjectMapper json;
     private final Clock clock;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final Map<String, Integer> used = new HashMap<>();
     private LocalDate usedOn;
 
-    FeedClient(ObjectMapper json, Clock clock) {
+    FeedClient(MatchFeedProperties props, ObjectMapper json, Clock clock) {
+        this.props = props;
         this.json = json;
         this.clock = clock;
     }
 
     /** @param date null이면 시즌 전체, 있으면 그날(한국 시간) 경기 */
-    public List<FeedGame> games(LeagueFeed feed, LocalDate date) {
-        if (!feed.enabled()) throw new FeedException(feed.league() + " has no API key");
+    public List<FeedGame> games(CompetitionFeed feed, LocalDate date) {
+        String key = props.keyFor(feed.source());
+        if (key.isBlank()) throw new FeedException(feed.source() + " has no API key");
         FeedProvider provider = PROVIDERS.get(feed.source());
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
         URI base = feed.baseUrl() != null ? feed.baseUrl() : provider.defaultBaseUrl();
 
-        spend(feed, provider, today);
+        spend(feed, key, provider, today);
         JsonNode body;
         try {
-            HttpResponse<String> res = http.send(provider.request(feed, base, date, today),
+            HttpResponse<String> res = http.send(provider.request(feed, key, base, date, today),
                     HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() != 200) throw new FeedException(feed.source() + " HTTP " + res.statusCode());
             body = json.readTree(res.body());
@@ -68,30 +71,30 @@ public class FeedClient {
         return provider.parse(body);
     }
 
-    /** 오늘 이 리그의 제공처·키로 남은 요청 수 */
-    public synchronized int remaining(LeagueFeed feed) {
+    /** 오늘 이 대회의 제공처·키로 남은 요청 수 */
+    public synchronized int remaining(CompetitionFeed feed) {
         LocalDate today = clock.instant().atZone(KST).toLocalDate();
-        return limit(feed, PROVIDERS.get(feed.source()))
-                - (today.equals(usedOn) ? used.getOrDefault(budgetKey(feed), 0) : 0);
+        String budget = budgetKey(feed.source(), props.keyFor(feed.source()));
+        return limit(feed, PROVIDERS.get(feed.source())) - (today.equals(usedOn) ? used.getOrDefault(budget, 0) : 0);
     }
 
-    private synchronized void spend(LeagueFeed feed, FeedProvider provider, LocalDate today) {
+    private synchronized void spend(CompetitionFeed feed, String key, FeedProvider provider, LocalDate today) {
         if (!today.equals(usedOn)) {
             used.clear();
             usedOn = today;
         }
-        String key = budgetKey(feed);
-        int n = used.getOrDefault(key, 0);
+        String budget = budgetKey(feed.source(), key);
+        int n = used.getOrDefault(budget, 0);
         if (n >= limit(feed, provider)) throw new FeedException(feed.source() + " daily request limit reached");
-        used.put(key, n + 1);
+        used.put(budget, n + 1);
     }
 
-    private static int limit(LeagueFeed feed, FeedProvider provider) {
+    private static int limit(CompetitionFeed feed, FeedProvider provider) {
         return feed.dailyRequestLimit() != null ? feed.dailyRequestLimit() : provider.defaultDailyLimit();
     }
 
-    /** 제공처 한도는 제공처(API)와 키마다 센다 */
-    private static String budgetKey(LeagueFeed feed) {
-        return feed.source() + "\n" + feed.apiKey();
+    /** 제공처 한도는 제공처(API)와 키마다 센다. 같은 키를 쓰는 대회끼리 한도를 함께 쓴다 */
+    private static String budgetKey(String source, String key) {
+        return source + "\n" + key;
     }
 }

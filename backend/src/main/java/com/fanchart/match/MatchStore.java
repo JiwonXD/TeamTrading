@@ -1,5 +1,6 @@
 package com.fanchart.match;
 
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -20,7 +21,9 @@ import java.util.Optional;
 class MatchStore {
 
     private static final RowMapper<Match> MATCH = (rs, i) -> new Match(rs.getLong("id"),
-            League.valueOf(rs.getString("league")), rs.getString("home_team_id"), rs.getString("away_team_id"),
+            League.valueOf(rs.getString("league")), Competition.valueOf(rs.getString("competition")),
+            rs.getString("home_team_id"), rs.getString("home_name"), rs.getString("away_team_id"),
+            rs.getString("away_name"),
             rs.getTimestamp("scheduled_at").toInstant(), Match.Status.valueOf(rs.getString("status")),
             (Integer) rs.getObject("home_score", Integer.class), (Integer) rs.getObject("away_score", Integer.class),
             rs.getTimestamp("final_at") == null ? null : rs.getTimestamp("final_at").toInstant(),
@@ -33,21 +36,25 @@ class MatchStore {
         this.jdbc = jdbc;
     }
 
-    long insert(League league, String home, String away, Instant scheduledAt, String source, String sourceRef,
-                Instant now) {
+    /** home·away가 null이면 상장하지 않은 팀이고 이름(homeName, awayName)만 둔다 */
+    long insert(League league, Competition competition, String home, String homeName, String away, String awayName,
+                Instant scheduledAt, String source, String sourceRef, Instant now) {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement("""
-                    INSERT INTO matches (league, home_team_id, away_team_id, scheduled_at, status, source, source_ref,
-                                         updated_at)
-                    VALUES (?, ?, ?, ?, 'SCHEDULED', ?, ?, ?)""", new String[]{"id"});
+                    INSERT INTO matches (league, competition, home_team_id, home_name, away_team_id, away_name,
+                                         scheduled_at, status, source, source_ref, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', ?, ?, ?)""", new String[]{"id"});
             ps.setString(1, league.name());
-            ps.setString(2, home);
-            ps.setString(3, away);
-            ps.setTimestamp(4, Timestamp.from(scheduledAt));
-            ps.setString(5, source);
-            ps.setString(6, sourceRef);
-            ps.setTimestamp(7, Timestamp.from(now));
+            ps.setString(2, competition.name());
+            ps.setString(3, home);
+            ps.setString(4, home == null ? homeName : null);
+            ps.setString(5, away);
+            ps.setString(6, away == null ? awayName : null);
+            ps.setTimestamp(7, Timestamp.from(scheduledAt));
+            ps.setString(8, source);
+            ps.setString(9, sourceRef);
+            ps.setTimestamp(10, Timestamp.from(now));
             return ps;
         }, key);
         return Objects.requireNonNull(key.getKey()).longValue();
@@ -101,11 +108,14 @@ class MatchStore {
         return jdbc.query("SELECT * FROM matches ORDER BY scheduled_at DESC, id DESC LIMIT ?", MATCH, limit);
     }
 
-    /** 한 리그의 [from, to) 사이 일정. 시작 시각 순 */
+    /** 한 리그 구단이 나가는 모든 대회(정규 시즌·컵대회)의 [from, to) 사이 일정. 시작 시각 순 */
     List<Match> between(League league, Instant from, Instant to) {
         return jdbc.query("""
-                SELECT * FROM matches WHERE league = ? AND scheduled_at >= ? AND scheduled_at < ?
-                ORDER BY scheduled_at, id""", MATCH, league.name(), Timestamp.from(from), Timestamp.from(to));
+                SELECT * FROM matches WHERE scheduled_at >= ? AND scheduled_at < ?
+                AND (home_team_id IN (SELECT id FROM teams WHERE league = ?)
+                     OR away_team_id IN (SELECT id FROM teams WHERE league = ?))
+                ORDER BY scheduled_at, id""", MATCH, Timestamp.from(from), Timestamp.from(to), league.name(),
+                league.name());
     }
 
     /** 시작한 지 오래됐는데 결과가 없는 경기 */
@@ -149,17 +159,20 @@ class MatchStore {
     List<MyDividend> myDividends(String accountId, int limit) {
         return jdbc.query("""
                 SELECT * FROM (
-                    SELECT g.id AS grant_id, d.match_id, NULL AS award_id, d.team_id, d.kind, d.dps, g.amount,
-                        g.granted_at FROM point_grants g
+                    SELECT g.id AS grant_id, d.match_id, NULL AS award_id, m.competition, d.team_id, d.kind, d.dps,
+                        g.amount, g.granted_at FROM point_grants g
                     JOIN dividends d ON g.source_ref = CONCAT(d.match_id, ':', d.team_id, ':', g.account_id)
+                    JOIN matches m ON m.id = d.match_id
                     WHERE g.account_id = ? AND g.source = 'DIVIDEND'
                     UNION ALL
-                    SELECT g.id, NULL, a.id, a.team_id, a.award, a.dps, g.amount, g.granted_at FROM point_grants g
+                    SELECT g.id, NULL, a.id, a.competition, a.team_id, a.award, a.dps, g.amount, g.granted_at
+                    FROM point_grants g
                     JOIN season_awards a ON g.source_ref = CONCAT('award:', a.id, ':', g.account_id)
                     WHERE g.account_id = ? AND g.source = 'DIVIDEND'
                 ) x ORDER BY grant_id DESC LIMIT ?""",
                 (rs, i) -> new MyDividend((Long) rs.getObject("match_id", Long.class),
-                        (Long) rs.getObject("award_id", Long.class), rs.getString("team_id"), rs.getString("kind"),
+                        (Long) rs.getObject("award_id", Long.class), rs.getString("competition"),
+                        rs.getString("team_id"), rs.getString("kind"),
                         rs.getLong("amount") / rs.getLong("dps"), rs.getLong("amount"),
                         rs.getTimestamp("granted_at").toInstant()),
                 accountId, accountId, limit);

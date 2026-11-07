@@ -3,10 +3,11 @@ package com.fanchart.feed;
 import com.sun.net.httpserver.HttpServer;
 import com.fanchart.TestClock;
 import com.fanchart.feed.FeedGame.State;
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import com.fanchart.feed.MatchFeedSync.Summary;
 import com.fanchart.match.Match;
 import com.fanchart.match.MatchService;
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import com.fanchart.trading.IdempotencyConflictException;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,16 +74,17 @@ class MatchFeedSyncTest {
 
     @DynamicPropertySource
     static void feed(DynamicPropertyRegistry r) {
-        r.add("fanchart.match-feed.leagues[0].api-key", () -> "test-key");
-        r.add("fanchart.match-feed.leagues[0].source", () -> SRC);
-        r.add("fanchart.match-feed.leagues[0].league", () -> "KBO");
-        r.add("fanchart.match-feed.leagues[0].league-id", () -> "5");
-        r.add("fanchart.match-feed.leagues[0].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
-        // 키가 없는 리그는 쉰다
-        r.add("fanchart.match-feed.leagues[1].source", () -> MatchFeedProperties.FOOTBALL_DATA);
-        r.add("fanchart.match-feed.leagues[1].league", () -> "EPL");
-        r.add("fanchart.match-feed.leagues[1].league-id", () -> "PL");
-        r.add("fanchart.match-feed.leagues[1].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
+        r.add("fanchart.match-feed.keys.api-sports", () -> "test-key");
+        r.add("fanchart.match-feed.keys.football-data", () -> "");
+        r.add("fanchart.match-feed.competitions[0].source", () -> SRC);
+        r.add("fanchart.match-feed.competitions[0].competition", () -> "KBO");
+        r.add("fanchart.match-feed.competitions[0].league-id", () -> "5");
+        r.add("fanchart.match-feed.competitions[0].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
+        // 제공처 키가 없는 대회는 쉰다
+        r.add("fanchart.match-feed.competitions[1].source", () -> MatchFeedProperties.FOOTBALL_DATA);
+        r.add("fanchart.match-feed.competitions[1].competition", () -> "EPL");
+        r.add("fanchart.match-feed.competitions[1].league-id", () -> "PL");
+        r.add("fanchart.match-feed.competitions[1].base-url", () -> "http://127.0.0.1:" + SERVER.getAddress().getPort());
     }
 
     @Autowired MatchFeedSync sync;
@@ -91,7 +93,7 @@ class MatchFeedSyncTest {
     @Autowired TestClock clock;
     @Autowired MockMvc mvc;
 
-    private final LeagueFeed kbo = new LeagueFeed(League.KBO, SRC, "test-key", "5", null, null, null);
+    private final CompetitionFeed kbo = CompetitionFeed.of(Competition.KBO, SRC, "5");
 
     @BeforeEach
     void setUp() {
@@ -276,6 +278,51 @@ class MatchFeedSyncTest {
     }
 
     @Test
+    void cupsTakeGamesWithOneOfOurTeamsAndKeepTheOtherSideByName() {
+        CompetitionFeed cup = CompetitionFeed.of(Competition.KOREA_CUP, SRC, "294");
+        FeedGame ours = new FeedGame("c1", "101", "LG Twins", "999", "Somebody", KICKOFF, State.NOT_STARTED, "NS",
+                null, null);
+        FeedGame crossLeague = new FeedGame("c2", "101", "LG Twins", "201", "T1", KICKOFF, State.NOT_STARTED, "NS",
+                null, null);
+        FeedGame notOurs = new FeedGame("c3", "998", "A", "997", "B", KICKOFF, State.NOT_STARTED, "NS", null, null);
+        teams.link("t1", SRC, "201");
+
+        Summary s = sync.apply(cup, List.of(ours, crossLeague, notOurs));
+
+        assertThat(s.created()).isEqualTo(2);
+        assertThat(s.competition()).isEqualTo("KOREA_CUP");
+        // 우리 구단과 붙은 상장하지 않은 팀만 알린다(우리 구단인데 잇지 않은 것일 수 있다)
+        assertThat(s.unmappedTeams()).containsExactly("999 Somebody");
+        Match m = match("c1");
+        assertThat(m.competition()).isEqualTo(Competition.KOREA_CUP);
+        assertThat(m.homeTeamId()).isEqualTo("lg");
+        assertThat(m.awayTeamId()).isNull();
+        assertThat(m.awayName()).isEqualTo("Somebody");
+        assertThat(match("c2").awayTeamId()).isEqualTo("t1");
+        assertThat(matches.findBySource(SRC, "c3")).isEmpty();
+
+        // 결과도 리그 경기와 같은 규칙으로 받는다
+        clock.set(KICKOFF.plus(Duration.ofHours(3)));
+        sync.apply(cup, List.of(new FeedGame("c1", "101", "LG Twins", "999", "Somebody", KICKOFF, State.FINAL, "FT",
+                2, 1)));
+        assertThat(match("c1").status()).isEqualTo(Match.Status.FINAL);
+    }
+
+    @Test
+    void aTeamKeepsOneNumberPerProvider() {
+        teams.link("lg", MatchFeedProperties.FOOTBALL_DATA, "64");
+        teams.link("lg", MatchFeedProperties.FOOTBALL_DATA, "65");
+
+        assertThat(teams.teamFor(SRC, "101")).contains("lg");
+        assertThat(teams.teamFor(MatchFeedProperties.FOOTBALL_DATA, "64")).isEmpty();
+        assertThat(teams.teamFor(MatchFeedProperties.FOOTBALL_DATA, "65")).contains("lg");
+        assertThat(teams.linksOf("lg")).containsEntry(SRC, "101").containsEntry(MatchFeedProperties.FOOTBALL_DATA, "65");
+        assertThatThrownBy(() -> teams.link("kia", MatchFeedProperties.FOOTBALL_DATA, "65"))
+                .isInstanceOf(IdempotencyConflictException.class);
+        assertThat(teams.linksOf("kia")).containsOnlyKeys(SRC);
+    }
+
+    @Test
     void operatorsLinkTeamsAndSyncThroughTheAdminApi() throws Exception {
         mvc.perform(put("/api/admin/teams/doosan/feed").with(admin("ops"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"api-baseball\",\"externalId\":\"104\"}"))
@@ -294,17 +341,19 @@ class MatchFeedSyncTest {
 
         mvc.perform(get("/api/admin/match-feed").with(admin("ops")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].league").value("KBO"))
-                .andExpect(jsonPath("$[0].enabled").value(true))
-                .andExpect(jsonPath("$[1].league").value("EPL"))
+                .andExpect(jsonPath("$[0].competition").value("KBO"))
+                .andExpect(jsonPath("$[0].active").value(true))
+                .andExpect(jsonPath("$[1].competition").value("EPL"))
                 .andExpect(jsonPath("$[1].source").value("football-data"))
-                .andExpect(jsonPath("$[1].enabled").value(false));
+                .andExpect(jsonPath("$[1].active").value(false));
+        mvc.perform(get("/api/admin/teams/doosan/feed").with(admin("ops")))
+                .andExpect(jsonPath("$['api-baseball']").value("104"));
 
         // 키가 있는 KBO만 받는다
         mvc.perform(post("/api/admin/match-feed/sync").with(admin("ops")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].league").value("KBO"))
+                .andExpect(jsonPath("$[0].competition").value("KBO"))
                 .andExpect(jsonPath("$[0].error").doesNotExist());
         assertThat(REQUESTS).containsExactly("/games?league=5&season=2026&timezone=Asia/Seoul");
     }

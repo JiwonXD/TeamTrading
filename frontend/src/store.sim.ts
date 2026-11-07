@@ -340,7 +340,8 @@ export function fetchSchedule(league: League, from: Date, to: Date): Promise<Mat
   at.setHours(18, 30, 0, 0)
   if (at < from || at >= to) return Promise.resolve([])
   return Promise.resolve(TODAY_MATCHES.filter((m) => m.league === league).map((m, i) => ({
-    id: i + 1, league: LEAGUES.find((l) => l.id === m.league)!.code, homeTeamId: m.home, awayTeamId: m.away,
+    id: i + 1, league: LEAGUES.find((l) => l.id === m.league)!.code, competition: LEAGUES.find((l) => l.id === m.league)!.code,
+    homeTeamId: m.home, homeName: null, awayTeamId: m.away, awayName: null,
     scheduledAt: at.toISOString(), status: 'FINAL', homeScore: m.homeScore, awayScore: m.awayScore,
     dividendStatus: state.settled.includes(m.id) ? 'PAID' : 'NONE',
   })))

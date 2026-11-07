@@ -1,5 +1,6 @@
 package com.fanchart.match;
 
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 
 /**
@@ -26,11 +27,23 @@ public final class DividendPolicy {
         return winDps(league) / 2;
     }
 
+    /** 대회 경기 승리 배당. 구단의 소속 리그 승리 배당에 대회 배수를 곱하고 10P 단위로 반올림한다(리그 정규 시즌은 배수 1) */
+    public static long winDps(League league, Competition competition) {
+        return Math.round(winDps(league) * competition.weight() / 10) * 10;
+    }
+
+    public static long drawDps(League league, Competition competition) {
+        return winDps(league, competition) / 2;
+    }
+
     /** 대회 성적 수당의 기준 금액 W. 평균 팀의 시즌 승리 배당 총액(약 3,000P)과 같게 잡았다 */
     public static final long AWARD_BASE = 3_000;
 
-    /** 대회 성적 수당 주당 금액. 리그와 관계없이 W의 배수(우승 1.0, 준우승 0.6, 4강 0.35, 포스트시즌 0.15, 정규 시즌 1위 0.3) */
-    public static long awardDps(SeasonAward.Award award) {
-        return Math.round(AWARD_BASE * award.multiple());
+    /**
+     * 대회 성적 수당 주당 금액. W × 성적 배수(우승 1.0, 준우승 0.6, 4강 0.35, 8강 0.25, 포스트시즌·본선 진출 0.15,
+     * 정규 시즌 1위 0.3) × 대회 배수(리그 1, 컵대회는 Competition.weight)
+     */
+    public static long awardDps(SeasonAward.Award award, Competition competition) {
+        return Math.round(AWARD_BASE * award.multiple() * competition.weight());
     }
 }

@@ -6,6 +6,7 @@ import com.fanchart.engine.OrderType;
 import com.fanchart.engine.Side;
 import com.fanchart.ledger.Reconciliation;
 import com.fanchart.match.Match.DividendStatus;
+import com.fanchart.team.Competition;
 import com.fanchart.trading.TradingException;
 import com.fanchart.trading.TradingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,6 +168,66 @@ class MatchServiceTest {
         assertThatThrownBy(() -> matches.recordResult(m.id(), 1, 0)).isInstanceOf(TradingException.class);
         assertThatThrownBy(() -> matches.schedule("lg", "t1", kickoff, "test", "x")).isInstanceOf(TradingException.class);
         assertThatThrownBy(() -> matches.schedule("lg", "lg", kickoff, "test", "y")).isInstanceOf(TradingException.class);
+    }
+
+    @Test
+    void cupWinsPayOnlyListedTeamsWithTheCompetitionWeight() {
+        trading.grantShares(early, "t1", 2, 32_500);
+        // 롤드컵: T1(LCK) 대 상장하지 않은 팀. 이기면 LCK 승리 배당 160P × 1.5
+        Match win = matches.schedule(Competition.WORLDS, "t1", null, null, "Bilibili Gaming", kickoff, "test", "w-1");
+        // 상장하지 않은 팀이 이기면 받을 구단이 없다
+        Match loss = matches.schedule(Competition.WORLDS, null, "Hanwha?", "t1", null, kickoff, "test", "w-2");
+        // 리그가 다른 두 구단의 무승부: 각자 소속 리그 무승부 배당 × 대회 배수
+        Match draw = matches.schedule(Competition.KOREA_CUP, "lg", null, "t1", null, kickoff, "test", "k-1");
+        assertThat(win.competition()).isEqualTo(Competition.WORLDS);
+        assertThat(win.league()).isEqualTo(com.fanchart.team.League.LCK);
+        assertThat(win.awayTeamId()).isNull();
+        assertThat(win.awayName()).isEqualTo("Bilibili Gaming");
+        assertThat(loss.homeName()).isEqualTo("Hanwha?");
+        assertThat(draw.league()).isEqualTo(com.fanchart.team.League.KBO);
+
+        clock.set(kickoff.plus(Duration.ofHours(3)));
+        long before = points(early);
+        matches.recordResult(win.id(), 3, 1);
+        matches.recordResult(loss.id(), 3, 0);
+        matches.recordResult(draw.id(), 1, 1);
+        matches.settle(win.id());
+        matches.settle(loss.id());
+        matches.settle(draw.id());
+
+        long worldsWin = DividendPolicy.winDps(com.fanchart.team.League.LCK, Competition.WORLDS);
+        assertThat(worldsWin).isEqualTo(240);
+        assertThat(DividendPolicy.drawDps(com.fanchart.team.League.KBO, Competition.KOREA_CUP)).isEqualTo(10);
+        assertThat(DividendPolicy.drawDps(com.fanchart.team.League.LCK, Competition.KOREA_CUP)).isEqualTo(40);
+        assertThat(points(early) - before).isEqualTo(2 * worldsWin + 10 * 10 + 2 * 40);
+        assertThat(matches.dividends(loss.id())).isEmpty();
+        assertThat(matches.match(loss.id()).dividendStatus()).isEqualTo(DividendStatus.PAID);
+        assertThat(matches.dividends(draw.id())).extracting(DividendRow::teamId, DividendRow::dps)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("lg", 10L),
+                        org.assertj.core.api.Assertions.tuple("t1", 40L));
+        assertThat(reconciliation.run().balanced()).isTrue();
+        // 리그 화면 일정에는 그 리그 구단이 나가는 컵대회 경기도 나온다
+        assertThat(matches.schedule(com.fanchart.team.League.LCK, kickoff.minusSeconds(1), kickoff.plusSeconds(1)))
+                .extracting(Match::id).containsExactly(win.id(), loss.id(), draw.id());
+        assertThat(matches.schedule(com.fanchart.team.League.KBO, kickoff.minusSeconds(1), kickoff.plusSeconds(1)))
+                .extracting(Match::id).containsExactly(draw.id());
+    }
+
+    @Test
+    void unlistedOpponentsOnlyInCups() {
+        // 리그 정규 시즌, 대회를 정하지 않은 경기에는 상장하지 않은 팀이 낄 수 없다
+        assertThatThrownBy(() -> matches.schedule(Competition.KBO, "lg", null, null, "Somebody", kickoff, "test", "a"))
+                .isInstanceOf(TradingException.class);
+        assertThatThrownBy(() -> matches.schedule(null, "lg", null, null, "Somebody", kickoff, "test", "b"))
+                .isInstanceOf(TradingException.class);
+        // 이름 없는 상대, 양쪽 다 상장하지 않은 팀은 안 된다
+        assertThatThrownBy(() -> matches.schedule(Competition.UCL, "lg", null, null, " ", kickoff, "test", "c"))
+                .isInstanceOf(TradingException.class);
+        assertThatThrownBy(() -> matches.schedule(Competition.UCL, null, "A", null, "B", kickoff, "test", "d"))
+                .isInstanceOf(TradingException.class);
+        // 리그 정규 시즌에 다른 리그 구단
+        assertThatThrownBy(() -> matches.schedule(Competition.KBO, "lg", null, "t1", null, kickoff, "test", "e"))
+                .isInstanceOf(TradingException.class);
     }
 
     @Test

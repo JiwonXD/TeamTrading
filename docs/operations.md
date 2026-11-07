@@ -96,38 +96,44 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 
 ## 경기 데이터 수집
 
-리그마다 제공처와 키를 따로 둔다(ADR 0024, 0027). 키를 비운 리그만 수집하지 않고, 그 리그는 운영자가 `/api/admin/matches`로 넣는다.
+키는 제공처마다 하나이고, 같은 키로 여러 대회(리그 정규 시즌·컵대회)를 부른다(ADR 0024, 0027, 0028). 키를 비운 제공처의 대회와 설정에서 `enabled: false`로 끈 대회만 수집하지 않고, 그 대회 경기는 운영자가 `/api/admin/matches`로 넣는다.
 
-| 리그 | 제공처(source) | 키 변수 | 리그 번호 | 무료 한도 |
-| --- | --- | --- | --- | --- |
-| KBO | API-Sports API-Baseball(`api-baseball`) | `KBO_API_KEY` | 5 | 하루 100회 |
-| K리그 | API-Sports API-Football(`api-football`) | `KLEAGUE_API_KEY` | 292 | 하루 100회 |
-| LCK | PandaScore(`pandascore`) | `LCK_API_KEY` | 293 | 시간당 1,000회 |
-| 프리미어리그·라리가·세리에A·분데스리가 | football-data.org(`football-data`) | `EPL_API_KEY`, `LALIGA_API_KEY`, `SERIEA_API_KEY`, `BUNDESLIGA_API_KEY` | PL, PD, SA, BL1 | 분당 10회 |
+| 키 변수 | 제공처 | 대회(설정의 대회 번호) | 무료 한도 |
+| --- | --- | --- | --- |
+| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 유로파(3), 컨퍼런스(848), FA컵(45), EFL컵(48), 코파 델 레이(143), 코파 이탈리아(137), DFB 포칼(81), 코리아컵(294), ACL(17) | API마다 하루 100회 |
+| `FOOTBALL_DATA_KEY` | football-data.org(`football-data`) | 프리미어리그(PL), 라리가(PD), 세리에A(SA), 분데스리가(BL1), 챔피언스리그(CL) | 분당 10회 |
+| `PANDASCORE_KEY` | PandaScore(`pandascore`) | LCK(293), MSI(300), 롤드컵(297). LCK컵·EWC는 번호 확인 뒤 더한다 | 시간당 1,000회 |
 
-1. 키를 받아 `.env`에 넣고 다시 띄운다. API-Sports 키 하나로 API-Baseball과 API-Football을 둘 다 쓴다(한도는 API마다 따로). football-data 키 하나를 유럽 네 줄에 똑같이 넣어도 된다.
+1. 키를 받아 `.env`에 넣고 다시 띄운다.
    - API-Sports: https://dashboard.api-sports.io 가입 → 대시보드의 API Key
-   - PandaScore: https://app.pandascore.co 가입 → 대시보드의 access token
    - football-data.org: https://www.football-data.org/client/register 가입 → 메일로 온 API token
-2. 운영자 세션으로 리그별 수집 여부를 본다. `enabled`가 false면 그 리그 키가 비었다.
+   - PandaScore: https://app.pandascore.co 가입 → 대시보드의 access token
+2. 운영자 세션으로 대회별 수집 여부를 본다. `active`가 false면 제공처 키가 비었거나 꺼 둔 대회다.
    ```
    GET /api/admin/match-feed
    ```
-3. 리그 번호와 올해 시즌이 무료 요금제로 열리는지 확인한다. 다르면 `fanchart.match-feed.leagues`를 고친다. 막혀 있으면 API-Sports는 응답의 `errors`에, 나머지는 HTTP 403과 `message`에 이유가 온다.
+3. 대회 번호와 올해 시즌이 무료 요금제로 열리는지 확인한다. 위 표의 번호는 아직 확인하지 않은 값이다. 다르면 `fanchart.match-feed.competitions`를 고친다. 막혀 있으면 API-Sports는 응답의 `errors`에, 나머지는 HTTP 403과 `message`에 이유가 온다.
    ```
    curl -H "x-apisports-key: $KEY" "https://v1.baseball.api-sports.io/leagues?country=South-Korea"
-   curl -H "x-apisports-key: $KEY" "https://v3.football.api-sports.io/leagues?country=South-Korea"
+   curl -H "x-apisports-key: $KEY" "https://v3.football.api-sports.io/leagues?id=45&current=true"
+   curl -H "X-Auth-Token: $KEY" "https://api.football-data.org/v4/competitions/CL"
    curl -H "Authorization: Bearer $KEY" "https://api.pandascore.co/lol/leagues?search%5Bname%5D=LCK"
-   curl -H "X-Auth-Token: $KEY" "https://api.football-data.org/v4/competitions/PL"
+   curl -H "Authorization: Bearer $KEY" "https://api.pandascore.co/lol/leagues?search%5Bname%5D=MSI"
    ```
-4. 지금 바로 받아 본다. 연결하지 않은 팀은 리그별 `unmappedTeams`에 "팀 번호 이름"으로 나온다. 아직 등록하지 않은 구단(유럽 리그 등)의 경기도 여기 나오므로, 먼저 구단을 등록하고 첫 상장 공모를 연다(위 "리그 확장: 구단 등록과 첫 상장").
-   ```
-   POST /api/admin/match-feed/sync
-   ```
-5. 구단마다 제공처 팀 번호를 잇고 4를 다시 한다. 한 제공처의 한 팀 번호는 한 구단에만 이을 수 있다.
+4. 구단마다 **대회에 쓰는 제공처 번호를 모두** 잇는다. 한 구단은 제공처마다 번호 하나를 가진다(예: 리버풀은 리그·챔스용 `football-data`와 FA컵용 `api-football`). 컵대회는 잇지 않은 우리 구단을 상장하지 않은 팀으로 들이므로, 컵대회 일정을 받기 전에 먼저 잇는다. 한 제공처의 한 팀 번호는 한 구단에만 이을 수 있다.
    ```
    PUT /api/admin/teams/lg/feed
    {"source":"api-baseball","externalId":"<팀 번호>"}
+   GET /api/admin/teams/lg/feed      # 이 구단의 제공처별 번호
+   ```
+5. 지금 바로 받아 본다. 대회별 `unmappedTeams`에 잇지 않은 팀이 "팀 번호 이름"으로 나온다. 리그는 그 경기를 건너뛰었고, 컵대회는 우리 구단과 붙은 상대만 나온다(우리 구단인데 잇지 않은 것인지 본다). 아직 등록하지 않은 구단은 먼저 등록하고 첫 상장 공모를 연다(위 "리그 확장: 구단 등록과 첫 상장").
+   ```
+   POST /api/admin/match-feed/sync
+   ```
+6. 컵대회 최종 성적 수당은 대회를 정해 등록한다. 비우면 구단 소속 리그의 정규 시즌이다. 금액은 W × 성적 배수 × 대회 배수다.
+   ```
+   POST /api/admin/awards
+   {"competition":"UCL","season":"2026","teamId":"<구단>","award":"QUARTERFINAL","recordAt":"...","sourceUrl":"https://..."}
    ```
 
 그 뒤에는 6시간마다 시즌 일정을, 15분마다 끝났을 경기의 결과를 받는다. 로그에서 `match feed`로 찾는다. 확인할 것:
@@ -135,4 +141,4 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 - `conflicts`: 끝난 경기의 취소, 취소한 경기의 결과, 팀이 바뀐 경기 번호. 자동으로 바꾸지 않았으니 사실을 확인하고 운영자 API로 고친다.
 - `moved later ... keeping`: 경기 중에 시작 시각을 늦춘 변경을 받지 않았다. 실제로 늦게 시작했는지 확인한다.
 - 시작하고 48시간이 지나도 결과가 없는 경기는 더 묻지 않는다. `GET /api/matches`에서 SCHEDULED로 남은 지난 경기를 보고 결과를 넣거나 취소한다.
-- `daily request limit reached`: 그 제공처·키로 그날 요청을 다 썼다. 같은 키를 쓰는 리그끼리 함께 센다. 한국 시간 자정에 다시 센다.
+- `daily request limit reached`: 그 제공처·키로 그날 요청을 다 썼다. 같은 키를 쓰는 대회끼리 함께 센다. 한국 시간 자정에 다시 센다. API-Sports 축구는 컵대회가 많아 빠듯하므로 필요 없는 대회는 끈다.

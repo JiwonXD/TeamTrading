@@ -1,5 +1,6 @@
 package com.fanchart.match;
 
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -14,7 +15,8 @@ import java.util.Optional;
 class SeasonAwardStore {
 
     private static final RowMapper<SeasonAward> AWARD = (rs, i) -> new SeasonAward(rs.getLong("id"),
-            League.valueOf(rs.getString("league")), rs.getString("season"), rs.getString("team_id"),
+            League.valueOf(rs.getString("league")), Competition.valueOf(rs.getString("competition")),
+            rs.getString("season"), rs.getString("team_id"),
             SeasonAward.Award.valueOf(rs.getString("award")), rs.getLong("dps"),
             rs.getTimestamp("record_at").toInstant(), SeasonAward.Status.valueOf(rs.getString("status")),
             rs.getString("source_url"), rs.getString("created_by"), rs.getTimestamp("created_at").toInstant(),
@@ -32,14 +34,15 @@ class SeasonAwardStore {
         return t == null ? null : t.toInstant();
     }
 
-    long insert(League league, String season, String teamId, SeasonAward.Award award, long dps, Instant recordAt,
-                String sourceUrl, String createdBy, Instant now) {
-        String base = league.name() + ":" + season + ":";
+    /** 고유 키는 "대회:시즌:"으로 시작한다. 리그 대회 이름이 리그 이름과 같아 V18 이전의 키와도 맞는다 */
+    long insert(League league, Competition competition, String season, String teamId, SeasonAward.Award award,
+                long dps, Instant recordAt, String sourceUrl, String createdBy, Instant now) {
+        String base = competition.name() + ":" + season + ":";
         jdbc.update("""
-                INSERT INTO season_awards (league, season, team_id, award, dps, record_at, status, source_url,
-                    created_by, created_at, award_key, placement_key, title_key)
-                VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)""",
-                league.name(), season, teamId, award.name(), dps, Timestamp.from(recordAt), sourceUrl, createdBy,
+                INSERT INTO season_awards (league, competition, season, team_id, award, dps, record_at, status,
+                    source_url, created_by, created_at, award_key, placement_key, title_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)""",
+                league.name(), competition.name(), season, teamId, award.name(), dps, Timestamp.from(recordAt), sourceUrl, createdBy,
                 Timestamp.from(now), base + teamId + ":" + award.name(),
                 award.placement() ? base + teamId : null, award.title() ? base + award.name() : null);
         Long id = jdbc.queryForObject("SELECT id FROM season_awards WHERE award_key = ?", Long.class,

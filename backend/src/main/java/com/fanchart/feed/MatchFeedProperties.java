@@ -1,6 +1,6 @@
 package com.fanchart.feed;
 
-import com.fanchart.team.League;
+import com.fanchart.team.Competition;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.net.URI;
@@ -9,12 +9,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 리그마다 제공처와 키를 따로 둔다. 키가 빈 리그만 수집하지 않고, 나머지 리그는 그대로 수집한다.
+ * 키는 제공처마다 하나, 대회(리그 정규 시즌·컵대회)는 "어느 제공처의 몇 번 대회인지"만 둔다. 같은 키로 여러 대회를 각각 부른다.
+ * 키가 없는 제공처의 대회와 enabled: false인 대회만 수집하지 않고, 나머지는 그대로 수집한다.
  *
- * @param leagues 수집할 리그. 한 리그는 한 번만 둔다(두 제공처가 같은 경기를 따로 만들지 않도록)
+ * @param competitions 수집할 대회. 한 대회는 한 번만 둔다(두 제공처가 같은 경기를 따로 만들지 않도록)
  */
 @ConfigurationProperties("fanchart.match-feed")
-public record MatchFeedProperties(List<LeagueFeed> leagues) {
+public record MatchFeedProperties(Keys keys, List<CompetitionFeed> competitions) {
 
     /** API-Sports API-Baseball v1 */
     public static final String BASEBALL = "api-baseball";
@@ -27,50 +28,80 @@ public record MatchFeedProperties(List<LeagueFeed> leagues) {
     public static final Set<String> SOURCES = Set.of(BASEBALL, FOOTBALL, FOOTBALL_DATA, PANDASCORE);
 
     public MatchFeedProperties {
-        leagues = leagues == null ? List.of() : List.copyOf(leagues);
-        Set<League> seen = EnumSet.noneOf(League.class);
-        for (LeagueFeed f : leagues)
-            if (!seen.add(f.league())) throw new IllegalArgumentException("match feed league listed twice: " + f.league());
+        if (keys == null) keys = new Keys(null, null, null);
+        competitions = competitions == null ? List.of() : List.copyOf(competitions);
+        Set<Competition> seen = EnumSet.noneOf(Competition.class);
+        for (CompetitionFeed f : competitions)
+            if (!seen.add(f.competition()))
+                throw new IllegalArgumentException("match feed competition listed twice: " + f.competition());
     }
 
-    /** 키가 있어 수집하는 리그 */
-    public List<LeagueFeed> enabledLeagues() {
-        return leagues.stream().filter(LeagueFeed::enabled).toList();
+    /** 제공처의 키. API-Sports 키 하나로 야구·축구 API를 둘 다 쓴다(한도는 API마다 따로) */
+    public String keyFor(String source) {
+        return switch (source) {
+            case BASEBALL, FOOTBALL -> keys.apiSports();
+            case FOOTBALL_DATA -> keys.footballData();
+            case PANDASCORE -> keys.pandascore();
+            default -> "";
+        };
+    }
+
+    /** 켜져 있고 제공처 키가 있는 대회 */
+    public boolean active(CompetitionFeed feed) {
+        return feed.enabled() && !keyFor(feed.source()).isBlank();
+    }
+
+    public List<CompetitionFeed> activeFeeds() {
+        return competitions.stream().filter(this::active).toList();
     }
 
     public boolean enabled() {
-        return !enabledLeagues().isEmpty();
+        return !activeFeeds().isEmpty();
+    }
+
+    /** 제공처별 키. 키는 로그에 남기지 않는다 */
+    public record Keys(String apiSports, String footballData, String pandascore) {
+
+        public Keys {
+            apiSports = apiSports == null ? "" : apiSports.trim();
+            footballData = footballData == null ? "" : footballData.trim();
+            pandascore = pandascore == null ? "" : pandascore.trim();
+        }
+
+        @Override
+        public String toString() {
+            return "Keys[hidden]";
+        }
     }
 
     /**
-     * @param league            우리 리그
+     * @param competition       우리 대회
      * @param source            제공처(SOURCES). 경기의 출처(matches.source)이자 팀 연결의 출처다
-     * @param apiKey            이 리그에 쓰는 제공처 키. 비어 있으면 이 리그는 수집하지 않는다
-     * @param leagueId          제공처의 리그 번호나 코드(API-Sports 5, football-data PL, PandaScore 293)
-     * @param season            시즌. 비우면 제공처마다 정한 기본값(API-Sports는 조회하는 날의 연도, 나머지는 현재 시즌)
+     * @param leagueId          제공처의 리그·대회 번호나 코드(API-Sports 5, football-data PL, PandaScore 293)
+     * @param season            시즌. 비우면 제공처마다 정한 기본값(API-Sports는 seasonStartMonth로 계산, 나머지는 현재 시즌)
+     * @param seasonStartMonth  API-Sports 시즌 계산용. 시즌이 이 달에 시작한다(유럽 축구 7: 2026년 3월이면 2025 시즌). 기본 1(연도 = 시즌)
      * @param baseUrl           비우면 제공처 기본 주소
      * @param dailyRequestLimit 같은 제공처·같은 키로 하루(한국 시간)에 보내는 요청 상한. 비우면 제공처 기본값
+     * @param enabled           false면 키가 있어도 수집하지 않는다. 기본 true
      */
-    public record LeagueFeed(League league, String source, String apiKey, String leagueId, Integer season,
-                             URI baseUrl, Integer dailyRequestLimit) {
+    public record CompetitionFeed(Competition competition, String source, String leagueId, Integer season,
+                                  Integer seasonStartMonth, URI baseUrl, Integer dailyRequestLimit, Boolean enabled) {
 
-        public LeagueFeed {
-            if (league == null) throw new IllegalArgumentException("match feed league is required");
+        public CompetitionFeed {
+            if (competition == null) throw new IllegalArgumentException("match feed competition is required");
             if (!SOURCES.contains(source))
-                throw new IllegalArgumentException("unknown match feed source for " + league + ": " + source);
+                throw new IllegalArgumentException("unknown match feed source for " + competition + ": " + source);
             if (leagueId == null || leagueId.isBlank())
-                throw new IllegalArgumentException("match feed league-id is required for " + league);
-            apiKey = apiKey == null ? "" : apiKey.trim();
+                throw new IllegalArgumentException("match feed league-id is required for " + competition);
+            if (seasonStartMonth == null) seasonStartMonth = 1;
+            if (seasonStartMonth < 1 || seasonStartMonth > 12)
+                throw new IllegalArgumentException("season-start-month must be 1..12 for " + competition);
+            if (enabled == null) enabled = true;
         }
 
-        public boolean enabled() {
-            return !apiKey.isBlank();
-        }
-
-        /** 키는 로그에 남기지 않는다 */
-        @Override
-        public String toString() {
-            return "LeagueFeed[" + league + " " + source + " " + leagueId + (enabled() ? "" : " disabled") + "]";
+        /** 기본 시즌·주소·상한으로 켜진 대회(설정 바인딩은 생성자가 하나여야 해서 정적 메서드로 둔다) */
+        public static CompetitionFeed of(Competition competition, String source, String leagueId) {
+            return new CompetitionFeed(competition, source, leagueId, null, null, null, null, null);
         }
     }
 }
