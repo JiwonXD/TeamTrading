@@ -20,6 +20,7 @@ public final class DividendPolicy {
             case LCK -> 160;        // 정규 시즌 평균 약 18승
             case EPL, LA_LIGA, SERIE_A -> 210;  // 38경기, 평균 약 14승
             case BUNDESLIGA -> 240; // 34경기, 평균 약 12.5승
+            case NBA -> 70;         // 82경기, 평균 41승(무승부 없음)
         };
     }
 

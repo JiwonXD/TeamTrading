@@ -26,6 +26,16 @@ interface FeedProvider {
      */
     HttpRequest request(CompetitionFeed feed, String key, URI base, LocalDate date, LocalDate today);
 
+    /** 한 번 받을 때 보낼 요청들. 기간 조회가 없는 제공처는 하루씩 여러 번 묻는다. 기본은 {@link #request} 하나 */
+    default List<HttpRequest> requests(CompetitionFeed feed, String key, URI base, LocalDate date, LocalDate today) {
+        return List.of(request(feed, key, base, date, today));
+    }
+
+    /** 키가 필요한 제공처인지. 키가 없는 공개 주소면 false */
+    default boolean needsKey() {
+        return true;
+    }
+
     /** 쓸 수 없는 응답이면 FeedException */
     List<FeedGame> parse(JsonNode body);
 }

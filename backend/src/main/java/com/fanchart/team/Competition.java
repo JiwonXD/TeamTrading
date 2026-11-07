@@ -14,6 +14,7 @@ public enum Competition {
     LA_LIGA(League.LA_LIGA, 1.0),
     SERIE_A(League.SERIE_A, 1.0),
     BUNDESLIGA(League.BUNDESLIGA, 1.0),
+    NBA(League.NBA, 1.0),
 
     // 리그 오브 레전드
     LCK_CUP(null, 0.5),
