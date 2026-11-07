@@ -131,6 +131,10 @@ main.with-cta { padding-bottom: 96px; }
 .sched-team:hover, .sched-team:active { background: var(--surface-2); }
 .sched-name { font-weight: 600; font-size: 14px; color: var(--text-2); }
 .sched-team.win .sched-name { color: var(--text); font-weight: 800; }
+/* 상장하지 않은 컵대회 상대: 누를 수 없고 이름만 */
+.sched-ext { justify-content: center; min-height: 60px; }
+.sched-ext:hover, .sched-ext:active { background: none; }
+.sched-comp { align-self: flex-start; padding: 1px 6px; border-radius: 6px; background: var(--blue-bg); color: var(--blue); font-weight: 700; }
 .sched-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sched-score { text-align: center; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
 .list-card { padding-bottom: 8px; }

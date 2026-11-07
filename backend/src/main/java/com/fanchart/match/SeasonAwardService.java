@@ -3,6 +3,7 @@ package com.fanchart.match;
 import com.fanchart.match.SeasonAward.Award;
 import com.fanchart.match.SeasonAward.Status;
 import com.fanchart.points.PointIssuer;
+import com.fanchart.team.Competition;
 import com.fanchart.team.Team;
 import com.fanchart.team.TeamCatalog;
 import com.fanchart.trading.IdempotencyConflictException;
@@ -23,8 +24,9 @@ import java.util.regex.Pattern;
 /**
  * 대회 최종 성적 수당(docs/adr/0020).
  * <ul>
- * <li>운영자가 리그·시즌·구단·성적·기준 시점·근거 주소를 등록한다. 기준 시점은 지난 시각이어야 한다(결과를 알고 사는 일을 막는다).</li>
- * <li>최종 성적(우승·준우승·4강·포스트시즌)은 구단당 시즌에 하나, 우승·준우승·정규 시즌 1위는 리그 시즌에 한 구단이다. DB 고유 키로 막는다.</li>
+ * <li>운영자가 대회(리그 정규 시즌 또는 컵대회)·시즌·구단·성적·기준 시점·근거 주소를 등록한다. 기준 시점은 지난 시각이어야 한다(결과를 알고 사는 일을 막는다).</li>
+ * <li>최종 성적(우승·준우승·4강·8강·포스트시즌)은 대회마다 구단당 시즌에 하나, 우승·준우승·정규 시즌 1위는 대회 시즌에 한 구단이다.
+ *     DB 고유 키로 막는다. 금액은 성적 배수 × 대회 배수(DividendPolicy.awardDps).</li>
  * <li>경기 배당과 같은 확정 대기(기본 6시간)가 지나면 지급한다. 그 사이 운영자가 취소하거나 바로 지급할 수 있다.</li>
  * <li>지급은 기준 시점 보유를 원장에서 되짚어 계정 id 순서로 한다. 멱등키 award:id:계정이라 다시 돌려도 두 번 주지 않는다.</li>
  * </ul>
@@ -55,9 +57,15 @@ public class SeasonAwardService {
         this.clock = clock;
     }
 
-    public SeasonAward register(String adminId, String season, String teamId, Award award, Instant recordAt,
-                                String sourceUrl) {
+    /** @param competition null이면 구단 소속 리그의 정규 시즌 */
+    public SeasonAward register(String adminId, Competition competition, String season, String teamId, Award award,
+                                Instant recordAt, String sourceUrl) {
         Team team = catalog.find(teamId).orElseThrow(() -> new NotFoundException("없는 구단이에요"));
+        Competition comp = competition != null ? competition : Competition.of(team.league());
+        if (!comp.cup() && comp.league() != team.league())
+            throw new TradingException("다른 리그의 정규 시즌 성적은 등록할 수 없어요");
+        if (comp.cup() && award == Award.REGULAR_FIRST)
+            throw new TradingException("컵대회에는 정규 시즌 1위 수당이 없어요");
         if (season == null || !SEASON.matcher(season).matches()) throw new TradingException("시즌은 2026처럼 4~10자예요");
         if (sourceUrl == null || !sourceUrl.startsWith("https://") || sourceUrl.length() > 300)
             throw new TradingException("근거 주소(https://)를 남겨 주세요");
@@ -65,13 +73,13 @@ public class SeasonAwardService {
         if (recordAt == null || recordAt.isAfter(now))
             throw new TradingException("기준 시점은 이미 지난 시각이어야 해요");
         try {
-            long id = store.insert(team.league(), season, teamId, award, DividendPolicy.awardDps(award), recordAt,
-                    sourceUrl, adminId, now);
-            log.info("season award {} registered by {}: {} {} {} {}", id, adminId, team.league(), season, teamId, award);
+            long id = store.insert(team.league(), comp, season, teamId, award, DividendPolicy.awardDps(award, comp),
+                    recordAt, sourceUrl, adminId, now);
+            log.info("season award {} registered by {}: {} {} {} {}", id, adminId, comp, season, teamId, award);
             return store.find(id).orElseThrow();
         } catch (DuplicateKeyException e) {
             throw new IdempotencyConflictException(
-                    "이미 등록된 성적이에요. 최종 성적은 구단당 하나, 우승·준우승·정규 시즌 1위는 리그 시즌에 한 구단이에요");
+                    "이미 등록된 성적이에요. 최종 성적은 대회마다 구단당 하나, 우승·준우승·정규 시즌 1위는 대회 시즌에 한 구단이에요");
         }
     }
 

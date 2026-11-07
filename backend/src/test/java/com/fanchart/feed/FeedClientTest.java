@@ -2,8 +2,9 @@ package com.fanchart.feed;
 
 import com.sun.net.httpserver.HttpServer;
 import com.fanchart.TestClock;
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
-import com.fanchart.team.League;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
+import com.fanchart.feed.MatchFeedProperties.Keys;
+import com.fanchart.team.Competition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,11 +31,13 @@ class FeedClientTest {
     // 한국 시간 2026-04-01 23:00
     private final TestClock clock = new TestClock(Instant.parse("2026-04-01T14:00:00Z"));
     private FeedClient client;
-    private LeagueFeed baseball;
-    private LeagueFeed football;
-    private LeagueFeed epl;
-    private LeagueFeed laLiga;
-    private LeagueFeed lck;
+    private CompetitionFeed baseball;
+    private CompetitionFeed football;
+    private CompetitionFeed uel;
+    private CompetitionFeed epl;
+    private CompetitionFeed laLiga;
+    private CompetitionFeed lck;
+    private URI base;
 
     @BeforeEach
     void start() throws Exception {
@@ -51,13 +54,21 @@ class FeedClientTest {
             ex.close();
         });
         server.start();
-        URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
-        baseball = new LeagueFeed(League.KBO, MatchFeedProperties.BASEBALL, "test-key", "5", null, base, 2);
-        football = new LeagueFeed(League.K_LEAGUE, MatchFeedProperties.FOOTBALL, "test-key", "292", 2025, base, 2);
-        epl = new LeagueFeed(League.EPL, MatchFeedProperties.FOOTBALL_DATA, "fd-key", "PL", null, base, 2);
-        laLiga = new LeagueFeed(League.LA_LIGA, MatchFeedProperties.FOOTBALL_DATA, "fd-key", "PD", 2026, base, 2);
-        lck = new LeagueFeed(League.LCK, MatchFeedProperties.PANDASCORE, "ps-key", "293", null, base, null);
-        client = new FeedClient(JsonMapper.builder().build(), clock);
+        base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+        baseball = new CompetitionFeed(Competition.KBO, MatchFeedProperties.BASEBALL, "5", null, null, base, 2, null);
+        football = new CompetitionFeed(Competition.K_LEAGUE, MatchFeedProperties.FOOTBALL, "292", 2025, null, base, 2,
+                null);
+        uel = new CompetitionFeed(Competition.UEL, MatchFeedProperties.FOOTBALL, "3", null, 7, base, null, null);
+        epl = new CompetitionFeed(Competition.EPL, MatchFeedProperties.FOOTBALL_DATA, "PL", null, null, base, 2, null);
+        laLiga = new CompetitionFeed(Competition.LA_LIGA, MatchFeedProperties.FOOTBALL_DATA, "PD", 2026, null, base, 2,
+                null);
+        lck = new CompetitionFeed(Competition.LCK, MatchFeedProperties.PANDASCORE, "293", null, null, base, null, null);
+        client = client(new Keys("test-key", "fd-key", "ps-key"));
+    }
+
+    private FeedClient client(Keys keys) {
+        return new FeedClient(new MatchFeedProperties(keys, List.of(baseball, football, uel, epl, laLiga, lck)),
+                JsonMapper.builder().build(), clock);
     }
 
     @AfterEach
@@ -69,10 +80,15 @@ class FeedClientTest {
     void asksForTheLeagueSeasonOrOneDayInKoreanTimeWithTheKey() {
         client.games(baseball, null);
         client.games(football, LocalDate.parse("2025-11-30"));
+        // 8월에 시작하는 유럽 컵대회: 2026년 4월은 2025 시즌, 9월은 2026 시즌
+        client.games(uel, null);
+        client.games(uel, LocalDate.parse("2026-09-17"));
 
         assertThat(requests).containsExactly(
                 "test-key /games?league=5&season=2026&timezone=Asia/Seoul",
-                "test-key /fixtures?league=292&season=2025&timezone=Asia/Seoul&date=2025-11-30");
+                "test-key /fixtures?league=292&season=2025&timezone=Asia/Seoul&date=2025-11-30",
+                "test-key /fixtures?league=3&season=2025&timezone=Asia/Seoul",
+                "test-key /fixtures?league=3&season=2026&timezone=Asia/Seoul&date=2026-09-17");
     }
 
     @Test
@@ -102,15 +118,19 @@ class FeedClientTest {
     }
 
     @Test
-    void neverAsksForALeagueWithoutAKey() {
-        LeagueFeed noKey = new LeagueFeed(League.SERIE_A, MatchFeedProperties.FOOTBALL_DATA, " ", "SA", null,
-                epl.baseUrl(), null);
-
-        assertThat(noKey.enabled()).isFalse();
-        assertThat(noKey.toString()).doesNotContain("key");
-        assertThat(epl.toString()).doesNotContain("fd-key");
-        assertThatThrownBy(() -> client.games(noKey, null)).isInstanceOf(FeedException.class);
+    void neverAsksWithoutAProviderKeyAndSkipsDisabledCompetitions() {
+        FeedClient noKeys = client(new Keys(" ", null, ""));
+        assertThatThrownBy(() -> noKeys.games(epl, null)).isInstanceOf(FeedException.class);
         assertThat(requests).isEmpty();
+
+        var props = new MatchFeedProperties(new Keys("a", "", "c"), List.of(baseball, epl, lck,
+                new CompetitionFeed(Competition.MSI, MatchFeedProperties.PANDASCORE, "300", null, null, null, null,
+                        false)));
+        assertThat(props.activeFeeds()).extracting(CompetitionFeed::competition)
+                .containsExactly(Competition.KBO, Competition.LCK);
+        assertThat(props.keys().toString()).doesNotContain("a").doesNotContain("c");
+        assertThatThrownBy(() -> new MatchFeedProperties(null, List.of(epl, epl)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -138,7 +158,7 @@ class FeedClientTest {
         assertThat(client.remaining(baseball)).isZero();
         // 다른 제공처(API)는 한도가 따로다
         client.games(football, null);
-        // 같은 제공처·같은 키를 쓰는 리그끼리는 한도를 함께 쓴다
+        // 같은 제공처·같은 키를 쓰는 대회끼리는 한도를 함께 쓴다
         body = "{\"matches\": []}";
         client.games(epl, null);
         client.games(laLiga, null);

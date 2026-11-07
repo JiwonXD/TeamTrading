@@ -1,9 +1,10 @@
 package com.fanchart.feed;
 
 import com.fanchart.feed.FeedGame.State;
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import com.fanchart.match.Match;
 import com.fanchart.match.MatchService;
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import com.fanchart.team.Team;
 import com.fanchart.team.TeamCatalog;
@@ -32,7 +33,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <li>새 경기는 시작한 지 36시간이 안 된 것만 들인다. 오래된 시즌 기록으로 지난 배당을 새로 만들지 않는다.</li>
  * <li>이미 끝난(FINAL) 경기를 제공처가 취소라고 하거나, 취소한 경기에 결과가 오면 바꾸지 않고 운영자에게 남긴다.
  *     같은 FINAL의 점수 정정은 받는다(지급 전이면 대기를 다시 시작하고, 지급 뒤면 REVIEW).</li>
- * <li>모르는 상태(UNKNOWN), 연결하지 않은 팀의 경기는 아무것도 하지 않는다.</li>
+ * <li>모르는 상태(UNKNOWN)는 아무것도 하지 않는다. 리그 정규 시즌은 연결하지 않은 팀이 있는 경기를 들이지 않는다.</li>
+ * <li>컵대회는 한쪽만 우리 구단이어도 들이고, 연결하지 않은 쪽은 상장하지 않은 팀(이름만)으로 둔다.
+ *     그래서 우리 구단은 컵대회를 받기 전에 그 제공처 팀 번호를 먼저 이어야 한다. 양쪽 다 우리 구단이 아니면 건너뛴다.</li>
  * </ul>
  */
 @Service
@@ -51,10 +54,11 @@ public class MatchFeedSync {
     private static final Logger log = LoggerFactory.getLogger(MatchFeedSync.class);
 
     /**
-     * @param unmappedTeams 연결하지 않아 건너뛴 제공처 팀("번호 이름"). 운영자가 이 번호로 구단을 잇는다
+     * @param unmappedTeams 연결하지 않은 제공처 팀("번호 이름"). 리그는 그 경기를 건너뛰었고, 컵대회는 상장하지 않은 팀으로
+     *                      들였다. 우리 구단이면 운영자가 이 번호로 잇는다
      * @param error         요청이 실패했으면 그 이유
      */
-    public record Summary(String source, String league, int created, int rescheduled, int finals, int canceled,
+    public record Summary(String source, String competition, int created, int rescheduled, int finals, int canceled,
                           int ignored, int conflicts, List<String> unmappedTeams, String error) {
     }
 
@@ -80,20 +84,25 @@ public class MatchFeedSync {
         return props.enabled();
     }
 
-    /** 설정한 리그 전부(키가 없어 쉬는 리그 포함) */
-    public List<LeagueFeed> leagues() {
-        return props.leagues();
+    /** 설정한 대회 전부(키가 없거나 꺼져 쉬는 대회 포함) */
+    public List<CompetitionFeed> competitions() {
+        return props.competitions();
     }
 
-    /** 리그마다 시즌 전체 일정을 받아 맞춘다. 한 리그가 실패해도 나머지는 한다 */
+    /** 키가 있고 켜져 있어 수집하는 대회인지 */
+    public boolean active(CompetitionFeed feed) {
+        return props.active(feed);
+    }
+
+    /** 대회마다 시즌 전체 일정을 받아 맞춘다. 한 대회가 실패해도 나머지는 한다 */
     public List<Summary> syncSeason() {
         List<Summary> out = new ArrayList<>();
-        for (LeagueFeed feed : props.enabledLeagues()) {
+        for (CompetitionFeed feed : props.activeFeeds()) {
             try {
                 out.add(apply(feed, client.games(feed, null)));
             } catch (FeedException e) {
-                log.warn("match feed {} {} season sync failed: {}", feed.source(), feed.league(), e.getMessage());
-                out.add(new Summary(feed.source(), feed.league().name(), 0, 0, 0, 0, 0, 0, List.of(), e.getMessage()));
+                log.warn("match feed {} {} season sync failed: {}", feed.source(), feed.competition(), e.getMessage());
+                out.add(new Summary(feed.source(), feed.competition().name(), 0, 0, 0, 0, 0, 0, List.of(), e.getMessage()));
             }
         }
         return out;
@@ -106,11 +115,11 @@ public class MatchFeedSync {
         LocalDate today = now.atZone(FeedClient.KST).toLocalDate();
         lastPolled.keySet().removeIf(k -> LocalDate.parse(k.substring(k.lastIndexOf(':') + 1))
                 .isBefore(today.minusDays(3)));
-        for (LeagueFeed feed : props.enabledLeagues()) {
+        for (CompetitionFeed feed : props.activeFeeds()) {
             Set<LocalDate> dates = new TreeSet<>();
             for (Match m : matches.startedWithoutResult(feed.source(), now.minus(FIRST_POLL))) {
                 Duration since = Duration.between(m.scheduledAt(), now);
-                if (m.league() != feed.league() || since.compareTo(GIVE_UP) > 0) continue;
+                if (m.competition() != feed.competition() || since.compareTo(GIVE_UP) > 0) continue;
                 LocalDate date = m.scheduledAt().atZone(FeedClient.KST).toLocalDate();
                 Instant last = lastPolled.get(pollKey(feed, date));
                 Duration wait = since.compareTo(FAST_POLL_UNTIL) < 0 ? Duration.ZERO : SLOW_POLL;
@@ -121,26 +130,30 @@ public class MatchFeedSync {
                 try {
                     apply(feed, client.games(feed, date));
                 } catch (FeedException e) {
-                    log.warn("match feed {} {} {} poll failed: {}", feed.source(), feed.league(), date, e.getMessage());
+                    log.warn("match feed {} {} {} poll failed: {}", feed.source(), feed.competition(), date,
+                            e.getMessage());
                 }
             }
         }
     }
 
-    private static String pollKey(LeagueFeed feed, LocalDate date) {
-        return feed.source() + ":" + feed.league() + ":" + date;
+    private static String pollKey(CompetitionFeed feed, LocalDate date) {
+        return feed.source() + ":" + feed.competition() + ":" + date;
     }
 
     /** 받은 경기를 맞춘다. 한 경기가 실패해도 나머지는 한다 */
-    public synchronized Summary apply(LeagueFeed feed, List<FeedGame> games) {
+    public synchronized Summary apply(CompetitionFeed feed, List<FeedGame> games) {
         Counts c = new Counts();
         Set<String> unmapped = new TreeSet<>();
+        boolean cup = feed.competition().cup();
         for (FeedGame g : games) {
             String home = teams.teamFor(feed.source(), g.homeTeamId()).orElse(null);
             String away = teams.teamFor(feed.source(), g.awayTeamId()).orElse(null);
+            // 컵대회에서 양쪽 다 우리 구단이 아니면 우리 경기가 아니다(알리지도 않는다)
+            if (cup && home == null && away == null) continue;
             if (home == null) unmapped.add(g.homeTeamId() + " " + g.homeName());
             if (away == null) unmapped.add(g.awayTeamId() + " " + g.awayName());
-            if (home == null || away == null) continue;
+            if (!cup && (home == null || away == null)) continue;
             try {
                 sync(feed, g, home, away, c);
             } catch (RuntimeException e) {
@@ -148,7 +161,7 @@ public class MatchFeedSync {
                 log.warn("match feed {} game {} not applied: {}", feed.source(), g.ref(), e.getMessage());
             }
         }
-        Summary s = new Summary(feed.source(), feed.league().name(), c.created, c.rescheduled, c.finals, c.canceled,
+        Summary s = new Summary(feed.source(), feed.competition().name(), c.created, c.rescheduled, c.finals, c.canceled,
                 c.ignored, c.conflicts, List.copyOf(unmapped), null);
         if (c.created + c.rescheduled + c.finals + c.canceled + c.conflicts > 0 || !unmapped.isEmpty())
             log.info("match feed {}", s);
@@ -159,11 +172,11 @@ public class MatchFeedSync {
         int created, rescheduled, finals, canceled, ignored, conflicts;
     }
 
-    private void sync(LeagueFeed feed, FeedGame g, String home, String away, Counts c) {
-        if (league(home) != feed.league() || league(away) != feed.league()) {
+    private void sync(CompetitionFeed feed, FeedGame g, String home, String away, Counts c) {
+        Competition comp = feed.competition();
+        if (!comp.cup() && (league(home) != comp.league() || league(away) != comp.league())) {
             c.conflicts++;
-            log.warn("match feed {} game {}: {} vs {} is not a {} match", feed.source(), g.ref(), home, away,
-                    feed.league());
+            log.warn("match feed {} game {}: {} vs {} is not a {} match", feed.source(), g.ref(), home, away, comp);
             return;
         }
         Instant now = clock.instant();
@@ -174,9 +187,9 @@ public class MatchFeedSync {
                 c.ignored++;
                 return;
             }
-            m = matches.schedule(home, away, g.scheduledAt(), feed.source(), g.ref());
+            m = schedule(comp, g, home, away, feed.source());
             c.created++;
-        } else if (!m.homeTeamId().equals(home) || !m.awayTeamId().equals(away)) {
+        } else if (!Objects.equals(m.homeTeamId(), home) || !Objects.equals(m.awayTeamId(), away)) {
             c.conflicts++;
             log.warn("match feed {} game {} changed teams: ours {} vs {}, feed {} vs {}", feed.source(), g.ref(),
                     m.homeTeamId(), m.awayTeamId(), home, away);
@@ -185,7 +198,7 @@ public class MatchFeedSync {
             boolean earlier = g.scheduledAt().isBefore(m.scheduledAt());
             boolean notStarted = g.state() == State.NOT_STARTED || g.state() == State.POSTPONED;
             if (earlier || notStarted) {
-                m = matches.schedule(home, away, g.scheduledAt(), feed.source(), g.ref());
+                m = schedule(comp, g, home, away, feed.source());
                 c.rescheduled++;
             } else {
                 log.warn("match feed {} game {} moved later to {} while {}; keeping {}", feed.source(), g.ref(),
@@ -222,6 +235,10 @@ public class MatchFeedSync {
             default -> {
             }
         }
+    }
+
+    private Match schedule(Competition comp, FeedGame g, String home, String away, String source) {
+        return matches.schedule(comp, home, g.homeName(), away, g.awayName(), g.scheduledAt(), source, g.ref());
     }
 
     private League league(String teamId) {

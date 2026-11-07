@@ -5,7 +5,9 @@ import com.fanchart.account.AccountStore;
 import com.fanchart.ledger.Reconciliation;
 import com.fanchart.match.SeasonAward.Award;
 import com.fanchart.match.SeasonAward.Status;
+import com.fanchart.team.Competition;
 import com.fanchart.trading.IdempotencyConflictException;
+import com.fanchart.trading.TradingException;
 import com.fanchart.trading.TradingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,10 +72,32 @@ class SeasonAwardTest {
     }
 
     @Test
+    void cupAwardsAreSeparateFromTheLeagueAndWeightedByTheCompetition() {
+        SeasonAward league = awards.register("admin", null, "2026", "lg", Award.CHAMPION, recordAt, URL);
+        // 같은 구단이 같은 시즌 컵대회에서 또 성적을 낼 수 있다. 금액은 W × 성적 배수 × 대회 배수
+        SeasonAward cup = awards.register("admin", Competition.UCL, "2026", "lg", Award.QUARTERFINAL, recordAt, URL);
+        SeasonAward other = awards.register("admin", Competition.KOREA_CUP, "2026", "lg", Award.CHAMPION, recordAt, URL);
+
+        assertThat(league.competition()).isEqualTo(Competition.KBO);
+        assertThat(cup.dps()).isEqualTo(Math.round(3_000 * 0.25 * 1.5));
+        assertThat(other.dps()).isEqualTo(1_500);
+        // 대회마다 최종 성적은 하나, 우승은 한 구단
+        assertThatThrownBy(() -> awards.register("admin", Competition.UCL, "2026", "lg", Award.SEMIFINAL, recordAt, URL))
+                .isInstanceOf(IdempotencyConflictException.class);
+        assertThatThrownBy(() -> awards.register("admin", Competition.KOREA_CUP, "2026", "kia", Award.CHAMPION,
+                recordAt, URL)).isInstanceOf(IdempotencyConflictException.class);
+        // 컵대회에 정규 시즌 1위는 없고, 다른 리그 정규 시즌 성적은 등록할 수 없다
+        assertThatThrownBy(() -> awards.register("admin", Competition.UCL, "2026", "kia", Award.REGULAR_FIRST,
+                recordAt, URL)).isInstanceOf(TradingException.class);
+        assertThatThrownBy(() -> awards.register("admin", Competition.LCK, "2026", "lg", Award.CHAMPION, recordAt, URL))
+                .isInstanceOf(TradingException.class);
+    }
+
+    @Test
     void holdersAtTheRecordTimeArePaidOnceAfterTheConfirmationDelay() throws Exception {
         long before = points(holder);
         long lateBefore = points(lateBuyer);
-        SeasonAward a = awards.register("admin", "2026", "lg", Award.CHAMPION, recordAt, URL);
+        SeasonAward a = awards.register("admin", null, "2026", "lg", Award.CHAMPION, recordAt, URL);
         assertThat(a.dps()).isEqualTo(3_000);
 
         assertThat(awards.payDue()).isZero();
@@ -100,32 +124,32 @@ class SeasonAwardTest {
 
     @Test
     void eachTeamHasOneFinalPlacementAndEachTitleOneTeam() {
-        awards.register("admin", "2026", "lg", Award.CHAMPION, recordAt, URL);
-        assertThatThrownBy(() -> awards.register("admin", "2026", "kia", Award.CHAMPION, recordAt, URL))
+        awards.register("admin", null, "2026", "lg", Award.CHAMPION, recordAt, URL);
+        assertThatThrownBy(() -> awards.register("admin", null, "2026", "kia", Award.CHAMPION, recordAt, URL))
                 .isInstanceOf(IdempotencyConflictException.class);
-        assertThatThrownBy(() -> awards.register("admin", "2026", "lg", Award.SEMIFINAL, recordAt, URL))
+        assertThatThrownBy(() -> awards.register("admin", null, "2026", "lg", Award.SEMIFINAL, recordAt, URL))
                 .isInstanceOf(IdempotencyConflictException.class);
         // 정규 시즌 1위는 최종 성적과 따로 받고, 다른 리그·시즌은 따로 센다
-        awards.register("admin", "2026", "lg", Award.REGULAR_FIRST, recordAt, URL);
-        awards.register("admin", "2026", "t1", Award.CHAMPION, recordAt, URL);
-        awards.register("admin", "2027", "kia", Award.CHAMPION, recordAt, URL);
-        awards.register("admin", "2026", "kia", Award.SEMIFINAL, recordAt, URL);
-        awards.register("admin", "2026", "samsung", Award.SEMIFINAL, recordAt, URL);
+        awards.register("admin", null, "2026", "lg", Award.REGULAR_FIRST, recordAt, URL);
+        awards.register("admin", null, "2026", "t1", Award.CHAMPION, recordAt, URL);
+        awards.register("admin", null, "2027", "kia", Award.CHAMPION, recordAt, URL);
+        awards.register("admin", null, "2026", "kia", Award.SEMIFINAL, recordAt, URL);
+        awards.register("admin", null, "2026", "samsung", Award.SEMIFINAL, recordAt, URL);
 
-        assertThatThrownBy(() -> awards.register("admin", "2026", "doosan", Award.POSTSEASON,
+        assertThatThrownBy(() -> awards.register("admin", null, "2026", "doosan", Award.POSTSEASON,
                 clock.instant().plusSeconds(1), URL)).hasMessageContaining("지난 시각");
-        assertThatThrownBy(() -> awards.register("admin", "2026", "doosan", Award.POSTSEASON, recordAt,
+        assertThatThrownBy(() -> awards.register("admin", null, "2026", "doosan", Award.POSTSEASON, recordAt,
                 "http://x")).hasMessageContaining("근거");
     }
 
     @Test
     void aCanceledAwardFreesItsSlotAndAPaidAwardCannotBeCanceled() {
-        SeasonAward wrong = awards.register("admin", "2026", "lg", Award.CHAMPION, recordAt, URL);
+        SeasonAward wrong = awards.register("admin", null, "2026", "lg", Award.CHAMPION, recordAt, URL);
         assertThat(awards.cancel(wrong.id(), "admin2").status()).isEqualTo(Status.VOID);
         clock.advance(Duration.ofHours(7));
         assertThat(awards.payDue()).isZero();
 
-        SeasonAward right = awards.register("admin", "2026", "kia", Award.CHAMPION, recordAt, URL);
+        SeasonAward right = awards.register("admin", null, "2026", "kia", Award.CHAMPION, recordAt, URL);
         assertThat(awards.pay(right.id(), "admin2").status()).isEqualTo(Status.PAID);
         assertThat(awards.pay(right.id(), "admin2")).isNull();
         assertThatThrownBy(() -> awards.cancel(right.id(), "admin2")).hasMessageContaining("이미 지급");
@@ -134,7 +158,7 @@ class SeasonAwardTest {
     @Test
     void concurrentPaymentsPayOnce() throws Exception {
         long before = points(holder);
-        SeasonAward a = awards.register("admin", "2026", "lg", Award.RUNNER_UP, recordAt, URL);
+        SeasonAward a = awards.register("admin", null, "2026", "lg", Award.RUNNER_UP, recordAt, URL);
         List<Future<SeasonAward>> done = new ArrayList<>();
         try (ExecutorService pool = Executors.newFixedThreadPool(6)) {
             for (int i = 0; i < 6; i++) done.add(pool.submit(() -> awards.pay(a.id(), "admin")));

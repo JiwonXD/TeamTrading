@@ -1,7 +1,7 @@
 package com.fanchart.feed;
 
 import com.fanchart.feed.FeedGame.State;
-import com.fanchart.feed.MatchFeedProperties.LeagueFeed;
+import com.fanchart.feed.MatchFeedProperties.CompetitionFeed;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * football-data.org v4 competitions/{코드}/matches. 무료 요금제로 프리미어리그(PL)·라리가(PD)·세리에A(SA)·
- * 분데스리가(BL1)를 받는다(분당 10회, 하루 상한 없음).
+ * 분데스리가(BL1)·챔피언스리그(CL)를 받는다(분당 10회, 하루 상한 없음).
  * <ul>
  * <li>시즌을 비우면 현재 시즌을 준다. 시즌은 시작 연도다(2026 = 2026/27).</li>
  * <li>날짜 조건(dateFrom, dateTo)은 UTC 날짜라서, 한국 시간 하루를 덮도록 전날부터 묻는다. 더 받은 경기는 동기화에 해가 없다.</li>
@@ -36,7 +36,8 @@ final class FootballDataProvider implements FeedProvider {
     }
 
     @Override
-    public HttpRequest request(LeagueFeed feed, URI base, LocalDate date, LocalDate today) {
+    public HttpRequest request(CompetitionFeed feed, String key, URI base, LocalDate date,
+                               LocalDate today) {
         List<String> query = new ArrayList<>();
         if (feed.season() != null) query.add("season=" + feed.season());
         if (date != null) {
@@ -46,7 +47,7 @@ final class FootballDataProvider implements FeedProvider {
         String uri = base + "/v4/competitions/" + feed.leagueId() + "/matches"
                 + (query.isEmpty() ? "" : "?" + String.join("&", query));
         return HttpRequest.newBuilder(URI.create(uri)).timeout(Duration.ofSeconds(10))
-                .header("X-Auth-Token", feed.apiKey()).GET().build();
+                .header("X-Auth-Token", key).GET().build();
     }
 
     @Override

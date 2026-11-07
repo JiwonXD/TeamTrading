@@ -3,6 +3,7 @@ package com.fanchart.match;
 import com.fanchart.match.Match.DividendStatus;
 import com.fanchart.match.Match.Status;
 import com.fanchart.points.PointIssuer;
+import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import com.fanchart.team.Team;
 import com.fanchart.team.TeamCatalog;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * 경기 일정·결과와 배당 지급.
@@ -58,19 +60,50 @@ public class MatchService {
         this.clock = clock;
     }
 
-    /** 일정 등록. 같은 출처의 같은 경기면 새로 만들지 않고, 아직 시작 전이면 시각만 고친다(연기) */
+    /** 같은 리그 두 구단의 정규 시즌 경기 */
     public Match schedule(String homeTeamId, String awayTeamId, Instant scheduledAt, String source, String sourceRef) {
-        League league = league(homeTeamId, awayTeamId);
+        return schedule(null, homeTeamId, null, awayTeamId, null, scheduledAt, source, sourceRef);
+    }
+
+    /**
+     * 일정 등록. 같은 출처의 같은 경기면 새로 만들지 않고, 아직 시작 전이면 시각만 고친다(연기).
+     * <ul>
+     * <li>리그 정규 시즌은 두 팀 모두 그 리그 구단이어야 한다.</li>
+     * <li>컵대회는 리그가 달라도 되고, 한쪽은 상장하지 않은 팀(구단 id null, 이름만)이어도 된다. 그 팀에는 배당이 없다.</li>
+     * </ul>
+     *
+     * @param competition null이면 두 구단 소속 리그의 정규 시즌
+     */
+    public Match schedule(Competition competition, String homeTeamId, String homeName, String awayTeamId,
+                          String awayName, Instant scheduledAt, String source, String sourceRef) {
+        Team home = team(homeTeamId);
+        Team away = team(awayTeamId);
+        if (home == null && away == null) throw new TradingException("한쪽은 상장한 구단이어야 해요");
+        if (home != null && home.equals(away)) throw new TradingException("같은 구단끼리는 경기할 수 없어요");
+        Competition comp = competition;
+        if (comp == null) {
+            if (home == null || away == null) throw new TradingException("상장하지 않은 팀과의 경기는 컵대회를 정해 주세요");
+            comp = Competition.of(home.league());
+        }
+        if (!comp.cup() && (home == null || away == null || home.league() != comp.league()
+                || away.league() != comp.league()))
+            throw new TradingException("다른 리그 구단끼리는 경기할 수 없어요");
+        String hName = home == null ? externalName(homeName) : null;
+        String aName = away == null ? externalName(awayName) : null;
+        League league = (home != null ? home : away).league();
+        Competition c = comp;
         return tx.execute(s -> {
             var existing = store.findBySource(source, sourceRef);
             if (existing.isPresent()) {
                 Match m = existing.get();
-                if (!m.homeTeamId().equals(homeTeamId) || !m.awayTeamId().equals(awayTeamId))
-                    throw new TradingException("같은 경기 번호에 다른 구단이 들어왔어요");
+                if (!Objects.equals(m.homeTeamId(), homeTeamId) || !Objects.equals(m.awayTeamId(), awayTeamId)
+                        || m.competition() != c)
+                    throw new TradingException("같은 경기 번호에 다른 구단이나 대회가 들어왔어요");
                 if (!m.scheduledAt().equals(scheduledAt)) store.reschedule(m.id(), scheduledAt, clock.instant());
                 return store.find(m.id()).orElseThrow();
             }
-            long id = store.insert(league, homeTeamId, awayTeamId, scheduledAt, source, sourceRef, clock.instant());
+            long id = store.insert(league, c, homeTeamId, hName, awayTeamId, aName, scheduledAt, source, sourceRef,
+                    clock.instant());
             return store.find(id).orElseThrow();
         });
     }
@@ -139,13 +172,18 @@ public class MatchService {
     private void pay(Match m, Instant now) {
         record Payee(String accountId, String teamId, long shares, long amount) {
         }
-        String winner = m.winner();
-        List<String> teams = winner != null ? List.of(winner) : List.of(m.homeTeamId(), m.awayTeamId());
-        long dps = winner != null ? DividendPolicy.winDps(m.league()) : DividendPolicy.drawDps(m.league());
-        String kind = winner != null ? "WIN" : "DRAW";
+        // 상장하지 않은 팀이 이기면 받을 구단이 없다. 무승부면 상장한 쪽만 받는다
+        boolean draw = m.draw();
+        List<String> teams = draw ? Stream.of(m.homeTeamId(), m.awayTeamId()).filter(Objects::nonNull).toList()
+                : Stream.ofNullable(m.winner()).toList();
+        String kind = draw ? "DRAW" : "WIN";
 
         List<Payee> payees = new ArrayList<>();
         for (String team : teams) {
+            // 대회 배당은 구단의 소속 리그 승리 배당 × 대회 배수라 리그가 다른 두 구단의 무승부는 금액이 다를 수 있다
+            League league = catalog.find(team).map(Team::league).orElse(m.league());
+            long dps = draw ? DividendPolicy.drawDps(league, m.competition())
+                    : DividendPolicy.winDps(league, m.competition());
             Map<String, Long> holders = store.holdersAt(team, m.scheduledAt());
             long shares = 0;
             for (var h : holders.entrySet()) {
@@ -158,7 +196,7 @@ public class MatchService {
         payees.sort(Comparator.comparing(Payee::accountId).thenComparing(Payee::teamId));
         for (Payee p : payees)
             points.grantDividend(p.accountId(), m.id() + ":" + p.teamId() + ":" + p.accountId(), p.amount());
-        log.info("match {} dividend paid: {} {} DPS {} to {} holdings", m.id(), kind, teams, dps, payees.size());
+        log.info("match {} {} dividend paid: {} {} to {} holdings", m.id(), m.competition(), kind, teams, payees.size());
     }
 
     /** 출처의 경기 번호로 찾는다 */
@@ -194,11 +232,13 @@ public class MatchService {
         return store.myDividends(accountId, limit);
     }
 
-    private League league(String home, String away) {
-        Team h = catalog.find(home).orElseThrow(() -> new NotFoundException("없는 구단이에요: " + home));
-        Team a = catalog.find(away).orElseThrow(() -> new NotFoundException("없는 구단이에요: " + away));
-        if (h.equals(a)) throw new TradingException("같은 구단끼리는 경기할 수 없어요");
-        if (h.league() != a.league()) throw new TradingException("다른 리그 구단끼리는 경기할 수 없어요");
-        return h.league();
+    private Team team(String id) {
+        return id == null ? null : catalog.find(id).orElseThrow(() -> new NotFoundException("없는 구단이에요: " + id));
+    }
+
+    private static String externalName(String name) {
+        String n = name == null ? "" : name.strip();
+        if (n.isEmpty() || n.length() > 60) throw new TradingException("상장하지 않은 상대 팀 이름(60자 이내)이 필요해요");
+        return n;
     }
 }

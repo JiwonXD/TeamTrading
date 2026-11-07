@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { type League, TEAMS } from '../data/teams'
+import { COMPETITION_LABEL, type League, TEAMS, isCup } from '../data/teams'
 import { type MatchDto, fetchSchedule, useStore } from '../store'
 import { Logo, fmt, pct, tone } from './ui'
 
@@ -102,20 +102,24 @@ function ScheduleMatch({ match: m }: { match: MatchDto }) {
   const time = new Date(m.scheduledAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
   return (
     <li className="sched-match">
-      <span className="sched-time"><b>{time}</b><span className="xs muted">{statusLabel(m)}</span></span>
-      <MatchTeam id={m.homeTeamId} win={done && m.homeScore! > m.awayScore!} />
+      <span className="sched-time">
+        <b>{time}</b>
+        <span className="xs muted">{statusLabel(m)}</span>
+        {isCup(m.competition) && <span className="xs sched-comp">{COMPETITION_LABEL[m.competition] ?? m.competition}</span>}
+      </span>
+      <MatchTeam id={m.homeTeamId} name={m.homeName} win={done && m.homeScore! > m.awayScore!} />
       <span className="sched-score">{done ? `${m.homeScore} : ${m.awayScore}` : 'vs'}</span>
-      <MatchTeam id={m.awayTeamId} win={done && m.awayScore! > m.homeScore!} />
+      <MatchTeam id={m.awayTeamId} name={m.awayName} win={done && m.awayScore! > m.homeScore!} />
     </li>
   )
 }
 
-/** 경기 속 구단: 로고·이름·지금 주가. 누르면 구단 주문 화면 */
-function MatchTeam({ id, win }: { id: string; win: boolean }) {
+/** 경기 속 구단: 로고·이름·지금 주가. 누르면 구단 주문 화면. 상장하지 않은 상대(컵대회)는 이름만 */
+function MatchTeam({ id, name, win }: { id: string | null; name: string | null; win: boolean }) {
   const s = useStore()
-  const team = TEAMS.find((t) => t.id === id)
-  const m = s.markets[id]
-  if (!team || !m) return <span className="sched-team muted">{id}</span>
+  const team = id ? TEAMS.find((t) => t.id === id) : undefined
+  const m = id ? s.markets[id] : undefined
+  if (!id || !team || !m) return <span className={`sched-team sched-ext ${win ? 'win' : ''}`}><span className="sched-name">{name ?? id}</span></span>
   const chg = m.last / m.base - 1
   return (
     <a href={`#team-${id}`} className={`sched-team ${win ? 'win' : ''}`}>
