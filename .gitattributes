@@ -1,5 +1,3 @@
 # 컨테이너 안에서 실행하는 스크립트는 Windows에서 받아도 줄 끝을 LF로 둔다
 *.sh text eol=lf
 gradlew text eol=lf
-# Windows에서 더블클릭으로 실행하는 배치 파일은 CRLF로 둔다
-*.cmd text eol=crlf
