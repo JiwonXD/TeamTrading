@@ -58,7 +58,8 @@ public class FeedClient {
         try {
             HttpResponse<String> res = http.send(provider.request(feed, key, base, date, today),
                     HttpResponse.BodyHandlers.ofString());
-            if (res.statusCode() != 200) throw new FeedException(feed.source() + " HTTP " + res.statusCode());
+            if (res.statusCode() != 200)
+                throw new FeedException(feed.source() + " HTTP " + res.statusCode() + reason(res.body()));
             body = json.readTree(res.body());
         } catch (IOException e) {
             throw new FeedException(feed.source() + " request failed: " + e);
@@ -69,6 +70,24 @@ public class FeedClient {
             throw new FeedException(feed.source() + " sent invalid JSON");
         }
         return provider.parse(body);
+    }
+
+    /**
+     * 실패 응답에서 제공처가 밝힌 이유(예: 토큰이 틀림). football-data는 message, PandaScore는 error에 담는다.
+     * 운영자 화면과 로그에 나가므로 짧게 자른다. 제공처는 응답에 키를 되돌려주지 않는다.
+     */
+    private String reason(String body) {
+        String text;
+        try {
+            JsonNode n = json.readTree(body == null ? "" : body);
+            text = n.path("message").isString() ? n.path("message").asString()
+                    : n.path("error").isString() ? n.path("error").asString() : "";
+        } catch (tools.jackson.core.JacksonException e) {
+            text = "";
+        }
+        text = text.strip();
+        if (text.isEmpty()) return "";
+        return ": " + (text.length() > 200 ? text.substring(0, 200) + "…" : text);
     }
 
     /** 오늘 이 대회의 제공처·키로 남은 요청 수 */
