@@ -37,9 +37,14 @@ docker compose ps         # backend가 healthy가 되면 web이 뜬다
 
 ```bash
 cd deploy
+cp .env.example .env
+sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=$(openssl rand -hex 16)/; s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 16)/; s/^SPRING_PROFILES_ACTIVE=.*/SPRING_PROFILES_ACTIVE=demo/" .env
 docker compose --profile quick-tunnel up -d --build
-docker compose logs quick-tunnel     # https://xxx.trycloudflare.com 주소가 나온다
+docker compose logs quick-tunnel | grep trycloudflare   # https://xxx.trycloudflare.com 주소가 나온다
 ```
+
+- Windows에서는 Git Bash에서 그대로 실행한다. DB 비밀번호는 MySQL이 처음 뜰 때 볼륨에 들어가므로 그 뒤에는 바꾸지 않는다.
+- `ports are not available ... 0.0.0.0:80 ... forbidden by its access permissions`가 나면 Windows가 80번을 다른 프로그램에 주었거나 예약해 둔 것이다. `.env`의 `HTTP_PORT`를 `8088`처럼 다른 번호로 바꾼다. 터널은 컨테이너 네트워크 안에서 `web:80`으로 가므로 PC 쪽 포트 번호와 상관없다. PC에서는 `http://localhost:8088`로 연다.
 
 ### 도메인으로 열기
 
