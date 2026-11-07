@@ -61,8 +61,11 @@ test('stars in the market table fill the 관심 tab of the side list in the orde
   await side.getByRole('tab', { name: '관심' }).click()
   await expect(side.locator('.side-name')).toHaveText(['T1', '젠지'])
 
-  // 사이드바의 별로 바로 뺀다
+  // 사이드바의 별로 바로 뺀다. 화면은 먼저 바뀌고 요청은 앞선 담기 요청 뒤에 차례로 나가므로,
+  // 새로고침 전에 빼기 응답까지 기다린다(기다리지 않으면 아직 안 보낸 요청이 새로고침에 사라진다)
+  const removed = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().endsWith('/api/accounts/me/watchlist/t1'))
   await side.getByRole('button', { name: 'T1 관심 구단' }).click()
+  expect((await removed).ok()).toBe(true)
   await expect(side.locator('.side-name')).toHaveText(['젠지'])
   await expect(table.getByRole('button', { name: 'T1 관심 구단' })).toHaveAttribute('aria-pressed', 'false')
 
