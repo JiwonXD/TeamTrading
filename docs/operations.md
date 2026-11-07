@@ -100,7 +100,7 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
 
 | 키 변수 | 제공처 | 대회(설정의 대회 번호) | 무료 한도 |
 | --- | --- | --- | --- |
-| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 유로파(3), 컨퍼런스(848), FA컵(45), EFL컵(48), 코파 델 레이(143), 코파 이탈리아(137), DFB 포칼(81), 코리아컵(294), ACL(17) | API마다 하루 100회 |
+| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 유로파(3), 컨퍼런스(848), FA컵(45), EFL컵(48), 코파 델 레이(143), 코파 이탈리아(137), DFB 포칼(81), 코리아컵(294), ACL(17) | API마다 하루 100회. 무료는 2022~2024 시즌만 열려 올해 일정은 유료(Pro, API마다 월 19달러)가 필요하다 |
 | `FOOTBALL_DATA_KEY` | football-data.org(`football-data`) | 프리미어리그(PL), 라리가(PD), 세리에A(SA), 분데스리가(BL1), 챔피언스리그(CL) | 분당 10회 |
 | `PANDASCORE_KEY` | PandaScore(`pandascore`) | LCK(293), MSI(300), 롤드컵(297). LCK컵·EWC는 번호 확인 뒤 더한다 | 시간당 1,000회 |
 
@@ -112,7 +112,7 @@ ROUNDS=3 USERS=20 tools/chaos/run.sh
    ```
    GET /api/admin/match-feed
    ```
-3. 대회 번호와 올해 시즌이 무료 요금제로 열리는지 확인한다. 위 표의 번호는 아직 확인하지 않은 값이다. 다르면 `fanchart.match-feed.competitions`를 고친다. 막혀 있으면 API-Sports는 응답의 `errors`에, 나머지는 HTTP 403과 `message`에 이유가 온다.
+3. 대회 번호와 올해 시즌이 무료 요금제로 열리는지 확인한다. 위 표의 번호는 아직 확인하지 않은 값이다. 다르면 `fanchart.match-feed.competitions`를 고친다. 막혀 있으면 API-Sports는 응답의 `errors`에, football-data는 HTTP 400·403과 `message`에, PandaScore는 HTTP 401·403과 `error`에 이유가 온다. 수집 결과의 `error`에도 그 이유가 같이 실린다.
    ```
    curl -H "x-apisports-key: $KEY" "https://v1.baseball.api-sports.io/leagues?country=South-Korea"
    curl -H "x-apisports-key: $KEY" "https://v3.football.api-sports.io/leagues?id=45&current=true"

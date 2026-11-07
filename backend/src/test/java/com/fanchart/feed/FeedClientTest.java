@@ -138,6 +138,13 @@ class FeedClientTest {
         status = 500;
         assertThatThrownBy(() -> client.games(baseball, null)).isInstanceOf(FeedException.class)
                 .hasMessageContaining("HTTP 500");
+        // 제공처가 밝힌 이유를 같이 남긴다(football-data는 message, PandaScore는 error)
+        status = 400;
+        body = "{\"message\": \"Your API token is invalid.\", \"errorCode\": 400}";
+        assertThatThrownBy(() -> client.games(epl, null)).hasMessage("football-data HTTP 400: Your API token is invalid.");
+        status = 401;
+        body = "{\"error\": \"Token is invalid\"}";
+        assertThatThrownBy(() -> client.games(lck, null)).hasMessage("pandascore HTTP 401: Token is invalid");
         status = 200;
         body = "{\"errors\": {\"requests\": \"You have reached the request limit for the day\"}, \"response\": []}";
         assertThatThrownBy(() -> client.games(baseball, null)).isInstanceOf(FeedException.class)
