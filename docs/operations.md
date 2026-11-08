@@ -149,3 +149,18 @@ ESPN 팀 번호는 종목마다 따로 매겨 겹칠 수 있어, 축구가 아�
 - `moved later ... keeping`: 경기 중에 시작 시각을 늦춘 변경을 받지 않았다. 실제로 늦게 시작했는지 확인한다.
 - 시작하고 48시간이 지나도 결과가 없는 경기는 더 묻지 않는다. `GET /api/matches`에서 SCHEDULED로 남은 지난 경기를 보고 결과를 넣거나 취소한다.
 - `daily request limit reached`: 그 제공처·키로 그날 요청을 다 썼다. 같은 키를 쓰는 대회끼리 함께 센다. 한국 시간 자정에 다시 센다. API-Sports 축구는 컵대회가 많아 빠듯하므로 필요 없는 대회는 끈다.
+
+## 구단 뉴스
+
+구단 화면의 뉴스는 네이버 검색 API(뉴스)로 받는다(ADR 0035). 키가 없으면 뉴스 탭이 "준비 중"으로 보이고 나머지는 그대로 돈다.
+
+1. https://developers.naver.com 에 네이버 아이디로 로그인 → Application → 애플리케이션 등록.
+2. 애플리케이션 이름(예: 팬차트), 사용 API는 **검색**, 비로그인 오픈 API 서비스 환경은 **WEB 설정**에 `https://fanchart.kr`을 넣고 등록한다. 검수 없이 바로 쓸 수 있다.
+3. 내 애플리케이션 화면의 Client ID와 Client Secret을 `deploy/.env`에 넣고 다시 띄운다.
+   ```
+   NAVER_CLIENT_ID=...
+   NAVER_CLIENT_SECRET=...
+   ```
+4. `GET /api/teams/t1/news`가 `"available":true`와 기사를 주면 된다.
+
+하루 25,000회까지 무료다. 서버는 구단마다 15분 동안 결과를 모아 두고 같이 쓰므로 140개 구단을 계속 봐도 하루 13,440회를 넘지 않는다. 받다가 실패하면 로그에 `news for ... failed`가 남고, 앞서 받아 둔 기사가 있으면 그것을 보여준다.

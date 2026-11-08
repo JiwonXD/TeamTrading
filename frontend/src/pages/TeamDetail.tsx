@@ -3,11 +3,12 @@ import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
 import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
+import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 type Period = '1d' | '1w' | '1m' | '3m'
-type Tab = 'book' | 'trades' | 'orders' | 'talk'
+type Tab = 'book' | 'trades' | 'orders' | 'info' | 'notice' | 'talk'
 
 export default function TeamDetail({ teamId }: { teamId: string }) {
   const s = useStore()
@@ -104,6 +105,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
           ['book', '호가'],
           ['trades', '체결'],
           ['orders', `내 주문${myOrders.length ? ` ${myOrders.length}` : ''}`],
+          ['info', '정보'],
+          ['notice', '뉴스·공시'],
           ['talk', '토론'],
         ] as [Tab, string][]).map(([v, l]) => (
           <button key={v} className={tab === v ? 'on' : ''} onClick={() => setTab(v)}>{l}</button>
@@ -124,6 +127,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
           ))}
         </section>
       )}
+      {tab === 'info' && <TeamInfoView teamId={teamId} />}
+      {tab === 'notice' && <NewsNoticesView teamId={teamId} />}
       {tab === 'talk' && <TalkView teamId={teamId} />}
 
       <div className="cta">

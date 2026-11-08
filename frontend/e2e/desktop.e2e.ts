@@ -164,3 +164,18 @@ test('clicking an ask fills the order panel and a 1-share buy goes through', asy
   await page.locator('.dt-order button.btn.wide').click()
   await expect(page.locator('.toast')).toContainText(/체결|대기/)
 })
+
+test('구단정보 sits between 차트 · 호가 and 토론 and shows dividends for the team\'s league', async ({ page }) => {
+  await signIn(page, '#team-t1')
+  const tabs = page.locator('.dt-tabs [role=tab]')
+  await expect(tabs).toHaveText(['차트 · 호가', '구단정보', '뉴스 · 공시', '토론'])
+  await tabs.filter({ hasText: '구단정보' }).click()
+  await expect(page.locator('.info-win')).toContainText('1주당 160P')
+  await expect(page.getByRole('region', { name: '대회 성적 수당' })).toContainText('3,000P')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+  await tabs.filter({ hasText: '뉴스 · 공시' }).click()
+  await expect(page.getByRole('region', { name: '뉴스' })).toBeVisible()
+  await page.locator('.news-sub').getByRole('button', { name: '공시' }).click()
+  await expect(page.getByRole('region', { name: '공시' })).toBeVisible()
+})

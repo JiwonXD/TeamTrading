@@ -103,6 +103,14 @@ class MatchStore {
                 ORDER BY scheduled_at DESC LIMIT ?""", MATCH, teamId, teamId, limit);
     }
 
+    /** 구단의 아직 열리지 않은 경기. 시작 시각 순 */
+    List<Match> upcoming(String teamId, Instant from, int limit) {
+        return jdbc.query("""
+                SELECT * FROM matches WHERE (home_team_id = ? OR away_team_id = ?) AND status = 'SCHEDULED'
+                AND scheduled_at >= ? ORDER BY scheduled_at, id LIMIT ?""", MATCH, teamId, teamId, Timestamp.from(from),
+                limit);
+    }
+
     /** 가장 최근 일정부터. 앞으로 열릴 경기도 포함한다 */
     List<Match> latest(int limit) {
         return jdbc.query("SELECT * FROM matches ORDER BY scheduled_at DESC, id DESC LIMIT ?", MATCH, limit);

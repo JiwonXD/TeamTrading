@@ -3,6 +3,7 @@ import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
 import { ME, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
+import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { TalkView, TradesView } from '../pages/TeamDetail'
@@ -12,6 +13,8 @@ import { useFlash } from './useDesktop'
 
 type Period = '1d' | '1w' | '1m' | '3m'
 type Lower = 'trades' | 'orders'
+type View = 'trade' | 'info' | 'notice' | 'talk'
+const VIEWS: [View, string][] = [['trade', '차트 · 호가'], ['info', '구단정보'], ['notice', '뉴스 · 공시'], ['talk', '토론']]
 const PERIODS: [Period, string][] = [['1d', '1일'], ['1w', '1주'], ['1m', '1달'], ['3m', '3달']]
 const DAY = 86_400_000
 
@@ -20,7 +23,7 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
   const s = useStore()
   const team = teamById(teamId)
   const m = s.markets[teamId]
-  const [view, setView] = useState<'trade' | 'talk'>('trade')
+  const [view, setView] = useState<View>('trade')
   const [period, setPeriod] = useState<Period>('1d')
   const [lower, setLower] = useState<Lower>('trades')
   const [side, setSide] = useState<Side>('buy')
@@ -88,14 +91,19 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
       )}
 
       <nav className="dt-tabs" role="tablist">
-        <button role="tab" aria-selected={view === 'trade'} className={view === 'trade' ? 'on' : ''} onClick={() => setView('trade')}>차트 · 호가</button>
-        <button role="tab" aria-selected={view === 'talk'} className={view === 'talk' ? 'on' : ''} onClick={() => setView('talk')}>토론</button>
+        {VIEWS.map(([v, l]) => (
+          <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>{l}</button>
+        ))}
       </nav>
 
       {offering && <OfferingCard offering={offering} />}
 
       {view === 'talk' ? (
         <div className="dt-talk"><TalkView teamId={teamId} /></div>
+      ) : view === 'info' ? (
+        <div className="dt-info"><TeamInfoView teamId={teamId} /></div>
+      ) : view === 'notice' ? (
+        <div className="dt-talk"><NewsNoticesView teamId={teamId} /></div>
       ) : (
         <div className="dt-grid">
           <section className="panel dt-chart">

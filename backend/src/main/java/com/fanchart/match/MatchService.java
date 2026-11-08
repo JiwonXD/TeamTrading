@@ -224,6 +224,11 @@ public class MatchService {
         return store.recent(teamId, limit);
     }
 
+    /** 구단의 다가오는 경기(공시 화면) */
+    public List<Match> upcoming(String teamId, int limit) {
+        return store.upcoming(teamId, clock.instant(), limit);
+    }
+
     public List<DividendRow> dividends(long matchId) {
         return store.dividends(matchId);
     }
