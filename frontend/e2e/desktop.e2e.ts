@@ -79,6 +79,37 @@ test('stars in the market table fill the 관심 tab of the side list in the orde
   expect(axe.violations).toEqual([])
 })
 
+test('schedule dates can be dragged sideways and the arrows move one day at a time', async ({ page }) => {
+  await signIn(page)
+  await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
+  const strip = page.locator('.sched-days')
+  const selected = page.locator('.sched-day[aria-pressed="true"]')
+  await expect(selected).toContainText('오늘')
+  // 오늘은 맨 오른쪽이 아니라 왼쪽 가까이에 있어 앞으로의 날짜가 넓게 보인다
+  const box = (await strip.boundingBox())!
+  const todayBox = (await selected.boundingBox())!
+  expect(todayBox.x - box.x).toBeLessThan(box.width / 4)
+
+  // 누른 채 왼쪽으로 끌면 미래 날짜로 넘어가고, 끌기를 날짜 고르기로 치지 않는다
+  const before = await strip.evaluate((el) => el.scrollLeft)
+  const y = box.y + box.height / 2
+  await page.mouse.move(box.x + box.width * 0.6, y)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + box.width * 0.6 - i * 30, y)
+  await page.mouse.up()
+  await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(before + 150)
+  await expect(selected).toContainText('오늘')
+
+  // 화살표는 하루씩 옮긴다
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  await page.getByRole('button', { name: '다음 날' }).click()
+  await expect(selected).toHaveAttribute('aria-label', new RegExp(`^${tomorrow.getMonth() + 1}월 ${tomorrow.getDate()}일 `))
+  await page.getByRole('button', { name: '오늘', exact: true }).click()
+  await expect(selected).toContainText('오늘')
+  await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBe(before)
+})
+
 test('league tab shows that league\'s schedule and prices while the logo and 홈 menu stay', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()

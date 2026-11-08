@@ -132,8 +132,17 @@ main.with-cta { padding-bottom: 96px; }
 /* 리그 화면 일정: 주간 달력과 경기(구단을 누르면 주문 화면) */
 .sched-nav { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
 .sched-nav .icon-btn { margin: 0; color: var(--text-2); border-radius: 8px; }
-.sched-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
-.sched-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 6px; border-radius: 12px; color: var(--text-2); }
+/* 날짜 띠: 좌우로 끌거나 밀어서 넘긴다. 오른쪽 끝에 반 칸을 걸쳐 더 있다는 걸 보여 준다 */
+.sched-days {
+  --sched-cols: 7.5;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - (var(--sched-cols) - 1) * 4px) / var(--sched-cols));
+  gap: 4px; margin-bottom: 8px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none; user-select: none; -webkit-user-select: none; cursor: grab;
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.sched-days::-webkit-scrollbar { display: none; }
+.sched-days.dragging { cursor: grabbing; }
+.sched-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 6px; border-radius: 12px; color: var(--text-2); scroll-snap-align: start; cursor: inherit; }
 .sched-day b { font-size: 16px; }
 .sched-day.today span { color: var(--blue); font-weight: 700; }
 .sched-day.on { background: var(--text); color: var(--surface); }
