@@ -136,7 +136,7 @@
 .dh .league-tabs { padding: 0 2px; margin-bottom: -4px; gap: 22px; }
 .dh .league-tabs a { font-size: 22px; }
 .dh .league-tabs a:hover:not(.on) { color: var(--text-2); }
-.dh .sched-days { --sched-cols: 15.5; }
+.dh .sched-days { --sched-cols: 15.6; }
 .dh .sched-list { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 32px; }
 .dh .panel-head .league-stats { margin: 0 auto 0 0; }
 .dh-asset { display: flex; flex-direction: column; gap: 2px; }
