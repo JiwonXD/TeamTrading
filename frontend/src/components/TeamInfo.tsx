@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { COMPETITION_LABEL, LEAGUES, TEAMS, teamById } from '../data/teams'
 import { ME, type NoticeDto, canWriteNotices, deleteNotice, editNotice, fetchNews, fetchNotices, fetchOverview, showToast, totalShares, useStore, writeNotice } from '../store'
 import { Segmented, fmt, timeAgo } from './ui'
+import { HelpTip } from './HelpTip'
 
 const AWARD_LABEL: Record<string, string> = {
   CHAMPION: '우승', RUNNER_UP: '준우승', SEMIFINAL: '4강', QUARTERFINAL: '8강(토너먼트 대회)',
@@ -40,7 +41,17 @@ export function TeamInfoView({ teamId }: { teamId: string }) {
   return (
     <div className="team-info">
       <section className="card info-win" aria-label="승리 배당">
-        <h2>이 구단이 이기면</h2>
+        <h2>
+          이 구단이 이기면
+          <HelpTip label="배당 지급 규칙">
+            <ul>
+              <li>경기 시작 예정 시각에 가진 주식에 줘요. 판매 주문에 걸어 둔 주식도 포함돼요.</li>
+              <li>결과가 들어오고 {delayLabel(info.confirmDelayMinutes)} 뒤에 자동으로 지급해요. 그 사이 결과가 정정되면 정정된 결과로 줘요.</li>
+              <li>무승부가 있는 종목은 무승부면 승리 배당의 절반을 양 팀에 줘요. 취소된 경기는 배당이 없어요.</li>
+              <li>배당 금액은 시즌 전에 정하고 시즌 중에는 바꾸지 않아요.</li>
+            </ul>
+          </HelpTip>
+        </h2>
         <p className="info-big">1승마다 1주당 <b className="up">{fmt(info.winDps)}P</b></p>
         <p className="muted small">
           {league} 경기 기준 · 지금 가격 {fmt(m.last)}P의 {(info.winDps / m.last * 100).toFixed(2)}%
@@ -49,14 +60,13 @@ export function TeamInfoView({ teamId }: { teamId: string }) {
       </section>
 
       <section className="card" aria-label="주요 정보">
-        <h2>주요 정보</h2>
+        <h2>주요 정보<HelpTip label="유통 주식 안내">유통 주식은 이용자들이 지금 가진 {team.short} 주식이에요(판매 주문에 걸린 것 포함). 운영자 판매 주문이 체결되면 늘어나요.</HelpTip></h2>
         <dl className="info-grid">
           <div><dt>리그</dt><dd>{league}</dd></div>
           <div><dt>보유자</dt><dd>{fmt(info.holders)}명</dd></div>
           <div><dt>유통 주식 수</dt><dd>{fmt(info.shares)}주</dd></div>
           <div><dt>시가총액</dt><dd>{fmt(info.shares * m.last)}P</dd></div>
         </dl>
-        <p className="hint">유통 주식은 이용자들이 지금 가진 {team.short} 주식이에요(판매 주문에 걸린 것 포함). 운영자 판매 주문이 체결되면 늘어나요.</p>
       </section>
 
       <section className="card" aria-label="다가오는 경기">
@@ -83,7 +93,10 @@ export function TeamInfoView({ teamId }: { teamId: string }) {
       </section>
 
       <section className="card" aria-label="대회별 배당">
-        <h2>대회별 배당 <span className="xs muted">1주당</span></h2>
+        <h2>
+          대회별 배당 <span className="xs muted">1주당</span>
+          <HelpTip label="대회별 배당 안내">컵대회는 출전하면 적용돼요. 1승 배당은 {league} 1승 배당에 대회 배수를 곱하고 10P 단위로 반올림해요.</HelpTip>
+        </h2>
         <table className="info-table">
           <thead><tr><th>대회</th><th>배수</th><th>1승</th><th>우승 수당</th></tr></thead>
           <tbody>
@@ -97,26 +110,18 @@ export function TeamInfoView({ teamId }: { teamId: string }) {
             ))}
           </tbody>
         </table>
-        <p className="hint">컵대회는 출전하면 적용돼요. 1승 배당은 {league} 1승 배당에 대회 배수를 곱하고 10P 단위로 반올림해요.</p>
       </section>
 
       <section className="card" aria-label="대회 성적 수당">
-        <h2>대회 성적 수당 <span className="xs muted">1주당, {league} 기준</span></h2>
+        <h2>
+          대회 성적 수당 <span className="xs muted">1주당, {league} 기준</span>
+          <HelpTip label="대회 성적 수당 안내">시즌이 끝나고 최종 성적에 따라 한 번 받아요. 우승·준우승·4강·8강·진출 중 대회마다 하나만 받고, 정규 시즌 1위는 따로 받아요. 컵대회는 위 대회 배수를 곱해요.</HelpTip>
+        </h2>
         <dl className="info-awards">
           {info.awards.map((a) => <div key={a.award}><dt>{AWARD_LABEL[a.award] ?? a.award}</dt><dd>{fmt(a.dps)}P</dd></div>)}
         </dl>
-        <p className="hint">시즌이 끝나고 최종 성적에 따라 한 번 받아요. 우승·준우승·4강·8강·진출 중 대회마다 하나만 받고, 정규 시즌 1위는 따로 받아요. 컵대회는 위 대회 배수를 곱해요.</p>
       </section>
 
-      <section className="card" aria-label="배당 지급 규칙">
-        <h2>지급 규칙</h2>
-        <ul className="info-rules">
-          <li>경기 시작 예정 시각에 가진 주식에 줘요. 판매 주문에 걸어 둔 주식도 포함돼요.</li>
-          <li>결과가 들어오고 {delayLabel(info.confirmDelayMinutes)} 뒤에 자동으로 지급해요. 그 사이 결과가 정정되면 정정된 결과로 줘요.</li>
-          <li>무승부가 있는 종목은 무승부면 승리 배당의 절반을 양 팀에 줘요. 취소된 경기는 배당이 없어요.</li>
-          <li>배당 금액은 시즌 전에 정하고 시즌 중에는 바꾸지 않아요.</li>
-        </ul>
-      </section>
     </div>
   )
 }
@@ -163,7 +168,7 @@ function NewsView({ teamId }: { teamId: string }) {
             ))}
           </ul>
         )}
-      {news?.available && <p className="hint">네이버 뉴스 검색 결과예요. 누르면 언론사 기사가 새 창으로 열려요.</p>}
+      {news?.available && <p className="hint">출처: 네이버 뉴스</p>}
     </section>
   )
 }
@@ -191,7 +196,6 @@ function NoticesView({ teamId }: { teamId: string }) {
       {!notices ? <p className="empty">{failed ? '공시를 불러오지 못했어요. 잠시 뒤 다시 시도해요' : '공시를 불러오는 중이에요'}</p>
         : notices.length === 0 ? <p className="empty">아직 공시가 없어요</p>
         : notices.map((n) => <NoticeItem key={n.id} notice={n} admin={admin} onDone={done} />)}
-      <p className="hint">공시는 운영자만 올려요. 배당 금액·일정 같은 숫자는 구단정보 탭이 늘 최신이에요.</p>
     </section>
   )
 }

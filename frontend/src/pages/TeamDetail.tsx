@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
-import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
+import { levels, priceBand, stepPrice, type OrderType, type Side } from '../engine/orderbook'
 import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
 import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
+import { HelpTip } from '../components/HelpTip'
 import { MAINTENANCE_MESSAGE, useMaintenance } from '../maintenance'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
@@ -184,7 +185,6 @@ function OrderBookView({ teamId, onPick }: { teamId: string; onPick: (price: num
         <span>판매대기 {fmt(askTotal)}</span>
         <span>구매대기 {fmt(bidTotal)}</span>
       </div>
-      <p className="hint">호가를 누르면 그 가격으로 주문할 수 있어요. 상대방은 익명으로 표시돼요.</p>
     </section>
   )
 }
@@ -239,7 +239,10 @@ export function TalkView({ teamId }: { teamId: string }) {
         <button className="chip-btn" onClick={submit}>등록</button>
       </div>
       {mode === 'server' && (
-        <p className="hint">글을 쓰고 10분 동안 숨겨지지 않으면 2,000P를 드려요(하루 3번). 링크는 올릴 수 없고, 신고가 3건 쌓이면 숨겨져요.</p>
+        <p className="hint">
+          글을 쓰면 2,000P · 하루 3번
+          <HelpTip label="글쓰기 보상 안내">글을 쓰고 10분 동안 숨겨지지 않으면 2,000P를 드려요(하루 3번). 링크는 올릴 수 없고, 신고가 3건 쌓이면 숨겨져요.</HelpTip>
+        </p>
       )}
       {posts.length === 0 && <p className="empty">첫 글을 남겨보세요</p>}
       {posts.map((p) => {
@@ -329,7 +332,6 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
           ) : (
             <div className="readonly">가장 유리한 호가부터 바로 체결</div>
           )}
-          <span className="muted xs">하한 {fmt(lower)} · 상한 {fmt(upper)} · 호가단위 {tickSize(price)}</span>
         </label>
         <label className="field">
           <span className="muted">수량</span>

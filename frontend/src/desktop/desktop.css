@@ -135,7 +135,6 @@
 .small-tabs button { padding: 4px 10px; }
 .desk .segmented button:hover:not(.on) { color: var(--text-2); }
 .desk .chip-btn:hover:not(:disabled) { filter: brightness(0.97); }
-.desk .hint kbd { vertical-align: 1px; }
 
 /* 홈 */
 .dh { display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
@@ -162,7 +161,6 @@
 .spark-base { stroke: var(--line); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .dh .card + .card { margin-top: 0; }
 .dh-board { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
-.dh-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 
 .dtable { width: 100%; border-collapse: collapse; }
 .dtable th { font-size: 12px; font-weight: 500; color: var(--text-3); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -188,7 +186,7 @@
 .dh-preview { position: sticky; top: calc(var(--header-h) + 24px); display: flex; flex-direction: column; gap: 4px; animation: desk-in 0.18s var(--ease); }
 .dh-preview-head { margin-bottom: 8px; }
 .dh-preview-price { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.dh-preview .pchart { margin: 12px 0 8px; }
+.dh-preview .pchart { margin-top: 12px; margin-bottom: 8px; }
 .dh-preview-talk { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .dh-preview-talk p { line-height: 1.45; color: var(--text-2); }
 .dh-preview-go { flex: none; height: 46px; font-size: 15px; margin-top: 14px; }
@@ -301,6 +299,9 @@
 .of-input { display: flex; align-items: center; height: 44px; padding-left: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); transition: border-color 0.12s, box-shadow 0.12s; }
 .of-input:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .of-input input { flex: 1; width: 100%; min-width: 0; border: 0; background: none; outline: none; font-weight: 700; font-size: 15px; text-align: right; padding-right: 4px; }
+/* 단위(P·주)는 숫자보다 작게, 숫자 밑선에 맞춘다: 입력칸을 칸 높이만큼 채워 글자 기준선을 단위와 맞춤 */
+.of-input > input { align-self: baseline; height: 100%; }
+.of-unit { align-self: baseline; font-size: 12px; }
 .of-input button { width: 34px; height: 100%; font-size: 18px; color: var(--text-3); border-left: 1px solid var(--line); }
 .of-input button:hover { background: var(--hover); color: var(--text); }
 .of-input button:last-child { border-radius: 0 9px 9px 0; }
@@ -359,7 +360,6 @@
 }
 @container (max-width: 860px) {
   .dh-top { grid-template-columns: 1fr; }
-  .dh-bottom { grid-template-columns: 1fr; }
   .dtable .range-col { display: none; }
 }
 @media (max-width: 1279px) {

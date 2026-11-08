@@ -39,7 +39,6 @@ export default function Watch() {
             </div>
           </div>
         ))}
-        <p className="hint">운영자 화면 예시예요. 실제 서비스에서는 일반 유저에게 계정명을 보여주지 않아요.</p>
       </section>
     </>
   )

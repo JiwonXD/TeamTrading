@@ -175,7 +175,7 @@ function BookPanel({ teamId, onPick }: { teamId: string; onPick: (price: number,
 
   return (
     <section className="panel dt-book" aria-label="호가">
-      <div className="panel-head"><h2>호가</h2><span className="muted xs">누르면 주문 가격이 채워져요</span></div>
+      <div className="panel-head"><h2>호가</h2></div>
       <div className="dob-cols xs muted"><span>판매대기</span><span>가격</span><span>구매대기</span></div>
       <div className="dob">
         {asks.length === 0 && bids.length === 0 && <p className="empty">아직 호가가 없어요</p>}
@@ -235,19 +235,18 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
         {type === 'limit' ? (
           <div className="of-input">
             <input id="of-price" inputMode="numeric" value={fmt(price)} onChange={(e) => setPrice(Number(e.target.value.replace(/\D/g, '')) || 0)} />
-            <span className="muted">P</span>
+            <span className="muted of-unit">P</span>
             <button aria-label="한 호가 내리기" onClick={() => setPrice((p) => Math.max(lower, stepPrice(p, -1)))}>−</button>
             <button aria-label="한 호가 올리기" onClick={() => setPrice((p) => Math.min(upper, stepPrice(p, 1)))}>+</button>
           </div>
         ) : <div className="of-input readonly">가장 유리한 호가부터 바로 체결</div>}
       </div>
-      <p className="of-hint muted xs">하한 {fmt(lower)} · 상한 {fmt(upper)} · 호가단위 {tickSize(price)}</p>
 
       <div className="of-row">
         <label className="of-label" htmlFor="of-qty">수량</label>
         <div className="of-input">
           <input id="of-qty" inputMode="numeric" placeholder="수량 입력" value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
-          <span className="muted">주</span>
+          <span className="muted of-unit">주</span>
           <button aria-label="1주 빼기" onClick={() => setQtyText(String(Math.max(0, qty - 1)))}>−</button>
           <button aria-label="1주 더하기" onClick={() => setQtyText(String(qty + 1))}>+</button>
         </div>
