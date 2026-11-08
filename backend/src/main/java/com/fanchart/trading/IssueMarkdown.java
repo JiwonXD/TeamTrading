@@ -12,12 +12,11 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.Set;
 
 /**
  * 안 팔린 운영자 매도는 다음날 할인해서 다시 건다(ADR 0038).
- * 매일 점검시간이 끝나는 00:30(한국 시간)에, 전날 운영자 계정이 한 주도 팔지 못한 구단의 운영자 매도 주문을 정해진 비율만큼
- * 내린 가격으로 다시 낸다. 바닥 가격과 그날 하한가 아래로는 내리지 않는다. 전날 운영자 물량이 팔린 구단은 그대로 둔다.
+ * 매일 점검시간이 끝나는 00:30(한국 시간)에, 남아 있는 운영자 매도 주문을 모두 정해진 비율만큼 내린 가격으로 다시 낸다.
+ * 바닥 가격과 그날 하한가 아래로는 내리지 않는다.
  */
 @Component
 class IssueMarkdown {
@@ -26,19 +25,17 @@ class IssueMarkdown {
     static final String PREFIX = "markdown-";
 
     private final TradingService trading;
-    private final TradeStore trades;
     private final AuthProperties auth;
     private final Clock clock;
     private final boolean enabled;
     private final int percent;
     private final long floor;
 
-    IssueMarkdown(TradingService trading, TradeStore trades, AuthProperties auth, Clock clock,
+    IssueMarkdown(TradingService trading, AuthProperties auth, Clock clock,
                   @Value("${fanchart.issuance.markdown.enabled:true}") boolean enabled,
                   @Value("${fanchart.issuance.markdown.percent:5}") int percent,
                   @Value("${fanchart.issuance.markdown.floor:5000}") long floor) {
         this.trading = trading;
-        this.trades = trades;
         this.auth = auth;
         this.clock = clock;
         this.enabled = enabled;
@@ -60,14 +57,11 @@ class IssueMarkdown {
     /** 오늘 할인을 한다. 같은 날 다시 돌려도 이미 내린 주문은 건너뛴다. 다시 건 주문 수를 돌려준다 */
     int run() {
         LocalDate today = LocalDate.ofInstant(clock.instant(), MarketHours.ZONE);
-        Set<String> sold = trades.teamsSoldBy(auth.admins(),
-                today.minusDays(1).atStartOfDay(MarketHours.ZONE).toInstant(),
-                today.atStartOfDay(MarketHours.ZONE).toInstant());
         String todayPrefix = PREFIX + today + "-";
         int repriced = 0;
         for (String issuer : auth.admins()) {
             for (StoredOrder o : trading.openOrders(issuer)) {
-                if (o.side() != Side.SELL || o.type() != OrderType.LIMIT || sold.contains(o.teamId())) continue;
+                if (o.side() != Side.SELL || o.type() != OrderType.LIMIT) continue;
                 if (o.clientOrderId().startsWith(todayPrefix)) continue;
                 long price = discounted(o.price(), trading.quote(o.teamId()).lowerLimit());
                 if (price >= o.price()) continue;
