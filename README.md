@@ -73,6 +73,7 @@ docker compose up -d     # 로컬 MySQL 8.4
 | GET | `/api/teams/{teamId}` | 구단 시세, 상·하한가 |
 | GET | `/api/teams/{teamId}/orderbook?depth=10` | 호가창. 실시간 시세와 같은 `epoch`·`seq`를 함께 준다 |
 | GET | `/api/teams/{teamId}/trades?limit=30` | 최근 체결 (익명) |
+| GET | `/api/teams/{teamId}/candles?unit=5m&before=&limit=200` | 차트 봉. unit은 1m·3m·5m·10m·15m·30m·60m·120m·240m·day·week·month·year |
 | GET | `/api/auth/options` | 로그인 방법 (소셜 로그인 제공자, 개발용 로그인 여부) |
 | GET | `/oauth2/authorization/{kakao\|google}` | 소셜 로그인 시작. 처음 로그인하면 계정을 만들고 100만P 지급 |
 | POST | `/api/auth/dev-login` | 개발용 닉네임 로그인 (`demo` 프로필에서만) |
