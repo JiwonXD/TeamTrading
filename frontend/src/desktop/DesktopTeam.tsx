@@ -235,7 +235,7 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
         {type === 'limit' ? (
           <div className="of-input">
             <input id="of-price" inputMode="numeric" value={fmt(price)} onChange={(e) => setPrice(Number(e.target.value.replace(/\D/g, '')) || 0)} />
-            <span className="muted xs">P</span>
+            <span className="muted of-unit">P</span>
             <button aria-label="한 호가 내리기" onClick={() => setPrice((p) => Math.max(lower, stepPrice(p, -1)))}>−</button>
             <button aria-label="한 호가 올리기" onClick={() => setPrice((p) => Math.min(upper, stepPrice(p, 1)))}>+</button>
           </div>
@@ -247,7 +247,7 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
         <label className="of-label" htmlFor="of-qty">수량</label>
         <div className="of-input">
           <input id="of-qty" inputMode="numeric" placeholder="수량 입력" value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
-          <span className="muted xs">주</span>
+          <span className="muted of-unit">주</span>
           <button aria-label="1주 빼기" onClick={() => setQtyText(String(Math.max(0, qty - 1)))}>−</button>
           <button aria-label="1주 더하기" onClick={() => setQtyText(String(qty + 1))}>+</button>
         </div>
