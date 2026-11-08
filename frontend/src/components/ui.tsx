@@ -57,31 +57,3 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
     </div>
   )
 }
-
-export function Chart({ points, base }: { points: number[]; base?: number }) {
-  const W = 360
-  const H = 170
-  const pad = 10
-  if (points.length < 2) points = [points[0], points[0]]
-  const min = Math.min(...points, base ?? Infinity)
-  const max = Math.max(...points, base ?? -Infinity)
-  const span = max - min || 1
-  const x = (i: number) => (i / (points.length - 1)) * W
-  const y = (v: number) => pad + (1 - (v - min) / span) * (H - pad * 2)
-  const d = points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')
-  const ref = base ?? points[0]
-  const cls = points[points.length - 1] >= ref ? 'up' : 'down'
-  const maxIdx = points.indexOf(Math.max(...points))
-  const minIdx = points.indexOf(Math.min(...points))
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className={`chart ${cls}`} preserveAspectRatio="none">
-        {base !== undefined && <line x1="0" x2={W} y1={y(base)} y2={y(base)} className="base" />}
-        <path d={`${d}L${W},${H}L0,${H}Z`} className="area" />
-        <path d={d} className="line" vectorEffect="non-scaling-stroke" />
-      </svg>
-      {maxIdx !== minIdx && <span className="chart-label" style={{ top: `${(y(points[maxIdx]) / H) * 100}%`, left: `${Math.min(80, (x(maxIdx) / W) * 100)}%` }}>최고 {fmt(points[maxIdx])}</span>}
-      {maxIdx !== minIdx && <span className="chart-label" style={{ top: `${(y(points[minIdx]) / H) * 100}%`, left: `${Math.min(80, (x(minIdx) / W) * 100)}%` }}>최저 {fmt(points[minIdx])}</span>}
-    </div>
-  )
-}

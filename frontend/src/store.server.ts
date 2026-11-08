@@ -7,6 +7,7 @@ import { CLOSED_LEAGUES, COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League,
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
+import type { Candle, CandlePage, CandleUnit } from './chart/candles'
 import { MAINTENANCE, type MaintenanceWindow } from './maintenance'
 import { emit } from './storeCore'
 import { ME, START_POINTS, type Market, type OrderResult, type Post, type State, type User } from './storeTypes'
@@ -280,7 +281,7 @@ function build(): State {
       base: q?.basePrice ?? team.basePrice, listed: quotes[team.id]?.listed ?? true,
       indicative: q?.indicativePrice != null ? { price: q.indicativePrice, volume: q.indicativeVolume ?? 0 } : undefined,
       viUntil: q?.viUntil ? Date.parse(q.viUntil) : undefined, last, high: q?.high ?? last, low: q?.low ?? last, volume: q?.volume ?? 0,
-      daily: [], intraday: intraday.length ? intraday : [{ ts: Date.now(), price: last }],
+      intraday: intraday.length ? intraday : [{ ts: Date.now(), price: last }],
     }
     books[team.id] = toBook(team.id, feed)
   }
@@ -330,6 +331,12 @@ export const fetchSchedule = (league: League, from: Date, to: Date) =>
   api<MatchDto[]>('GET', `/api/matches/schedule?league=${LEAGUE_LIST.find((l) => l.id === league)!.code}&from=${from.toISOString()}&to=${to.toISOString()}`)
 
 /** 구단정보 탭: 배당 조건과 다가오는 경기. 서버의 배당 규칙에서 계산한 값이다 */
+interface CandlePageDto { candles: (Omit<Candle, 'time'> & { time: string })[]; lastTradeId: number; more: boolean }
+/** 차트 봉. before: 이미 받은 가장 오래된 봉의 시작 시각 */
+export const fetchCandles = (teamId: string, unit: CandleUnit, before?: number): Promise<CandlePage> =>
+  api<CandlePageDto>('GET', `/api/teams/${teamId}/candles?unit=${unit}${before ? `&before=${before}` : ''}`)
+    .then((p) => ({ ...p, candles: p.candles.map((c) => ({ ...c, time: Date.parse(c.time) })) }))
+
 export const fetchOverview = (teamId: string) => api<OverviewDto>('GET', `/api/teams/${teamId}/overview`)
 
 /** 뉴스 탭: 서버가 구단별로 모아 둔 네이버 뉴스 검색 결과. 키가 없으면 available false */
