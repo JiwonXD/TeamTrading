@@ -245,7 +245,7 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
       <div className="of-row">
         <label className="of-label" htmlFor="of-qty">수량</label>
         <div className="of-input">
-          <input id="of-qty" inputMode="numeric" placeholder={`최대 ${fmt(maxQty)}`} value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
+          <input id="of-qty" inputMode="numeric" placeholder="수량 입력" value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
           <span className="muted of-unit">주</span>
           <button aria-label="1주 빼기" onClick={() => setQtyText(String(Math.max(0, qty - 1)))}>−</button>
           <button aria-label="1주 더하기" onClick={() => setQtyText(String(qty + 1))}>+</button>
@@ -256,6 +256,7 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
           <button key={r} onClick={() => setQtyText(String(Math.floor(maxQty * r)))}>{r === 1 ? '최대' : `${r * 100}%`}</button>
         ))}
       </div>
+      <p className="of-hint muted xs">{side === 'buy' ? `주문 가능 ${fmt(me.points)}P · 최대 ${fmt(maxQty)}주` : `판매 가능 ${fmt(maxQty)}주`}</p>
 
       <div className="of-total">
         <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>
