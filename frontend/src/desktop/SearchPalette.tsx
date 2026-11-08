@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { TEAMS, type Team } from '../data/teams'
+import { TEAMS, type Team, isOpen } from '../data/teams'
 import { useStore } from '../store'
 import { Logo, fmt, go, pct, tone } from '../components/ui'
 
@@ -38,8 +38,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const query = q.trim().toLowerCase()
   const recent = readRecent()
   const results = query
-    ? TEAMS.filter((t) => matches(t, query))
-    : [...recent.map((id) => TEAMS.find((t) => t.id === id)!), ...TEAMS.filter((t) => !recent.includes(t.id))]
+    ? TEAMS.filter((t) => isOpen(t) && matches(t, query))
+    : [...recent.map((id) => TEAMS.find((t) => t.id === id)!), ...TEAMS.filter((t) => isOpen(t) && !recent.includes(t.id))]
 
   useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }) }, [active])
 

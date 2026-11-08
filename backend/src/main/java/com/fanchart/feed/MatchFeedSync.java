@@ -7,6 +7,7 @@ import com.fanchart.match.MatchService;
 import com.fanchart.team.Competition;
 import com.fanchart.team.League;
 import com.fanchart.team.Team;
+import com.fanchart.team.LeagueProperties;
 import com.fanchart.team.TeamCatalog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  */
 @Service
-@EnableConfigurationProperties(MatchFeedProperties.class)
+@EnableConfigurationProperties({MatchFeedProperties.class, LeagueProperties.class})
 public class MatchFeedSync {
 
     static final Duration NEW_GAME_WINDOW = Duration.ofHours(36);
@@ -63,6 +64,7 @@ public class MatchFeedSync {
     }
 
     private final MatchFeedProperties props;
+    private final LeagueProperties leagues;
     private final FeedClient client;
     private final FeedTeams teams;
     private final TeamCatalog catalog;
@@ -70,9 +72,10 @@ public class MatchFeedSync {
     private final Clock clock;
     private final Map<String, Instant> lastPolled = new ConcurrentHashMap<>();
 
-    MatchFeedSync(MatchFeedProperties props, FeedClient client, FeedTeams teams, TeamCatalog catalog,
-                  MatchService matches, Clock clock) {
+    MatchFeedSync(MatchFeedProperties props, LeagueProperties leagues, FeedClient client, FeedTeams teams,
+                  TeamCatalog catalog, MatchService matches, Clock clock) {
         this.props = props;
+        this.leagues = leagues;
         this.client = client;
         this.teams = teams;
         this.catalog = catalog;
@@ -81,7 +84,7 @@ public class MatchFeedSync {
     }
 
     public boolean enabled() {
-        return props.enabled();
+        return !feeds().isEmpty();
     }
 
     /** 설정한 대회 전부(키가 없거나 꺼져 쉬는 대회 포함) */
@@ -91,13 +94,18 @@ public class MatchFeedSync {
 
     /** 키가 있고 켜져 있어 수집하는 대회인지 */
     public boolean active(CompetitionFeed feed) {
-        return props.active(feed);
+        return props.active(feed) && !leagues.hidden(feed.competition().league());
+    }
+
+    /** 수집하는 대회. 닫아 둔 리그(fanchart.leagues.hidden)의 정규 시즌은 뺀다 */
+    private List<CompetitionFeed> feeds() {
+        return props.activeFeeds().stream().filter(this::active).toList();
     }
 
     /** 대회마다 시즌 전체 일정을 받아 맞춘다. 한 대회가 실패해도 나머지는 한다 */
     public List<Summary> syncSeason() {
         List<Summary> out = new ArrayList<>();
-        for (CompetitionFeed feed : props.activeFeeds()) {
+        for (CompetitionFeed feed : feeds()) {
             try {
                 out.add(apply(feed, client.games(feed, null)));
             } catch (FeedException e) {
@@ -110,12 +118,12 @@ public class MatchFeedSync {
 
     /** 시작했는데 결과가 없는 경기의 날짜만 다시 묻는다 */
     public void pollResults() {
-        if (!props.enabled()) return;
+        if (!enabled()) return;
         Instant now = clock.instant();
         LocalDate today = now.atZone(FeedClient.KST).toLocalDate();
         lastPolled.keySet().removeIf(k -> LocalDate.parse(k.substring(k.lastIndexOf(':') + 1))
                 .isBefore(today.minusDays(3)));
-        for (CompetitionFeed feed : props.activeFeeds()) {
+        for (CompetitionFeed feed : feeds()) {
             Set<LocalDate> dates = new TreeSet<>();
             for (Match m : matches.startedWithoutResult(feed.source(), now.minus(FIRST_POLL))) {
                 Duration since = Duration.between(m.scheduledAt(), now);

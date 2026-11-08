@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, teamById } from '../data/teams'
+import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, isOpen, teamById } from '../data/teams'
 import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, mode, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
@@ -16,7 +16,7 @@ export default function Home({ league }: { league: League | null }) {
 
   const value = totalValue(ME)
   const profit = value - START_POINTS
-  const rows = TEAMS.filter((t) => !league || t.league === league)
+  const rows = TEAMS.filter((t) => (league ? t.league === league : isOpen(t)))
     .map((t) => ({ t, m: s.markets[t.id], chg: s.markets[t.id].last / s.markets[t.id].base - 1 }))
     .sort((a, b) =>
       sort === 'volume' ? b.m.volume * b.m.last - a.m.volume * a.m.last : sort === 'up' ? b.chg - a.chg : a.chg - b.chg,
