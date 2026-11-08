@@ -79,7 +79,7 @@ test('stars in the market table fill the 관심 tab of the side list in the orde
   expect(axe.violations).toEqual([])
 })
 
-test('schedule dates can be dragged sideways, a picked day moves to the center and the arrows move one day at a time', async ({ page }) => {
+test('schedule dates can be dragged sideways and stay where released, a picked day moves to the center and the arrows move one day at a time', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
   const strip = page.locator('.sched-days')
@@ -101,6 +101,16 @@ test('schedule dates can be dragged sideways, a picked day moves to the center a
   await page.mouse.up()
   await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(before + 150)
   await expect(selected).toContainText('오늘')
+
+  // 천천히 끌다 놓으면 놓은 자리에 그대로 멈춘다(가운데로 다시 맞추지 않는다)
+  await page.mouse.move(box.x + box.width * 0.6, y)
+  await page.mouse.down()
+  for (let i = 1; i <= 5; i++) { await page.mouse.move(box.x + box.width * 0.6 - i * 17, y); await page.waitForTimeout(30) }
+  await page.waitForTimeout(150)
+  const released = await strip.evaluate((el) => el.scrollLeft)
+  await page.mouse.up()
+  await page.waitForTimeout(700)
+  expect(Math.abs(await strip.evaluate((el) => el.scrollLeft) - released)).toBeLessThan(1)
 
   // 끌다가 날짜를 누르면 그 날이 띠 가운데로 온다
   const picked = strip.locator('.sched-day').nth(await strip.evaluate((el) => {
