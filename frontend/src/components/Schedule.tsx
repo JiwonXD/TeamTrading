@@ -262,7 +262,6 @@ export function LeagueSchedule({ league }: { league: League }) {
       {!onDay ? <p className="empty">{failed[selKey] ? '일정을 불러오지 못했어요. 잠시 뒤 다시 시도해요' : '일정을 불러오는 중이에요'}</p>
         : onDay.length === 0 ? <p className="empty">이 날은 경기가 없어요</p>
         : <ul className="sched-list">{onDay.map((m) => <ScheduleMatch key={m.id} match={m} />)}</ul>}
-      <p className="hint">날짜는 좌우로 끌어 넘길 수 있어요. 경기의 구단을 누르면 호가를 보고 바로 주문할 수 있어요.</p>
     </section>
   )
 }

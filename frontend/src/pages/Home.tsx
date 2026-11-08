@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, isOpen, teamById } from '../data/teams'
-import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, mode, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 import { LeagueStats, LeagueTabs } from '../components/League'
 import { LeagueSchedule } from '../components/Schedule'
 import { WatchStar } from '../components/WatchStar'
+import { HelpTip } from '../components/HelpTip'
 
 type Sort = 'volume' | 'up' | 'down'
 
@@ -80,7 +81,6 @@ export default function Home({ league }: { league: League | null }) {
       </section>
       <p className="footnote">
         팬차트는 무료 포인트로 즐기는 모의투자 서비스예요. 포인트는 현금으로 바꾸거나 다른 계정에 보낼 수 없어요.
-        {mode === 'server' ? ' 데모 서버에서는 시뮬레이션 계정도 일반 유저와 같은 방식으로 함께 거래해요.' : ' 이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.'}
       </p>
     </>
   )
@@ -128,7 +128,7 @@ export function SimMatches() {
   return (
     <section className="card">
       <div className="row-between">
-        <h2>오늘의 경기</h2>
+        <h2>오늘의 경기<HelpTip label="배당 안내">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</HelpTip></h2>
         <button className="chip-btn" disabled={allSettled} onClick={() => showToast(settleMatches())}>
           {allSettled ? '정산 완료' : '배당 정산하기'}
         </button>
@@ -147,7 +147,6 @@ export function SimMatches() {
           )
         })}
       </div>
-      <p className="hint">승리 구단 보유자에게 주당 기준가의 0.5%를 배당해요. 경기 결과는 목업 데이터예요.</p>
     </section>
   )
 }
@@ -167,7 +166,14 @@ export function matchState(m: MatchDto) {
 export function ServerMatches({ matches }: { matches: MatchDto[] }) {
   return (
     <section className="card">
-      <h2>최근 경기</h2>
+      <h2>
+        최근 경기
+        <HelpTip label="배당 안내">
+          <p>이긴 구단 주식 1주당 KBO 40P · NBA 70P · LCK 160P · 분데스리가 240P · 그 밖의 축구 리그 210P, 무승부는 절반을 배당해요.</p>
+          <p>컵대회 경기는 여기에 대회 배수(챔스·롤드컵 1.5배, 국내 컵 0.5배 등)를 곱해요.</p>
+          <p>경기 시작 시각에 가진 주식에만 배당하고, 결과가 나온 뒤 정정 여부를 확인하는 시간을 두고 지급해요.</p>
+        </HelpTip>
+      </h2>
       {matches.length === 0 && <p className="empty">아직 등록된 경기가 없어요</p>}
       <div className="match-list">
         {matches.map((m) => {
@@ -186,11 +192,6 @@ export function ServerMatches({ matches }: { matches: MatchDto[] }) {
           )
         })}
       </div>
-      <p className="hint">
-        이긴 구단 주식 1주당 KBO 40P · NBA 70P · LCK 160P · 분데스리가 240P · 그 밖의 축구 리그 210P, 무승부는 절반을 배당해요.
-        컵대회 경기는 여기에 대회 배수(챔스·롤드컵 1.5배, 국내 컵 0.5배 등)를 곱해요. 경기 시작 시각에 가진 주식에만
-        배당하고, 결과가 나온 뒤 정정 여부를 확인하는 시간을 두고 지급해요.
-      </p>
     </section>
   )
 }
