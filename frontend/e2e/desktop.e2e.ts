@@ -50,6 +50,30 @@ test('hiding a league in the tab editor also hides it from the side list filter'
   await expect(page.locator('.side-filter button', { hasText: 'LCK' })).toHaveCount(0)
 })
 
+test('the side list league filter scrolls sideways with the mouse wheel and drag', async ({ page }) => {
+  await signIn(page)
+  const filter = page.locator('.side-filter-scroll')
+  await expect(filter.locator('button', { hasText: 'LCK' })).toHaveCount(1)
+  // 리그가 폭보다 많은 상황을 만들려고 줄을 좁힌다
+  await filter.evaluate((el) => { el.style.width = '90px' })
+  await expect(filter).toHaveClass(/more-right/)
+  const box = (await filter.boundingBox())!
+  await page.mouse.move(box.x + 30, box.y + box.height / 2)
+  await page.mouse.wheel(0, 200)
+  await expect.poll(() => filter.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  await expect(filter).toHaveClass(/more-left/)
+  await page.mouse.wheel(0, -400)
+  await expect.poll(() => filter.evaluate((el) => el.scrollLeft)).toBe(0)
+  // 탭 위에서 눌러 끌어도 그 탭이 골라지지 않고 줄만 넘어간다
+  const all = filter.getByRole('button', { name: '전체' })
+  await filter.getByRole('button', { name: 'LCK' }).hover()
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + 60 - i * 10, box.y + box.height / 2)
+  await page.mouse.up()
+  await expect.poll(() => filter.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  await expect(all).toHaveClass(/on/)
+})
+
 test('stars in the market table fill the 관심 tab of the side list in the order they were added', async ({ page }) => {
   await signIn(page)
   const table = page.locator('.dtable')
@@ -79,7 +103,7 @@ test('stars in the market table fill the 관심 tab of the side list in the orde
   expect(axe.violations).toEqual([])
 })
 
-test('schedule dates can be dragged sideways and the arrows move one day at a time', async ({ page }) => {
+test('schedule dates can be dragged sideways and stay where released, a picked day moves to the center and the arrows move one day at a time', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
   const strip = page.locator('.sched-days')
@@ -102,9 +126,32 @@ test('schedule dates can be dragged sideways and the arrows move one day at a ti
   await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(before + 150)
   await expect(selected).toContainText('오늘')
 
+  // 천천히 끌다 놓으면 놓은 자리에 그대로 멈춘다(가운데로 다시 맞추지 않는다)
+  await page.mouse.move(box.x + box.width * 0.6, y)
+  await page.mouse.down()
+  for (let i = 1; i <= 5; i++) { await page.mouse.move(box.x + box.width * 0.6 - i * 17, y); await page.waitForTimeout(30) }
+  await page.waitForTimeout(150)
+  const released = await strip.evaluate((el) => el.scrollLeft)
+  await page.mouse.up()
+  await page.waitForTimeout(700)
+  expect(Math.abs(await strip.evaluate((el) => el.scrollLeft) - released)).toBeLessThan(1)
+
+  // 끌다가 날짜를 누르면 그 날이 띠 가운데로 온다
+  const picked = strip.locator('.sched-day').nth(await strip.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return [...el.children].findIndex((c) => c.getBoundingClientRect().left > r.left + r.width * 0.75)
+  }))
+  await picked.click()
+  await expect(picked).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(async () => {
+    const [p, s] = [(await picked.boundingBox())!, (await strip.boundingBox())!]
+    return Math.abs(p.x + p.width / 2 - (s.x + s.width / 2))
+  }).toBeLessThan(2)
+
   // 화살표는 하루씩 옮긴다
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
+  await page.getByRole('button', { name: '오늘', exact: true }).click()
   await page.getByRole('button', { name: '다음 날' }).click()
   await expect(selected.locator('b')).toHaveText(`${tomorrow.getDate()}일`)
   await page.getByRole('button', { name: '오늘', exact: true }).click()

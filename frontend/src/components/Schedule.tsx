@@ -22,17 +22,32 @@ const FUTURE = 180
 const DAYS = PAST + 1 + FUTURE
 // 일정은 이 날수 묶음으로 받는다(서버 한도 31일 이내). 보이는 범위 근처 묶음만 받는다
 const CHUNK = 14
-// 오늘로 갈 때 왼쪽에 남겨 둘 지난 날 수. 앞으로의 일정이 넓게 보이게 조금만 남긴다
+// 처음 열거나 "오늘"을 누를 때 오늘 왼쪽에 남겨 둘 지난 날 수. 앞으로의 일정이 넓게 보이게 조금만 남긴다
 const lead = (visible: number) => (visible >= 10 ? 2 : 1)
+/** 오늘이 왼쪽에서 lead+1번째 칸에 오게 하려면 가운데에 둘 칸 */
+const homeCenter = (visible: number) => PAST - lead(visible) + Math.floor(visible / 2)
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-/** 날짜 띠의 칸 간격(칸 폭 + 사이 간격)과 다 보이는 칸 수 */
+/** 날짜 띠의 칸 간격(칸 폭 + 사이 간격), 다 보이는 칸 수, 지금 가운데에 있는 칸 */
 function geometry(el: HTMLElement) {
   const a = el.children[0] as HTMLElement | undefined
   const b = el.children[1] as HTMLElement | undefined
   const pitch = a && b ? b.offsetLeft - a.offsetLeft : el.clientWidth / 7
-  const gap = a ? pitch - a.offsetWidth : 0
-  return { pitch, visible: Math.max(1, Math.floor((el.clientWidth + gap) / pitch + 0.01)) }
+  const width = a ? a.offsetWidth : pitch
+  return {
+    pitch,
+    visible: Math.max(1, Math.floor((el.clientWidth + pitch - width) / pitch + 0.01)),
+    center: Math.round((el.scrollLeft + el.clientWidth / 2 - width / 2) / pitch),
+    /** i번째 칸이 띠 가운데에 오는 스크롤 위치(화면상 위치로 재서 띠의 여백·테두리와 무관하게 맞춘다) */
+    leftFor: (i: number) => {
+      const c = el.children[i] as HTMLElement | undefined
+      if (!c) return el.scrollLeft
+      const box = el.getBoundingClientRect()
+      const cell = c.getBoundingClientRect()
+      const to = el.scrollLeft + cell.left + cell.width / 2 - (box.left + el.clientLeft + el.clientWidth / 2)
+      return Math.max(0, Math.min(el.scrollWidth - el.clientWidth, to))
+    },
+  }
 }
 
 /** 리그 화면 위쪽: 좌우로 끌어 넘기는 날짜 띠와 고른 날의 경기. 경기의 구단을 누르면 그 구단 주문 화면으로 간다 */
@@ -42,27 +57,24 @@ export function LeagueSchedule({ league }: { league: League }) {
   const [sel, setSel] = useState(PAST)
   const day = dates[sel]
   const strip = useRef<HTMLDivElement>(null)
-  const [view, setView] = useState({ first: PAST - 1, visible: 7 })
+  const [view, setView] = useState({ center: PAST + 2, visible: 7 })
 
   const measure = useCallback(() => {
     const el = strip.current
     if (!el) return
-    const { pitch, visible } = geometry(el)
-    const first = Math.round(el.scrollLeft / pitch)
-    setView((v) => (v.first === first && v.visible === visible ? v : { first, visible }))
+    const { center, visible } = geometry(el)
+    setView((v) => (v.center === center && v.visible === visible ? v : { center, visible }))
   }, [])
 
-  // 끌기를 놓은 뒤나 버튼으로 옮길 때 띠를 부드럽게 미끄러뜨린다. 그동안은 칸 맞춤(scroll-snap)을 끈다
+  // 끌기를 놓은 뒤(관성)나 날짜를 고를 때 띠를 부드럽게 미끄러뜨린다
   const anim = useRef(0)
-  const stop = () => {
-    cancelAnimationFrame(anim.current)
-    if (strip.current) strip.current.style.scrollSnapType = ''
-  }
-  const glide = (toIndex: number) => {
+  const stop = () => cancelAnimationFrame(anim.current)
+  /** 스크롤 위치 to까지 감속하며 미끄러뜨린다 */
+  const glideTo = (to: number) => {
     const el = strip.current
     if (!el) return
     stop()
-    const to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, toIndex * geometry(el).pitch))
+    to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, to))
     const from = el.scrollLeft
     if (reduceMotion() || Math.abs(to - from) < 1) {
       el.scrollLeft = to
@@ -70,37 +82,34 @@ export function LeagueSchedule({ league }: { league: League }) {
     }
     const ms = Math.min(650, 260 + Math.abs(to - from) * 0.5)
     const t0 = performance.now()
-    el.style.scrollSnapType = 'none'
     const step = (now: number) => {
       const k = Math.min(1, (now - t0) / ms)
       el.scrollLeft = from + (to - from) * (1 - (1 - k) ** 3)
       if (k < 1) anim.current = requestAnimationFrame(step)
-      else el.style.scrollSnapType = ''
     }
     anim.current = requestAnimationFrame(step)
+  }
+  /** i번째 칸이 띠 가운데에 오게 미끄러뜨린다(날짜를 고를 때만) */
+  const glide = (i: number) => {
+    if (strip.current) glideTo(geometry(strip.current).leftFor(i))
   }
 
   const goToday = () => {
     setSel(PAST)
-    if (strip.current) glide(PAST - lead(geometry(strip.current).visible))
+    if (strip.current) glide(homeCenter(geometry(strip.current).visible))
   }
-  /** 날을 고르고, 띠 가장자리면 이웃한 날이 보이게 한 칸씩 밀어 준다 */
+  /** 날을 고르면 그 날이 띠 가운데로 오게 옮긴다 */
   const select = (i: number) => {
     setSel(i)
-    const el = strip.current
-    if (!el) return
-    const { pitch, visible } = geometry(el)
-    const first = Math.round(el.scrollLeft / pitch)
-    if (i < first + 1) glide(i - 1)
-    else if (i > first + visible - 2) glide(i - visible + 2)
+    glide(i)
   }
 
   // 처음 열면 오늘이 왼쪽에서 두세 번째 칸에 오게 둔다(맞춘 뒤 scroll 이벤트가 measure를 부른다)
   useLayoutEffect(() => {
     const el = strip.current
     if (el) {
-      const { pitch, visible } = geometry(el)
-      el.scrollLeft = (PAST - lead(visible)) * pitch
+      const g = geometry(el)
+      el.scrollLeft = g.leftFor(homeCenter(g.visible))
     }
     window.addEventListener('resize', measure)
     return () => {
@@ -109,7 +118,8 @@ export function LeagueSchedule({ league }: { league: League }) {
     }
   }, [measure])
 
-  // 마우스로 누른 채 끌기. 손가락(터치)은 브라우저 기본 스크롤이 관성과 칸 맞춤까지 해 준다
+  // 마우스로 누른 채 끌기. 손가락(터치)은 브라우저 기본 스크롤이 관성까지 해 준다.
+  // 끌기를 놓은 자리는 그대로 둔다(칸 맞춤·가운데 정렬을 하면 보던 날짜가 밀려 다른 날을 고르기 어렵다)
   const drag = useRef<{ id: number; x: number; left: number; moved: boolean; trail: { t: number; x: number }[] } | null>(null)
   const dragged = useRef(false)
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -127,7 +137,6 @@ export function LeagueSchedule({ league }: { league: League }) {
       if (Math.abs(dx) < 6) return
       d.moved = true
       el.setPointerCapture(d.id)
-      el.style.scrollSnapType = 'none'
       el.classList.add('dragging')
     }
     el.scrollLeft = d.left - dx
@@ -141,11 +150,11 @@ export function LeagueSchedule({ league }: { league: League }) {
     if (!d.moved) return
     const el = e.currentTarget
     el.classList.remove('dragging')
-    // 놓을 때 손 빠르기만큼 더 미끄러진 뒤 가까운 날짜 칸에 멈춘다
+    // 빠르게 던지듯 놓았을 때만 그 빠르기만큼 조금 더 미끄러지고, 천천히 놓으면 그 자리에 멈춘다
     const a = d.trail[0]
     const b = d.trail[d.trail.length - 1]
     const v = b.t > a.t && e.timeStamp - b.t < 80 ? (b.x - a.x) / (b.t - a.t) : 0
-    glide(Math.round((el.scrollLeft - v * 280) / geometry(el).pitch))
+    if (Math.abs(v) > 0.3) glideTo(el.scrollLeft - v * 280)
     // 끌고 난 뒤 따라오는 클릭은 날짜 고르기로 치지 않는다
     dragged.current = true
     window.setTimeout(() => { dragged.current = false })
@@ -155,8 +164,9 @@ export function LeagueSchedule({ league }: { league: League }) {
   const [chunks, setChunks] = useState<Record<string, MatchDto[]>>({})
   const [failed, setFailed] = useState<Record<string, boolean>>({})
   const known = useRef(new Set<string>())
-  const lo = Math.max(0, view.first - 7)
-  const hi = Math.min(DAYS - 1, view.first + view.visible + 7)
+  const half = Math.ceil(view.visible / 2)
+  const lo = Math.max(0, view.center - half - 7)
+  const hi = Math.min(DAYS - 1, view.center + half + 7)
   const need = new Set([Math.floor(sel / CHUNK)])
   for (let k = Math.floor(lo / CHUNK); k <= Math.floor(hi / CHUNK); k++) need.add(k)
   const needKey = [...need].sort((x, y) => x - y).join(',')
@@ -203,7 +213,7 @@ export function LeagueSchedule({ league }: { league: League }) {
   }, [chunks, league])
   const selKey = `${league}:${Math.floor(sel / CHUNK)}`
   const onDay = selKey in chunks ? byDay.get(day.toDateString()) ?? [] : null
-  const shown = dates[Math.min(DAYS - 1, view.first + Math.floor(view.visible / 2))]
+  const shown = dates[Math.max(0, Math.min(DAYS - 1, view.center))]
 
   return (
     <section className="card schedule" aria-label={`${league} 경기 일정`}>

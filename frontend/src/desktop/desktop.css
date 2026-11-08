@@ -74,11 +74,18 @@
 .side-tabs button.on { color: var(--text); }
 .side-toggle { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-3); }
 .side-toggle:hover { background: var(--hover); color: var(--text); }
-.side-filter { display: flex; align-items: center; gap: 4px; padding: 4px 16px 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.side-filter { padding: 4px 0 8px; border-bottom: 1px solid var(--line); }
+/* 리그가 폭보다 많으면 가로로 넘긴다(마우스 끌기·휠은 useDragScroll). 더 있는 쪽 끝을 흐리게 */
+.side-filter-scroll { display: flex; align-items: center; gap: 4px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.side-filter-scroll::-webkit-scrollbar { display: none; }
+.side-filter-scroll.more-right { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.side-filter-scroll.more-left { mask-image: linear-gradient(to right, transparent, #000 28px); }
+.side-filter-scroll.more-left.more-right { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.side-filter-scroll.dragging { cursor: grabbing; user-select: none; }
 .side-filter button { flex: none; padding: 4px 8px; border-radius: 6px; font-size: 13px; color: var(--text-3); white-space: nowrap; }
 .side-filter button:hover { background: var(--hover); }
 .side-filter button.on { background: var(--surface-2); color: var(--text); font-weight: 700; }
-.side-sort { margin-left: auto; }
+.side-sort { margin-left: auto; padding-left: 8px; flex: none; white-space: nowrap; }
 .side-list { list-style: none; margin: 0; padding: 6px 8px; overflow-y: auto; flex: 1; }
 .side-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
 .side-row:hover { background: var(--hover); }
@@ -136,7 +143,7 @@
 .dh .league-tabs { padding: 0 2px; margin-bottom: -4px; gap: 22px; }
 .dh .league-tabs a { font-size: 22px; }
 .dh .league-tabs a:hover:not(.on) { color: var(--text-2); }
-.dh .sched-days { --sched-cols: 15.5; }
+.dh .sched-days { --sched-cols: 15.6; }
 .dh .sched-list { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 32px; }
 .dh .panel-head .league-stats { margin: 0 auto 0 0; }
 .dh-asset { display: flex; flex-direction: column; gap: 2px; }
