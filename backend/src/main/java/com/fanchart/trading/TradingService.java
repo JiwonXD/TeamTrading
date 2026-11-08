@@ -672,6 +672,12 @@ public class TradingService {
         return locked(market(teamId), m -> m.recentTrades(limit));
     }
 
+    /** 차트 봉. before는 이미 받은 가장 오래된 봉의 시작 시각(없으면 최신부터) */
+    public Candles.Page candles(String teamId, CandleUnit unit, Instant before, int limit) {
+        market(teamId);
+        return Candles.load(trades, teamId, unit, before, limit);
+    }
+
     public List<Trade> myTrades(String accountId, int limit) {
         return trades.byAccount(accountId, limit);
     }

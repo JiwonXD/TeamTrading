@@ -8,16 +8,15 @@ import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { TalkView, TradesView } from '../pages/TeamDetail'
-import { PriceChart } from './PriceChart'
+import { CandleChart, UnitPicker } from '../chart/CandleChart'
+import { type CandleUnit, savedMinuteUnit } from '../chart/candles'
+import { useCandles } from '../chart/useCandles'
 import { rememberTeam } from './SearchPalette'
 import { useFlash } from './useDesktop'
 
-type Period = '1d' | '1w' | '1m' | '3m'
 type Lower = 'trades' | 'orders'
 type View = 'trade' | 'info' | 'notice' | 'talk'
 const VIEWS: [View, string][] = [['trade', '차트 · 호가'], ['info', '구단정보'], ['notice', '뉴스 · 공시'], ['talk', '토론']]
-const PERIODS: [Period, string][] = [['1d', '1일'], ['1w', '1주'], ['1m', '1달'], ['3m', '3달']]
-const DAY = 86_400_000
 
 /** PC 구단 화면: 차트 · 호가 · 주문을 한 화면에 함께 둔다(토스증권 웹 주문 화면 배치) */
 export default function DesktopTeam({ teamId }: { teamId: string }) {
@@ -25,7 +24,8 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
   const team = teamById(teamId)
   const m = s.markets[teamId]
   const [view, setView] = useState<View>('trade')
-  const [period, setPeriod] = useState<Period>('1d')
+  const [unit, setUnit] = useState<CandleUnit>(savedMinuteUnit)
+  const chart = useCandles(teamId, unit)
   const [lower, setLower] = useState<Lower>('trades')
   const [side, setSide] = useState<Side>('buy')
   const [price, setPrice] = useState(m.last)
@@ -41,9 +41,6 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
 
   const diff = m.last - m.base
   const flash = useFlash(m.last)
-  const points = period === '1d'
-    ? m.intraday
-    : [...m.daily.slice(period === '1w' ? -7 : period === '1m' ? -30 : -90), m.last].map((price, i, a) => ({ price, ts: Date.now() - (a.length - 1 - i) * DAY }))
   const myQty = totalShares(ME, teamId)
   const myAvg = s.users[ME].holdings[teamId]?.avgPrice ?? 0
   const myOrders = openOrders(ME).filter((o) => o.teamId === teamId)
@@ -110,11 +107,9 @@ export default function DesktopTeam({ teamId }: { teamId: string }) {
           <section className="panel dt-chart">
             <div className="panel-head">
               <h2>차트</h2>
-              <div className="pill-tabs small-tabs">
-                {PERIODS.map(([v, l]) => <button key={v} className={period === v ? 'on' : ''} onClick={() => setPeriod(v)}>{l}</button>)}
-              </div>
+              <UnitPicker unit={unit} onChange={setUnit} />
             </div>
-            <PriceChart points={points} base={period === '1d' ? m.base : undefined} height={340} snap={snap} onPick={pick} />
+            <CandleChart key={`${teamId}:${unit}`} candles={chart.candles} unit={unit} height={340} more={chart.more} onLoadMore={chart.loadMore} snap={snap} onPick={pick} />
           </section>
 
           <section className="panel dt-lower">

@@ -18,6 +18,8 @@ export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' 
 const impl = mode === 'server' ? server : sim
 impl.start()
 
+export const getState = (): State => impl.getState()
+
 export function useStore(): State {
   useSyncExternalStore(subscribe, getVersion)
   return impl.getState()
@@ -58,6 +60,7 @@ export const fetchSchedule = impl.fetchSchedule
 
 /** 구단정보 탭(배당 조건·다가오는 경기)과 뉴스·공시 탭 */
 export const fetchOverview = impl.fetchOverview
+export const fetchCandles = impl.fetchCandles
 export const fetchNews = impl.fetchNews
 export const fetchNotices = impl.fetchNotices
 /** 공시를 쓰고 고치고 지울 수 있는지. 서버 모드는 운영자만, 시뮬레이션 미리보기는 운영자 화면 예시로 보여준다 */

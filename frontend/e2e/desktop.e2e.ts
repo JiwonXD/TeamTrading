@@ -226,3 +226,30 @@ test('구단정보 sits between 차트 · 호가 and 토론 and shows dividends 
   await page.locator('.news-sub').getByRole('button', { name: '공시' }).click()
   await expect(page.getByRole('region', { name: '공시' })).toBeVisible()
 })
+
+test('the team chart draws candles from stored trades, opens on 5분 and keeps another minute unit after reload', async ({ page, request }) => {
+  // 데모 봇이 체결을 만든 구단을 찾는다
+  let teamId = ''
+  await expect.poll(async () => {
+    const teams: { id: string }[] = await (await request.get('/api/teams')).json()
+    for (const t of teams) {
+      const body = await (await request.get(`/api/teams/${t.id}/candles?unit=year`)).json()
+      if (body.candles.length) { teamId = t.id; return true }
+    }
+    return false
+  }, { timeout: 60_000 }).toBe(true)
+
+  await signIn(page, `#team-${teamId}`)
+  const picker = page.locator('.unit-picker')
+  await expect(picker.locator('.up-minute > button')).toHaveText('5분')
+  await expect(picker.locator('.up-minute > button')).toHaveClass(/on/)
+  await picker.getByRole('button', { name: '년' }).click()
+  await expect(page.locator('.cchart svg g').first()).toBeVisible()
+
+  await picker.locator('.up-minute > button').click()
+  await page.getByRole('option', { name: '15분' }).click()
+  await expect(picker.locator('.up-minute > button')).toHaveText('15분')
+  await page.reload()
+  await expect(page.locator('.unit-picker .up-minute > button')).toHaveText('15분')
+  await expect(page.locator('.unit-picker .up-minute > button')).toHaveClass(/on/)
+})
