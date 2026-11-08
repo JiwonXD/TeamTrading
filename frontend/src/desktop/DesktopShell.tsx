@@ -6,7 +6,7 @@ import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
 import { WatchStar } from '../components/WatchStar'
-import { useFlash } from './useDesktop'
+import { useDragScroll, useFlash } from './useDesktop'
 import './desktop.css'
 
 const NAV = [
@@ -106,6 +106,7 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
   const [picked, setPicked] = useState<SideTab | null>(null)
   const tab = picked ?? (watchlist.length > 0 ? 'watch' : 'live')
   const [league, setLeague] = useState<League | 'all'>('all')
+  const filterRef = useDragScroll<HTMLDivElement>()
   const byValue = (a: Team, b: Team) => s.markets[b.id].volume * s.markets[b.id].last - s.markets[a.id].volume * s.markets[a.id].last
   const rows = (tab === 'watch'
     // 관심은 담은 순서대로 둔다
@@ -135,10 +136,12 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
         </button>
       </div>
       <div className="side-filter">
-        {(['all', ...visibleLeagues(getLeagueTabs()).filter((l) => TEAMS.some((t) => t.league === l.id)).map((l) => l.id)] as const).map((l) => (
-          <button key={l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
-        ))}
-        <span className="muted xs side-sort">{tab === 'watch' ? '담은 순' : '거래대금순'}</span>
+        <div className="side-filter-scroll" ref={filterRef}>
+          {(['all', ...visibleLeagues(getLeagueTabs()).filter((l) => TEAMS.some((t) => t.league === l.id)).map((l) => l.id)] as const).map((l) => (
+            <button key={l} className={league === l ? 'on' : ''} onClick={() => setLeague(l)}>{l === 'all' ? '전체' : l}</button>
+          ))}
+          <span className="muted xs side-sort">{tab === 'watch' ? '담은 순' : '거래대금순'}</span>
+        </div>
       </div>
       <ul className="side-list">
         {rows.length === 0 && <li className="empty">{EMPTY[tab]}</li>}
