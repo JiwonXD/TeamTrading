@@ -44,6 +44,35 @@ test('login page has no accessibility violations and logging out returns to it',
   await expect(page.getByPlaceholder('닉네임')).toBeVisible()
 })
 
+test('signing up with an id and password, then logging back in with it', async ({ page }) => {
+  const id = `e2e${Date.now() % 100_000_000}${Math.floor(Math.random() * 100)}`
+  await page.goto('/#home')
+  await page.getByRole('button', { name: '회원가입' }).click()
+  await page.getByLabel('아이디').fill(id)
+  await page.getByLabel('비밀번호', { exact: true }).fill('e2epass123')
+  await page.getByLabel('비밀번호 확인').fill('e2epass12')
+  await expect(page.getByText('비밀번호가 서로 달라요')).toBeVisible()
+  await expect(page.getByRole('button', { name: '가입하기' })).toBeDisabled()
+  await page.getByLabel('비밀번호 확인').fill('e2epass123')
+  await expect(page.getByText('쓸 수 있는 아이디예요')).toBeVisible()
+  await page.getByRole('button', { name: '가입하기' }).click()
+  await expect(page.locator('.tabbar, .cta').first()).toBeVisible()
+
+  // 아이디로 가입한 계정은 내 투자 화면에 로그인 수단(소셜 연동)이 보인다. 연동에서 돌아오면 결과를 알려 준다
+  await page.goto('/?link=taken#portfolio')
+  await expect(page.getByRole('status').filter({ hasText: '다른 계정에 이미 연결된 소셜 계정이에요' })).toBeVisible()
+  await expect(page.locator('.login-methods')).toContainText(id)
+  await expect(page).toHaveURL(/\/#portfolio$/)
+  await page.getByRole('button', { name: '로그아웃' }).click()
+  await page.getByLabel('아이디').fill(id)
+  await page.getByLabel('비밀번호').fill('wrongpass1')
+  await page.getByRole('button', { name: '로그인', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('아이디 또는 비밀번호가 맞지 않아요')
+  await page.getByLabel('비밀번호').fill('e2epass123')
+  await page.getByRole('button', { name: '로그인', exact: true }).click()
+  await expect(page.locator('.tabbar, .cta').first()).toBeVisible()
+})
+
 test('league tab shows the schedule and only that league, and a team in a match opens its order page', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'KBO' }).click()

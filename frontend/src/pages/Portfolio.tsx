@@ -2,6 +2,7 @@ import { TEAMS, teamById } from '../data/teams'
 import { ME, START_POINTS, cancel, lockedPoints, mode, openOrders, reset, showToast, totalShares, totalValue, useStore } from '../store'
 import AdReward from '../components/AdReward'
 import Nickname from '../components/Nickname'
+import LoginMethods from '../components/LoginMethods'
 import Withdraw from '../components/Withdraw'
 import { Header, Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
@@ -33,6 +34,7 @@ export default function Portfolio() {
       </section>
 
       <Nickname />
+      {mode === 'server' && <LoginMethods />}
       <AdReward />
 
       <section className="card list-card">

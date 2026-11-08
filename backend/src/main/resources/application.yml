@@ -37,6 +37,15 @@ fanchart:
   # KBO는 API-Sports 유료로 데이터를 받게 되면 HIDDEN_LEAGUES에서 빼서 다시 연다(예: HIDDEN_LEAGUES=K_LEAGUE)
   leagues:
     hidden: ${HIDDEN_LEAGUES:KBO,K_LEAGUE}
+  # 비밀번호 재설정 메일(ADR 0037). MAIL_HOST를 비우면 재설정 메일을 보내지 않고 화면에 '비밀번호 찾기'를 보이지 않는다.
+  # 예: Gmail은 MAIL_HOST=smtp.gmail.com, MAIL_USERNAME=주소, MAIL_PASSWORD=앱 비밀번호(구글 계정 2단계 인증 후 발급)
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:}
+    site-url: ${SITE_URL:https://fanchart.kr}
   # 구단 화면 뉴스(네이버 검색 API 뉴스, docs/adr/0035). 키를 비우면 뉴스 탭이 준비 중으로 보인다
   news:
     naver-client-id: ${NAVER_CLIENT_ID:}

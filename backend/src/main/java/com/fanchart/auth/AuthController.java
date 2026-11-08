@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.security.oauth2.client.registration.InMemoryClientReg
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,7 +30,8 @@ class AuthController {
     record Provider(String id, String name, String loginUrl) {
     }
 
-    record LoginOptions(List<Provider> providers, boolean devLogin) {
+    /** @param passwordReset 메일 발송이 설정돼 있어 비밀번호 찾기를 쓸 수 있는지 */
+    record LoginOptions(List<Provider> providers, boolean devLogin, boolean passwordReset) {
     }
 
     record ErrorResponse(String message) {
@@ -37,12 +40,31 @@ class AuthController {
     record DevLoginRequest(@NotBlank @Size(max = 20) String nickname) {
     }
 
+    record SignupRequest(@NotNull @Size(max = 40) String loginId, @NotNull @Size(max = 100) String password,
+                         @Size(max = 254) String email) {
+    }
+
+    record PasswordLoginRequest(@NotNull @Size(max = 40) String loginId, @NotNull @Size(max = 100) String password) {
+    }
+
+    record ResetRequest(@NotNull @Size(max = 40) String loginId, @NotNull @Size(max = 254) String email) {
+    }
+
+    record ResetConfirm(@NotNull @Size(max = 100) String token, @NotNull @Size(max = 100) String password) {
+    }
+
+    record LoginIdCheck(boolean available, String message) {
+    }
+
     private final AccountLogin login;
+    private final PasswordLogin passwords;
     private final AuthProperties props;
     private final ObjectProvider<ClientRegistrationRepository> registrations;
 
-    AuthController(AccountLogin login, AuthProperties props, ObjectProvider<ClientRegistrationRepository> registrations) {
+    AuthController(AccountLogin login, PasswordLogin passwords, AuthProperties props,
+                   ObjectProvider<ClientRegistrationRepository> registrations) {
         this.login = login;
+        this.passwords = passwords;
         this.props = props;
         this.registrations = registrations;
     }
@@ -56,7 +78,41 @@ class AuthController {
                         "/oauth2/authorization/" + r.getRegistrationId()));
             }
         }
-        return new LoginOptions(providers, props.devLogin());
+        return new LoginOptions(providers, props.devLogin(), passwords.resetAvailable());
+    }
+
+    /** 가입 화면에서 아이디를 쓸 수 있는지 미리 본다 */
+    @GetMapping("/api/auth/login-ids/check")
+    LoginIdCheck checkLoginId(@RequestParam String loginId) {
+        return passwords.unavailableReason(loginId)
+                .map(reason -> new LoginIdCheck(false, reason))
+                .orElse(new LoginIdCheck(true, "쓸 수 있는 아이디예요"));
+    }
+
+    /** 아이디·비밀번호로 가입하고 바로 로그인한다 */
+    @PostMapping("/api/auth/signup")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void signUp(@Valid @RequestBody SignupRequest req, HttpServletRequest request, HttpServletResponse response) {
+        login.signIn(passwords.signUp(req.loginId(), req.password(), req.email()), request, response);
+    }
+
+    @PostMapping("/api/auth/login")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void passwordLogin(@Valid @RequestBody PasswordLoginRequest req, HttpServletRequest request, HttpServletResponse response) {
+        login.signIn(passwords.authenticate(req.loginId(), req.password()), request, response);
+    }
+
+    /** 아이디와 이메일이 맞으면 재설정 링크를 보낸다. 맞는지는 알려 주지 않는다 */
+    @PostMapping("/api/auth/password-reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void requestReset(@Valid @RequestBody ResetRequest req) {
+        passwords.requestReset(req.loginId(), req.email());
+    }
+
+    @PostMapping("/api/auth/password-reset/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void confirmReset(@Valid @RequestBody ResetConfirm req) {
+        passwords.confirmReset(req.token(), req.password());
     }
 
     /** 개발·시연용. 같은 닉네임이면 같은 계정으로 들어간다 */

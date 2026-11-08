@@ -164,3 +164,20 @@ ESPN 팀 번호는 종목마다 따로 매겨 겹칠 수 있어, 축구가 아�
 4. `GET /api/teams/t1/news`가 `"available":true`와 기사를 주면 된다.
 
 하루 25,000회까지 무료다. 서버는 구단마다 15분 동안 결과를 모아 두고 같이 쓰므로 140개 구단을 계속 봐도 하루 13,440회를 넘지 않는다. 받다가 실패하면 로그에 `news for ... failed`가 남고, 앞서 받아 둔 기사가 있으면 그것을 보여준다.
+
+## 비밀번호 재설정 메일
+
+아이디·비밀번호로 가입한 사람이 비밀번호를 잊으면, 가입할 때 넣은 이메일로 재설정 링크(30분 유효, 한 번만 사용)를 보낸다(ADR 0037). 메일 설정이 없으면 가입·로그인은 그대로 되고 로그인 화면에 "비밀번호 찾기"만 보이지 않는다.
+
+Gmail로 보내는 예:
+
+1. 보낼 구글 계정에서 2단계 인증을 켜고, https://myaccount.google.com/apppasswords 에서 앱 비밀번호(16자리)를 만든다.
+2. `deploy/.env`에 넣고 다시 띄운다.
+   ```
+   MAIL_HOST=smtp.gmail.com
+   MAIL_USERNAME=보낼주소@gmail.com
+   MAIL_PASSWORD=앱비밀번호16자리
+   ```
+3. `GET /api/auth/options`가 `"passwordReset":true`를 주면 된다.
+
+포트는 587(STARTTLS)이 기본이다(`MAIL_PORT`). 보내는 주소를 계정과 다르게 하려면 `MAIL_FROM`을 넣는다. 메일 속 링크 주소는 `SITE_URL`(기본 `https://fanchart.kr`)이다. 보내다 실패하면 로그에 `password reset mail failed`가 남고, 사용자 화면에는 성공과 같은 안내가 나간다(아이디·이메일이 맞는지 알려 주지 않기 위해서다). Gmail 무료 계정은 하루 500통까지 보낼 수 있다.
