@@ -17,7 +17,7 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 전날 안 팔린 운영자 매도는 다음날 할인해서 다시 건다(ADR 0038) */
+/** 안 팔린 운영자 매도는 다음날 할인해서 다시 건다(ADR 0038) */
 @SpringBootTest(properties = "fanchart.auth.admins=operator-1")
 @Import(TestClock.Config.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
@@ -71,17 +71,22 @@ class IssueMarkdownTest {
     }
 
     @Test
-    void teamWhereTheOperatorSoldYesterdayIsLeftAlone() {
+    void remainingOrdersAreMarkedDownEvenWhereSomeSold() {
         sell("ladder-1", "lg", 18_450, 50);
         sell("ladder-2", "lg", 18_500, 30);
         sell("ladder-3", "kia", 21_300, 50);
         trading.place(buyer, "b-1", "lg", Side.BUY, OrderType.LIMIT, 18_450, 1);
         clock.set(NEXT_DAY);
 
-        assertThat(markdown.run()).isEqualTo(1);
+        assertThat(markdown.run()).isEqualTo(3);
 
-        assertThat(trading.orderBook("lg", 5).asks()).extracting(Level::price).containsExactly(18_450L, 18_500L);
+        assertThat(trading.orderBook("lg", 5).asks()).extracting(Level::price, Level::quantity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(17_520L, 49L),
+                        org.assertj.core.groups.Tuple.tuple(17_570L, 30L));
+        // 21,300 × 0.95 = 20,235 → 호가 단위(50) 내림 20,200
         assertThat(trading.orderBook("kia", 5).asks()).extracting(Level::price).containsExactly(20_200L);
+        assertThat(operatorShares("lg")).isEqualTo(79);
+        assertThat(reconciliation.run().balanced()).isTrue();
     }
 
     @Test

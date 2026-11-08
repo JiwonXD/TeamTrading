@@ -8,13 +8,9 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
-import java.util.Set;
 
 @Repository
 public class TradeStore {
@@ -71,21 +67,6 @@ public class TradeStore {
                 SELECT MAX(price), MIN(price), COALESCE(SUM(quantity), 0) FROM trades
                 WHERE team_id = ? AND executed_at >= ?""",
                 (rs, i) -> new Stats(rs.getLong(1), rs.getLong(2), rs.getLong(3)), teamId, Timestamp.from(since));
-    }
-
-    /** [from, to) 사이에 sellers 중 한 계정이라도 판 적이 있는 구단 */
-    public Set<String> teamsSoldBy(Collection<String> sellers, Instant from, Instant to) {
-        Set<String> out = new HashSet<>();
-        if (sellers.isEmpty()) return out;
-        List<Object> args = new ArrayList<>(sellers);
-        args.add(Timestamp.from(from));
-        args.add(Timestamp.from(to));
-        String in = String.join(", ", sellers.stream().map(x -> "?").toList());
-        jdbc.query("SELECT DISTINCT team_id FROM trades WHERE seller_id IN (" + in + ") AND executed_at >= ? AND executed_at < ?",
-                rs -> {
-                    out.add(rs.getString(1));
-                }, args.toArray());
-        return out;
     }
 
     /** 구단별 가장 최근 일 마감 종가(daily_closes). 기준가가 된다 */
