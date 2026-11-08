@@ -46,8 +46,16 @@ services:
       PANDASCORE_KEY: ${PANDASCORE_KEY:-}
       # 닫아 둔 리그(쉼표로 구분). KBO를 다시 열려면 .env에 HIDDEN_LEAGUES=K_LEAGUE
       HIDDEN_LEAGUES: ${HIDDEN_LEAGUES-KBO,K_LEAGUE}
+      # 안 팔린 운영자 매도 다음날 할인(ADR 0038). 끄려면 .env에 ISSUE_MARKDOWN=false
+      ISSUE_MARKDOWN: ${ISSUE_MARKDOWN:-true}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      # 비밀번호 재설정 메일. MAIL_HOST를 비우면 "비밀번호 찾기"를 끈다
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

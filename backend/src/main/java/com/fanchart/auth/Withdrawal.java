@@ -27,7 +27,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 탈퇴. 계정 행과 원장은 다른 계정의 잔고·체결과 맞물려 있어 지우지 않는다. 대신
  * <ul>
- * <li>로그인 연결(account_identities)을 지워 그 사람과 계정의 연결을 끊고, 닉네임을 "탈퇴회원+숫자"로 바꾼다. 화면 설정(리그 탭)과 관심 구단도 지운다.</li>
+ * <li>로그인 연결(account_identities)과 아이디·비밀번호·이메일(password_logins)을 지워 그 사람과 계정의 연결을 끊고, 닉네임을 "탈퇴회원+숫자"로 바꾼다. 화면 설정(리그 탭)과 관심 구단도 지운다.</li>
  * <li>대기 주문을 모두 취소한다. 남은 포인트와 주식은 그대로 두어 장부 합계가 바뀌지 않는다(소각하지 않는다).</li>
  * <li>로그인 식별 번호의 SHA-256 해시만 30일 남겨, 탈퇴와 재가입을 되풀이해 가입 포인트를 거듭 받지 못하게 한다.</li>
  * <li>다른 기기에 남은 세션은 WithdrawnSessionFilter가 다음 요청에서 끊는다.</li>
@@ -80,6 +80,9 @@ public class Withdrawal {
                         hash((String) id.get("provider"), (String) id.get("subject")), Timestamp.from(now));
             }
             jdbc.update("DELETE FROM account_identities WHERE account_id = ?", accountId);
+            jdbc.update("DELETE FROM password_reset_tokens WHERE login_id IN (SELECT login_id FROM password_logins WHERE account_id = ?)",
+                    accountId);
+            jdbc.update("DELETE FROM password_logins WHERE account_id = ?", accountId);
             jdbc.update("DELETE FROM account_league_tabs WHERE account_id = ?", accountId);
             jdbc.update("DELETE FROM account_watchlist WHERE account_id = ?", accountId);
         });
@@ -106,8 +109,12 @@ public class Withdrawal {
     }
 
     static String hash(String provider, String subject) {
+        return sha256(provider + ":" + subject);
+    }
+
+    static String sha256(String text) {
         try {
-            byte[] d = MessageDigest.getInstance("SHA-256").digest((provider + ":" + subject).getBytes(StandardCharsets.UTF_8));
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(d);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);

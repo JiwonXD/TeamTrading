@@ -430,6 +430,31 @@ public class TradingService {
         }
     }
 
+    /**
+     * 운영자 매도 주문을 새 가격으로 다시 건다(ADR 0038). 종목 락을 잡은 채 취소하고 호가창에 남은 수량만큼만 다시 내므로,
+     * 읽은 뒤 체결된 수량까지 새로 발행하지 않는다. 다시 낼 수 없는 가격이면 취소하기 전에 거절한다.
+     */
+    public OrderReceipt repriceIssue(String accountId, long orderId, long newPrice, String clientOrderId) {
+        if (!isIssuer(accountId)) throw new TradingException("운영자 계정만 쓸 수 있어요");
+        StoredOrder stored = orders.find(orderId)
+                .filter(o -> o.accountId().equals(accountId) && o.side() == Side.SELL && o.status() == Status.OPEN)
+                .orElseThrow(() -> new NotFoundException("대기 중인 매도 주문이 아니에요"));
+        Market market = market(stored.teamId());
+        market.lock.lock();
+        try {
+            if (market.halted || inMaintenance()) throw new TradingException("지금은 주문을 다시 낼 수 없어요");
+            PriceRules.validate(OrderType.LIMIT, newPrice, 1, market.basePrice()).ifPresent(reason -> {
+                throw new TradingException(reason);
+            });
+            long remaining = market.book.find(orderId).map(Order::remaining)
+                    .orElseThrow(() -> new NotFoundException("대기 중인 매도 주문이 아니에요"));
+            cancel(accountId, orderId);
+            return place(accountId, clientOrderId, stored.teamId(), Side.SELL, OrderType.LIMIT, newPrice, remaining);
+        } finally {
+            market.lock.unlock();
+        }
+    }
+
     // ---------- 트랜잭션 본문 ----------
 
     /** 운영자 매도는 증자다. 판매 가능 수량이 모자라면 모자란 만큼 공모가(주문 가격)로 새로 발행해 운영자 계정에 넣는다 */
@@ -645,6 +670,12 @@ public class TradingService {
 
     public List<Trade> trades(String teamId, int limit) {
         return locked(market(teamId), m -> m.recentTrades(limit));
+    }
+
+    /** 차트 봉. before는 이미 받은 가장 오래된 봉의 시작 시각(없으면 최신부터) */
+    public Candles.Page candles(String teamId, CandleUnit unit, Instant before, int limit) {
+        market(teamId);
+        return Candles.load(trades, teamId, unit, before, limit);
     }
 
     public List<Trade> myTrades(String accountId, int limit) {

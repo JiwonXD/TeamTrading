@@ -12,11 +12,13 @@ export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
 export type { ReportReason } from './store.server'
-export type { AdStatusDto, Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, NewsDto, NoticeDto, OfferingDto, OverviewDto, SubscriptionDto } from './store.server'
+export type { AdStatusDto, Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginMethodsDto, LoginOptions, MatchDto, NewsDto, NoticeDto, OfferingDto, OverviewDto, SubscriptionDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
 impl.start()
+
+export const getState = (): State => impl.getState()
 
 export function useStore(): State {
   useSyncExternalStore(subscribe, getVersion)
@@ -44,6 +46,7 @@ export const settleMatches = impl.settleMatches
 /** 서버 모드에서 로그인이 필요하면 로그인 방법, 아니면 null */
 export const getLogin = (): server.LoginOptions | null => (mode === 'server' ? server.getLogin() : null)
 export const devLogin = server.devLogin
+export const { passwordLogin, signUp, checkLoginId, requestPasswordReset, confirmPasswordReset, loadLoginMethods, startSocialLink } = server
 
 /** 서버 모드의 연결 상태. 시뮬레이션 모드는 늘 live */
 export const getConnection = (): server.Connection =>
@@ -57,6 +60,7 @@ export const fetchSchedule = impl.fetchSchedule
 
 /** 구단정보 탭(배당 조건·다가오는 경기)과 뉴스·공시 탭 */
 export const fetchOverview = impl.fetchOverview
+export const fetchCandles = impl.fetchCandles
 export const fetchNews = impl.fetchNews
 export const fetchNotices = impl.fetchNotices
 /** 공시를 쓰고 고치고 지울 수 있는지. 서버 모드는 운영자만, 시뮬레이션 미리보기는 운영자 화면 예시로 보여준다 */

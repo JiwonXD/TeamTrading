@@ -7,26 +7,25 @@ import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
 import { HelpTip } from '../components/HelpTip'
 import { MAINTENANCE_MESSAGE, useMaintenance } from '../maintenance'
-import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
+import { Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
+import { CandleChart, UnitPicker } from '../chart/CandleChart'
+import { type CandleUnit, savedMinuteUnit } from '../chart/candles'
+import { useCandles } from '../chart/useCandles'
 
-type Period = '1d' | '1w' | '1m' | '3m'
 type Tab = 'book' | 'trades' | 'orders' | 'info' | 'notice' | 'talk'
 
 export default function TeamDetail({ teamId }: { teamId: string }) {
   const s = useStore()
   const team = teamById(teamId)
   const m = s.markets[teamId]
-  const [period, setPeriod] = useState<Period>('1d')
+  const [unit, setUnit] = useState<CandleUnit>(savedMinuteUnit)
+  const chart = useCandles(teamId, unit)
   const [tab, setTab] = useState<Tab>('book')
   const [sheet, setSheet] = useState<{ side: Side; price: number } | null>(null)
   const maintenance = useMaintenance()
   useEffect(() => watchTeam(teamId), [teamId])
 
   const diff = m.last - m.base
-  const points =
-    period === '1d'
-      ? m.intraday.map((p) => p.price)
-      : [...m.daily.slice(period === '1w' ? -7 : period === '1m' ? -30 : -90), m.last]
   const myQty = totalShares(ME, teamId)
   const myAvg = s.users[ME].holdings[teamId]?.avgPrice ?? 0
   const myOrders = openOrders(ME).filter((o) => o.teamId === teamId)
@@ -64,18 +63,9 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
         )}
       </section>
 
-      <Chart points={points} base={period === '1d' ? m.base : undefined} />
-      <div className="pad">
-        <Segmented
-          value={period}
-          onChange={setPeriod}
-          options={[
-            { value: '1d', label: '1일' },
-            { value: '1w', label: '1주' },
-            { value: '1m', label: '1달' },
-            { value: '3m', label: '3달' },
-          ]}
-        />
+      <div className="detail-chart">
+        <CandleChart key={`${teamId}:${unit}`} candles={chart.candles} unit={unit} height={210} step={7} more={chart.more} onLoadMore={chart.loadMore} />
+        <UnitPicker unit={unit} onChange={setUnit} />
       </div>
 
       {offering && <OfferingCard offering={offering} />}

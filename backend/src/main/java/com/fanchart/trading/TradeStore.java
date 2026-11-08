@@ -40,6 +40,14 @@ public class TradeStore {
         return jdbc.query("SELECT * FROM trades WHERE team_id = ? ORDER BY id DESC LIMIT ?", TRADE, teamId, limit);
     }
 
+    /** (at, id)보다 앞선 체결. 체결 시각이 늦은 순, 같은 시각이면 번호가 큰 순 */
+    public List<Trade> before(String teamId, Instant at, long id, int limit) {
+        Timestamp ts = Timestamp.from(at);
+        return jdbc.query("""
+                SELECT * FROM trades WHERE team_id = ? AND executed_at <= ? AND (executed_at < ? OR id < ?)
+                ORDER BY executed_at DESC, id DESC LIMIT ?""", TRADE, teamId, ts, ts, id, limit);
+    }
+
     /** 한 계정이 매수자나 매도자로 참여한 체결. 최신이 앞 */
     public List<Trade> byAccount(String accountId, int limit) {
         return jdbc.query("""

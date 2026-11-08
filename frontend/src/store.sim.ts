@@ -15,6 +15,7 @@ import {
   validateOrder,
 } from './engine/orderbook'
 import { detect } from './engine/fds'
+import { type Candle, type CandlePage, type CandleUnit, addTrade, bucketStart, isMinute } from './chart/candles'
 import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
 import { DIVIDEND_RATE, LEAGUES, type League, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
 import type { MatchDto, NewsDto, NoticeDto, OverviewDto } from './store.server'
@@ -267,13 +268,8 @@ function freshState(): SimState {
   const now = Date.now()
   for (const t of TEAMS) {
     books[t.id] = { bids: [], asks: [] }
-    const daily: number[] = [t.basePrice]
-    for (let d = 1; d < 90; d++) {
-      const prev = daily[0]
-      daily.unshift(Math.round(prev * (1 + (r() - 0.5) * 0.05)))
-    }
     markets[t.id] = {
-      base: t.basePrice, listed: true, last: t.basePrice, high: t.basePrice, low: t.basePrice, volume: 0, daily,
+      base: t.basePrice, listed: true, last: t.basePrice, high: t.basePrice, low: t.basePrice, volume: 0,
       intraday: [{ ts: now - 60_000, price: t.basePrice }],
     }
     bias[t.id] = (r() - 0.5) * 1.2
@@ -442,4 +438,29 @@ export function editNotice(id: number, title: string, body: string): OrderResult
 export function deleteNotice(id: number): OrderResult {
   simNotices = simNotices.filter((n) => n.id !== id)
   return { ok: true, message: '공시를 지웠어요' }
+}
+
+/**
+ * 미리보기 차트 봉. 이번 방문의 시뮬레이션 체결로 만든 봉 앞에 구단·단위별로 고정된 가상 과거 봉을 붙인다.
+ * 과거 봉은 더 불러오지 않는다
+ */
+export function fetchCandles(teamId: string, unit: CandleUnit, before?: number): Promise<CandlePage> {
+  if (before) return Promise.resolve({ candles: [], lastTradeId: 0, more: false })
+  const mine = state.trades.filter((t) => t.teamId === teamId).reverse()
+  let real: Candle[] = []
+  for (const t of mine) real = addTrade(real, unit, t.ts, t.price, t.qty)
+  const vol = isMinute(unit) ? 0.0015 * Math.sqrt(parseInt(unit)) : { day: 0.02, week: 0.045, month: 0.09, year: 0.3 }[unit as 'day']
+  const r = rng([...teamId + unit].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7))
+  const past: Candle[] = []
+  let time = real[0]?.time ?? bucketStart(Date.now(), unit)
+  let close = real[0]?.open ?? state.markets[teamId].last
+  for (let i = 0; i < 150; i++) {
+    time = bucketStart(time - 1, unit)
+    const open = Math.max(1, Math.round(close / (1 + (r() - 0.5) * 2 * vol)))
+    const high = Math.round(Math.max(open, close) * (1 + r() * vol * 0.6))
+    const low = Math.round(Math.min(open, close) * (1 - r() * vol * 0.6))
+    past.unshift({ time, open, high, low, close, volume: 5 + Math.floor(r() * 200) })
+    close = open
+  }
+  return Promise.resolve({ candles: [...past, ...real], lastTradeId: Math.max(0, ...state.trades.map((t) => Number(t.id))), more: false })
 }

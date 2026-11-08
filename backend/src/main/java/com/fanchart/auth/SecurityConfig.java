@@ -1,8 +1,6 @@
 package com.fanchart.auth;
 
 
-import com.fanchart.trading.TradingException;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,7 +9,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
@@ -19,7 +16,7 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
-import java.util.Map;
+import java.time.Clock;
 
 /**
  * 세션 쿠키 로그인. 쿠키를 쓰므로 상태를 바꾸는 요청에는 CSRF 토큰(XSRF-TOKEN 쿠키 → X-XSRF-TOKEN 헤더)이 필요하다.
@@ -37,7 +34,7 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain api(HttpSecurity http, SecurityContextRepository contexts,
                             ObjectProvider<ClientRegistrationRepository> registrations,
-                            ObjectProvider<AccountLogin> login, Withdrawal withdrawal) throws Exception {
+                            ObjectProvider<AccountLogin> login, Withdrawal withdrawal, Clock clock) throws Exception {
         http.csrf(c -> c.spa())
                 .securityContext(c -> c.securityContextRepository(contexts))
                 .anonymous(AbstractHttpConfigurer::disable)
@@ -56,31 +53,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/teams/*/posts").authenticated()
                         .anyRequest().permitAll());
         if (registrations.getIfAvailable() != null) {
-            http.oauth2Login(o -> o.successHandler((req, res, auth) -> {
-                OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) auth;
-                String provider = token.getAuthorizedClientRegistrationId();
-                AccountLogin accounts = login.getObject();
-                String accountId;
-                try {
-                    accountId = accounts.findOrCreate(provider, subject(provider, token.getPrincipal().getAttributes()));
-                } catch (TradingException e) {
-                    res.sendRedirect("/#signup-blocked");
-                    return;
-                }
-                accounts.signIn(accountId, req, res);
-                res.sendRedirect("/");
-            }).failureHandler((req, res, e) -> res.sendRedirect("/#login-failed")));
+            OAuthLoginSuccess handler = new OAuthLoginSuccess(login.getObject(), withdrawal, clock);
+            http.oauth2Login(o -> o.successHandler(handler).failureHandler(handler));
         }
         return http.build();
-    }
-
-    /** 제공자의 사용자 고유 id */
-    static String subject(String provider, Map<String, Object> attributes) {
-        Object id = switch (provider) {
-            case "google" -> attributes.get("sub");
-            default -> attributes.get("id");
-        };
-        if (id == null) throw new IllegalStateException("no user id from " + provider);
-        return id.toString();
     }
 }

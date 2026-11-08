@@ -32,7 +32,6 @@ export interface Market {
   high: number
   low: number
   volume: number
-  daily: number[]
   intraday: { ts: number; price: number }[]
 }
 
