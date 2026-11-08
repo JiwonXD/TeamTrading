@@ -135,7 +135,6 @@
 .small-tabs button { padding: 4px 10px; }
 .desk .segmented button:hover:not(.on) { color: var(--text-2); }
 .desk .chip-btn:hover:not(:disabled) { filter: brightness(0.97); }
-.desk .hint kbd { vertical-align: 1px; }
 
 /* 홈 */
 .dh { display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
@@ -162,7 +161,6 @@
 .spark-base { stroke: var(--line); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .dh .card + .card { margin-top: 0; }
 .dh-board { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
-.dh-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 
 .dtable { width: 100%; border-collapse: collapse; }
 .dtable th { font-size: 12px; font-weight: 500; color: var(--text-3); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -308,7 +306,6 @@
 .of-input button:hover { background: var(--hover); color: var(--text); }
 .of-input button:last-child { border-radius: 0 9px 9px 0; }
 .of-input.readonly { color: var(--text-3); background: var(--surface-2); border-color: transparent; font-size: 13px; }
-.of-hint { margin: 6px 0 0 80px; }
 .of-pcts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0 0 80px; }
 .of-pcts button { height: 32px; border-radius: 8px; background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--text-2); }
 .of-pcts button:hover { background: var(--press); color: var(--text); }
@@ -362,7 +359,6 @@
 }
 @container (max-width: 860px) {
   .dh-top { grid-template-columns: 1fr; }
-  .dh-bottom { grid-template-columns: 1fr; }
   .dtable .range-col { display: none; }
 }
 @media (max-width: 1279px) {

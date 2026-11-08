@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { type LeaderboardDto, type LeaderboardPeriod, type LeaderboardSort, ME, fetchLeaderboard, mode, totalValue, useStore } from '../store'
 import { Header, Segmented, fmt, pct, signed, tone } from '../components/ui'
+import { HelpTip } from '../components/HelpTip'
 
 export default function Ranking() {
   return mode === 'server' ? <ServerRanking /> : <SimRanking />
@@ -48,6 +49,7 @@ function ServerRanking() {
       <section className="card rank-hero">
         <div className="muted">
           {!shown ? '불러오는 중' : period === 'TODAY' ? '오늘 지금까지' : shown.from > shown.to ? '첫 마감 전' : `${day(shown.from)} ~ ${day(shown.to)} 마감 기준`} · 내 순위
+          <HelpTip label="순위 계산 기준">오늘은 지금 시세로, 나머지는 매일 자정 마감 가격으로 계산해요. 활동 보상은 수익에 넣지 않고 배당은 넣어요.</HelpTip>
         </div>
         {mine ? (
           <>
@@ -60,7 +62,6 @@ function ServerRanking() {
         ) : (
           shown && <p className="hint">이 기간에 마감된 기록이 아직 없어요.</p>
         )}
-        <p className="hint">오늘은 지금 시세로, 나머지는 매일 자정 마감 가격으로 계산해요. 활동 보상은 수익에 넣지 않고 배당은 넣어요.</p>
       </section>
       <section className="card" aria-busy={!shown}>
         {error && <p className="hint" role="alert">{error}</p>}
@@ -91,9 +92,8 @@ function SimRanking() {
     <>
       <Header title="수익률 랭킹" />
       <section className="card rank-hero">
-        <div className="muted">시즌 1 · 내 순위</div>
+        <div className="muted">시즌 1 · 내 순위<HelpTip label="시즌 안내">시즌이 끝나면 포인트가 초기화되고 순위에 따라 명예 배지를 드려요.</HelpTip></div>
         <div className="big">{myRank}위 <span className="muted small">/ {rows.length}명</span></div>
-        <p className="hint">시즌이 끝나면 포인트가 초기화되고 순위에 따라 명예 배지를 드려요.</p>
       </section>
       <section className="card">
         {rows.map((r, i) => (

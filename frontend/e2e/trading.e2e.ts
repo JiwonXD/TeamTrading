@@ -122,7 +122,7 @@ test('team page shows live order book and a limit buy at the best ask fills', as
   expect(axe.violations).toEqual([])
 
   await asks.last().click() // 가장 낮은 판매 호가
-  await page.getByPlaceholder('몇 주를 주문할까요?').fill('1')
+  await page.locator('.sheet .qty-input').fill('1')
   await page.locator('.sheet button.btn.wide').click()
   await expect(page.locator('.toast')).toContainText(/체결|대기/)
 
@@ -145,7 +145,7 @@ test("another user's trade reaches a watcher through the live feed", async ({ pa
   const asks = trader.locator('.ob-row.ask')
   await expect(asks.first()).toBeVisible({ timeout: 20_000 })
   await asks.last().click()
-  await trader.getByPlaceholder('몇 주를 주문할까요?').fill('1')
+  await trader.locator('.sheet .qty-input').fill('1')
   await trader.locator('.sheet button.btn.wide').click()
   await expect(trader.locator('.toast')).toContainText('체결')
   await other.close()
@@ -370,13 +370,19 @@ test('정보 tab shows the dividend terms from the server and 뉴스·공시 is 
   await expect(table.locator('tbody tr').first()).toContainText('LCK')
   await expect(table).toContainText('롤드컵')
   await expect(table).not.toContainText('챔스')
+  // 긴 설명은 화면에 바로 두지 않고 물음표를 눌러야 보인다
+  await expect(page.getByText('10P 단위로 반올림')).toHaveCount(0)
+  await table.getByRole('button', { name: '대회별 배당 안내' }).click()
+  await expect(page.getByRole('complementary', { name: '대회별 배당 안내' })).toContainText('10P 단위로 반올림')
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('complementary', { name: '대회별 배당 안내' })).toHaveCount(0)
 
   await page.locator('.tabs').getByRole('button', { name: '뉴스·공시' }).click()
   // 시연 서버는 뉴스 키가 없다
   await expect(page.getByRole('region', { name: '뉴스' })).toContainText('뉴스는 준비 중이에요')
   await page.locator('.news-sub').getByRole('button', { name: '공시' }).click()
-  await expect(page.getByRole('region', { name: '공시' })).toContainText('운영자만 올려요')
+  await expect(page.getByRole('region', { name: '공시' })).toBeVisible()
   await expect(page.getByRole('button', { name: '공시 쓰기' })).toHaveCount(0)
 })

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type League, TEAMS, type Team, isOpen } from '../data/teams'
-import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, mode, totalValue, useStore } from '../store'
+import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
@@ -83,22 +83,11 @@ export default function DesktopHome({ league }: { league: League | null }) {
               ))}
             </tbody>
           </table>
-          <p className="hint">줄에 마우스를 올리면 오른쪽에 미리 보여주고, 누르면 주문 화면으로 가요.</p>
         </div>
         {shownId && <Preview teamId={shownId} />}
       </section>
 
-      {!league && <section className="dh-bottom">
-        {serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />}
-        <section className="card">
-          <h2>팬차트는</h2>
-          <p className="hint">
-            무료 포인트로 즐기는 스포츠 구단 모의 거래소예요. 포인트는 현금으로 바꾸거나 다른 계정에 보낼 수 없어요.
-            {mode === 'server' ? ' 데모 서버에서는 시뮬레이션 계정도 일반 유저와 같은 방식으로 함께 거래해요.' : ' 이 미리보기에서 다른 유저들은 시뮬레이션 계정이에요.'}
-          </p>
-          <p className="hint">단축키: <kbd>/</kbd> 검색 · 구단 화면 차트에서 오른쪽 클릭으로 그 가격에 주문</p>
-        </section>
-      </section>}
+      {!league && (serverMatches ? <ServerMatches matches={serverMatches} /> : <SimMatches />)}
     </div>
   )
 }

@@ -37,7 +37,7 @@ export default function Portfolio() {
 
       <section className="card list-card">
         <h2>보유 구단</h2>
-        {holdings.length === 0 && <p className="empty">아직 보유한 구단이 없어요. 홈에서 응원하는 구단을 찾아보세요.</p>}
+        {holdings.length === 0 && <p className="empty">아직 보유한 구단이 없어요</p>}
         <ul className="stock-list">
           {holdings.map(({ t, qty, avg, last }) => (
             <li key={t.id} onClick={() => go(`team-${t.id}`)}>
@@ -82,9 +82,7 @@ export default function Portfolio() {
       <section className="card">
         <h2>배당 내역</h2>
         {s.dividends.length === 0 && (
-          <p className="empty">
-            {mode === 'server' ? '경기 시작 시각에 보유한 구단이 이기면 배당이, 시즌이 끝나면 최종 성적에 따라 수당이 들어와요' : '홈의 오늘의 경기에서 배당을 정산할 수 있어요'}
-          </p>
+          <p className="empty">아직 받은 배당이 없어요</p>
         )}
         {s.dividends.map((d) => (
           <div key={`${d.matchId}-${d.teamId}`} className="order-row">
