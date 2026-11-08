@@ -3,7 +3,7 @@
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
 import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
-import { COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
+import { CLOSED_LEAGUES, COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -537,6 +537,12 @@ export function start() {
       // 탭 설정·관심 구단은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
       leagueTabs = DEFAULT_TABS
       api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
+      // 닫아 둔 리그는 운영 설정이라 자주 바뀌지 않는다. 못 받으면 모든 리그를 보인다
+      api<{ hidden: string[] }>('GET', '/api/leagues').then((l) => {
+        CLOSED_LEAGUES.clear()
+        for (const code of l.hidden) if (LEAGUES[code]) CLOSED_LEAGUES.add(LEAGUES[code])
+        update()
+      }).catch(() => {})
       watchlist = []
       api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
       await refresh()

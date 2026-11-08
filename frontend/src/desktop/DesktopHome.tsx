@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { type League, TEAMS, type Team } from '../data/teams'
+import { type League, TEAMS, type Team, isOpen } from '../data/teams'
 import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, mode, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { WatchStar } from '../components/WatchStar'
@@ -27,7 +27,7 @@ export default function DesktopHome({ league }: { league: League | null }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'value', desc: true })
   const [preview, setPreview] = useState<string | null>(null)
 
-  const rows = TEAMS.filter((t) => !league || t.league === league)
+  const rows = TEAMS.filter((t) => (league ? t.league === league : isOpen(t)))
     .map((t) => {
       const m = s.markets[t.id]
       return { t, m, chg: m.last / m.base - 1, sortVal: { value: m.volume * m.last, chg: m.last / m.base - 1, last: m.last, volume: m.volume } }
@@ -36,7 +36,7 @@ export default function DesktopHome({ league }: { league: League | null }) {
   const shownId = preview && rows.some((r) => r.t.id === preview) ? preview : rows[0]?.t.id
   const serverMatches = getMatches()
   const offerings = getOfferings()
-  const movers = [...TEAMS].filter((t) => s.markets[t.id].listed)
+  const movers = TEAMS.filter((t) => isOpen(t) && s.markets[t.id].listed)
     .sort((a, b) => Math.abs(s.markets[b.id].last / s.markets[b.id].base - 1) - Math.abs(s.markets[a.id].last / s.markets[a.id].base - 1))
     .slice(0, 3)
 

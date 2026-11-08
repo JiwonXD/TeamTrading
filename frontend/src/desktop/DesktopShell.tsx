@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { type League, TEAMS, type Team, leaguesWithTeams } from '../data/teams'
+import { type League, TEAMS, type Team, isOpen, leaguesWithTeams } from '../data/teams'
 import { visibleLeagues } from '../data/leagueTabs'
 import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, getWatchlist, mode, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
@@ -110,7 +110,7 @@ function Sidebar({ open, onToggle, currentTeam }: { open: boolean; onToggle: () 
   const rows = (tab === 'watch'
     // 관심은 담은 순서대로 둔다
     ? watchlist.flatMap((id) => TEAMS.find((t) => t.id === id) ?? [])
-    : (tab === 'mine' ? TEAMS.filter((t) => totalShares(ME, t.id) > 0) : [...TEAMS]).sort(byValue))
+    : (tab === 'mine' ? TEAMS.filter((t) => totalShares(ME, t.id) > 0) : TEAMS.filter(isOpen)).sort(byValue))
     .filter((t) => league === 'all' || t.league === league)
 
   if (!open) return (

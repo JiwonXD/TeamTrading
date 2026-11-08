@@ -37,6 +37,14 @@ export const TEAMS: Team[] = [
 
 export const teamById = (id: string) => TEAMS.find((t) => t.id === id)!
 
+/**
+ * 서버가 닫아 둔 리그(받을 경기 데이터가 없는 리그, ADR 0033). 리그 탭과 구단 목록에서 뺀다.
+ * 구단은 TEAMS에 남겨 두므로 가진 사람의 보유·주문 내역과 구단 화면은 그대로다
+ */
+export const CLOSED_LEAGUES = new Set<League>()
+/** 리그 탭·구단 목록에 보일 구단인지 */
+export const isOpen = (t: Team) => !CLOSED_LEAGUES.has(t.league)
+
 /** 리그 카테고리. slug는 주소(#league-kbo)에, code는 서버 API에 쓴다 */
 export const LEAGUES: { id: League; slug: string; code: LeagueCode; sport: string }[] = [
   { id: 'KBO', slug: 'kbo', code: 'KBO', sport: '야구' },
@@ -59,7 +67,7 @@ export const COMPETITION_LABEL: Record<string, string> = {
 export const isCup = (competition: string) => !LEAGUES.some((l) => l.code === competition)
 
 /** 구단이 하나라도 있는 리그(시세 띠·구단 목록 필터용) */
-export const leaguesWithTeams = () => LEAGUES.filter((l) => TEAMS.some((t) => t.league === l.id))
+export const leaguesWithTeams = () => LEAGUES.filter((l) => !CLOSED_LEAGUES.has(l.id) && TEAMS.some((t) => t.league === l.id))
 
 export interface Match {
   id: string
