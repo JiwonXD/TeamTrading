@@ -79,7 +79,7 @@ test('stars in the market table fill the 관심 tab of the side list in the orde
   expect(axe.violations).toEqual([])
 })
 
-test('schedule dates can be dragged sideways and the arrows move one day at a time', async ({ page }) => {
+test('schedule dates can be dragged sideways, a picked day moves to the center and the arrows move one day at a time', async ({ page }) => {
   await signIn(page)
   await page.locator('.league-tabs').getByRole('link', { name: 'LCK' }).click()
   const strip = page.locator('.sched-days')
@@ -102,9 +102,22 @@ test('schedule dates can be dragged sideways and the arrows move one day at a ti
   await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(before + 150)
   await expect(selected).toContainText('오늘')
 
+  // 끌다가 날짜를 누르면 그 날이 띠 가운데로 온다
+  const picked = strip.locator('.sched-day').nth(await strip.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return [...el.children].findIndex((c) => c.getBoundingClientRect().left > r.left + r.width * 0.75)
+  }))
+  await picked.click()
+  await expect(picked).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(async () => {
+    const [p, s] = [(await picked.boundingBox())!, (await strip.boundingBox())!]
+    return Math.abs(p.x + p.width / 2 - (s.x + s.width / 2))
+  }).toBeLessThan(2)
+
   // 화살표는 하루씩 옮긴다
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
+  await page.getByRole('button', { name: '오늘', exact: true }).click()
   await page.getByRole('button', { name: '다음 날' }).click()
   await expect(selected.locator('b')).toHaveText(`${tomorrow.getDate()}일`)
   await page.getByRole('button', { name: '오늘', exact: true }).click()
