@@ -27,6 +27,7 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -100,6 +101,8 @@ public class TradingService {
     private final AtomicLong ids = new AtomicLong();
     /** 매도가 증자로 작동하는 운영자 계정 */
     private final Set<String> issuers;
+    /** 매일 점검시간({@link MarketHours})에 주문을 막는지. 시연·테스트 서버는 끈다 */
+    private volatile boolean maintenance;
 
     public TradingService(TeamCatalog catalog, AccountStore accounts, OrderStore orders, TradeStore trades,
                           Ledger ledger, PointIssuer points, TransactionTemplate tx, Clock clock,
@@ -136,6 +139,21 @@ public class TradingService {
         for (Team team : catalog.all()) initial.put(team.id(), new Market(team));
         this.markets = initial;
         catalog.onRegistered(this::open);
+    }
+
+    @Value("${fanchart.trading.maintenance:true}")
+    void setMaintenance(boolean maintenance) {
+        this.maintenance = maintenance;
+    }
+
+    /** 점검시간 설정이 켜져 있는지. 화면이 점검시간에 매매 버튼을 막는 데 쓴다 */
+    public boolean maintenanceEnabled() {
+        return maintenance;
+    }
+
+    /** 지금이 점검시간이라 주문을 받지 않는지 */
+    public boolean inMaintenance() {
+        return maintenance && MarketHours.isMaintenance(clock.instant());
     }
 
     /** 기동 시 DB를 기준으로 호가창과 시세를 다시 만든다 */
@@ -242,6 +260,8 @@ public class TradingService {
 
     /** 상장 시각이 됐거나 VI 시간이 끝난 구단의 단일가 매매를 체결한다 */
     public void openDueAuctions() {
+        // 점검시간에는 체결하지 않는다. 끝나면 다음 차례에 체결한다
+        if (inMaintenance()) return;
         for (Market market : markets.values()) {
             market.lock.lock();
             try {
@@ -310,6 +330,12 @@ public class TradingService {
         market.lock.lock();
         try {
             if (market.halted) throw new TradingException("이 구단은 점검 중이라 잠시 거래할 수 없어요");
+            if (inMaintenance()) {
+                // 점검시간 직전에 접수된 주문을 같은 번호로 다시 보내면 거절하지 않고 처음 결과를 돌려준다
+                var accepted = orders.findByClientOrderId(accountId, clientOrderId);
+                if (accepted.isPresent()) return replay(accepted.get(), teamId, side, type, price, quantity);
+                throw new TradingException("매일 00:00~00:30은 점검시간이라 주문할 수 없어요. 00:30부터 다시 거래할 수 있어요");
+            }
             // 기준가는 일 마감 뒤 바뀌므로 종목 락 안에서 확인한다
             long base = market.basePrice();
             PriceRules.validate(type, price, quantity, base).ifPresent(reason -> {

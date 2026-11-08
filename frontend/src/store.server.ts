@@ -7,6 +7,7 @@ import { CLOSED_LEAGUES, COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League,
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
+import { MAINTENANCE, type MaintenanceWindow } from './maintenance'
 import { emit } from './storeCore'
 import { ME, START_POINTS, type Market, type OrderResult, type Post, type State, type User } from './storeTypes'
 
@@ -586,6 +587,8 @@ export function start() {
         for (const code of l.hidden) if (LEAGUES[code]) CLOSED_LEAGUES.add(LEAGUES[code])
         update()
       }).catch(() => {})
+      // 매일 점검시간은 운영 설정이라 한 번만 받는다. 못 받으면 막지 않는다(주문은 서버가 거절한다)
+      api<{ maintenance: MaintenanceWindow | null }>('GET', '/api/market-hours').then((h) => { MAINTENANCE.window = h.maintenance; update() }).catch(() => {})
       watchlist = []
       api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
       await refresh()

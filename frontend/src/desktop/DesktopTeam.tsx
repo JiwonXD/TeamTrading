@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
+import { MAINTENANCE_MESSAGE, useMaintenance } from '../maintenance'
 import { ME, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
 import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
@@ -204,6 +205,7 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
   const unitPrice = type === 'limit' ? price : side === 'buy' ? upper : m.last
   const maxQty = side === 'buy' ? Math.floor(me.points / Math.max(1, type === 'limit' ? price : upper)) : me.holdings[teamId]?.qty ?? 0
   const label = side === 'buy' ? '구매' : '판매'
+  const maintenance = useMaintenance()
 
   const submit = async () => {
     setBusy(true)
@@ -261,7 +263,8 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
         <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>
         <b>{fmt(unitPrice * qty)}P</b>
       </div>
-      <button className={`btn wide ${side}`} disabled={qty <= 0 || busy} onClick={submit}>{qty > 0 ? `${fmt(qty)}주 ${label}하기` : `${label}하기`}</button>
+      {maintenance && <p className="notice" aria-live="polite">{MAINTENANCE_MESSAGE}</p>}
+      <button className={`btn wide ${side}`} disabled={qty <= 0 || busy || maintenance} onClick={submit}>{qty > 0 ? `${fmt(qty)}주 ${label}하기` : `${label}하기`}</button>
     </section>
   )
 }
