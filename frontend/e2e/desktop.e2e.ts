@@ -89,6 +89,8 @@ test('schedule dates can be dragged sideways and the arrows move one day at a ti
   const box = (await strip.boundingBox())!
   const todayBox = (await selected.boundingBox())!
   expect(todayBox.x - box.x).toBeLessThan(box.width / 4)
+  // 띠 안의 날짜 칸이 페이지 가로 폭을 늘리지 않는다
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
   // 누른 채 왼쪽으로 끌면 미래 날짜로 넘어가고, 끌기를 날짜 고르기로 치지 않는다
   const before = await strip.evaluate((el) => el.scrollLeft)

@@ -135,6 +135,8 @@ main.with-cta { padding-bottom: 96px; }
 /* 날짜 띠: 좌우로 끌거나 밀어서 넘긴다. 오른쪽 끝에 반 칸을 걸쳐 더 있다는 걸 보여 준다 */
 .sched-days {
   --sched-cols: 7.5;
+  /* 칸 안의 화면 낭독용 글자(sr-only, absolute)가 띠 밖으로 새어 페이지 가로 폭을 늘리지 않게 띠를 기준 상자로 둔다 */
+  position: relative;
   display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - (var(--sched-cols) - 1) * 4px) / var(--sched-cols));
   gap: 4px; margin-bottom: 8px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
   scrollbar-width: none; user-select: none; -webkit-user-select: none; cursor: grab;
