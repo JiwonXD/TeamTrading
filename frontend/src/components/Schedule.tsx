@@ -238,12 +238,13 @@ export function LeagueSchedule({ league }: { league: League }) {
               key={d.getTime()}
               className={`sched-day ${on ? 'on' : ''} ${isToday ? 'today' : ''}`}
               aria-pressed={on}
-              aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일${isToday ? ' 오늘' : ''}${has ? ' 경기 있음' : ''}`}
               onClick={() => select(i)}
             >
+              {d.getDate() !== 1 && <span className="sr-only">{d.getMonth() + 1}월</span>}
               <span className="xs">{isToday ? '오늘' : d.getDate() === 1 ? `${d.getMonth() + 1}월` : WEEKDAYS[d.getDay()]}</span>
-              <b>{d.getDate()}</b>
+              <b>{d.getDate()}<span className="sr-only">일</span></b>
               <i className={`dot ${has ? '' : 'none'}`} />
+              {has && <span className="sr-only">경기 있음</span>}
             </button>
           )
         })}

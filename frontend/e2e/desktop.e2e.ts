@@ -104,7 +104,7 @@ test('schedule dates can be dragged sideways and the arrows move one day at a ti
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   await page.getByRole('button', { name: '다음 날' }).click()
-  await expect(selected).toHaveAttribute('aria-label', new RegExp(`^${tomorrow.getMonth() + 1}월 ${tomorrow.getDate()}일 `))
+  await expect(selected.locator('b')).toHaveText(`${tomorrow.getDate()}일`)
   await page.getByRole('button', { name: '오늘', exact: true }).click()
   await expect(selected).toContainText('오늘')
   await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBe(before)
