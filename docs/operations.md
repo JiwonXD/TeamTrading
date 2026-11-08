@@ -105,7 +105,7 @@ ESPN 팀 번호는 종목마다 따로 매겨 겹칠 수 있어, 축구가 아�
 
 | 키 변수 | 제공처 | 대회(설정의 대회 번호) | 무료 한도 |
 | --- | --- | --- | --- |
-| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292), 코리아컵(294) | API마다 하루 100회. 무료는 2022~2024 시즌만 열려 올해 일정은 유료(Pro, API마다 월 19달러)가 필요하다 |
+| `API_SPORTS_KEY` | API-Sports(`api-baseball`, `api-football`) | KBO(5), K리그(292). 둘 다 지금은 닫아 둔 리그(HIDDEN_LEAGUES, ADR 0033)라 수집하지 않는다 | API마다 하루 100회. 무료는 2022~2024 시즌만 열려 올해 일정은 유료(Pro, API마다 월 19달러)가 필요하다 |
 | `FOOTBALL_DATA_KEY` | football-data.org(`football-data`) | 프리미어리그(PL), 라리가(PD), 세리에A(SA), 분데스리가(BL1), 챔피언스리그(CL) | 분당 10회 |
 | `PANDASCORE_KEY` | PandaScore(`pandascore`) | LCK(293), MSI(300), 롤드컵(297). LCK컵·EWC는 번호 확인 뒤 더한다 | 시간당 1,000회 |
 | (키 없음) | ESPN(`espn`, 공개 문서 없음) | NBA(`basketball/nba`), 유로파(`soccer/uefa.europa`), 컨퍼런스(`soccer/uefa.europa.conf`), FA컵(`soccer/eng.fa`), EFL컵(`soccer/eng.league_cup`), 코파 델 레이(`soccer/esp.copa_del_rey`), 코파 이탈리아(`soccer/ita.coppa_italia`), DFB 포칼(`soccer/ger.dfb_pokal`), ACL(`soccer/afc.champions`) | 공식 한도 없음. 하루씩 묻고 우리 쪽 상한 하루 1,500회. 승부차기로 끝난 경기는 운영자가 결과를 넣는다 |
