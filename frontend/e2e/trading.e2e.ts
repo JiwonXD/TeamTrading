@@ -360,3 +360,23 @@ test('a star on the team page adds it to 관심 구단 on home, which stays afte
   // 별만 눌렀으므로 구단 화면으로 넘어가지 않는다
   await expect(page).toHaveURL(/#home$/)
 })
+
+test('정보 tab shows the dividend terms from the server and 뉴스·공시 is read-only for users', async ({ page }) => {
+  await signIn(page, '#team-t1')
+  await page.locator('.tabs').getByRole('button', { name: '정보' }).click()
+  // LCK 1승 배당(DividendPolicy)과 국제 대회 배수
+  await expect(page.locator('.info-win')).toContainText('1주당 160P')
+  const table = page.getByRole('region', { name: '대회별 배당' })
+  await expect(table.locator('tbody tr').first()).toContainText('LCK')
+  await expect(table).toContainText('롤드컵')
+  await expect(table).not.toContainText('챔스')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await page.locator('.tabs').getByRole('button', { name: '뉴스·공시' }).click()
+  // 시연 서버는 뉴스 키가 없다
+  await expect(page.getByRole('region', { name: '뉴스' })).toContainText('뉴스는 준비 중이에요')
+  await page.locator('.news-sub').getByRole('button', { name: '공시' }).click()
+  await expect(page.getByRole('region', { name: '공시' })).toContainText('운영자만 올려요')
+  await expect(page.getByRole('button', { name: '공시 쓰기' })).toHaveCount(0)
+})

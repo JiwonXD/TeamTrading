@@ -224,8 +224,8 @@ main.with-cta { padding-bottom: 96px; }
 .stats div { display: flex; flex-direction: column; gap: 2px; }
 .stats .muted { font-size: 12px; font-weight: 400; }
 
-.tabs { display: flex; gap: 4px; padding: 4px 16px 10px; position: sticky; top: calc(56px + env(safe-area-inset-top, 0px)); background: var(--bg); z-index: 5; }
-.tabs button { padding: 8px 12px; font-weight: 600; color: var(--text-3); border-radius: 10px; }
+.tabs { display: flex; gap: 4px; padding: 4px 16px 10px; overflow-x: auto; scrollbar-width: none; position: sticky; top: calc(56px + env(safe-area-inset-top, 0px)); background: var(--bg); z-index: 5; }
+.tabs button { padding: 8px 12px; font-weight: 600; color: var(--text-3); border-radius: 10px; white-space: nowrap; flex: none; }
 .tabs button.on { color: var(--text); background: var(--surface); }
 
 .orderbook { padding: 12px 0 16px; }
@@ -393,3 +393,36 @@ main.with-cta { padding-bottom: 96px; }
 .legal-links { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 8px 16px 24px; color: var(--text-3); }
 .legal-links .text-btn { font-size: 13px; }
 .withdraw-notes li { line-height: 1.6; }
+
+/* 구단정보·공시 탭 */
+.team-info h2 { font-size: 17px; }
+.team-info h2 .xs { font-weight: 400; margin-left: 4px; }
+.info-big { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.info-mine { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+.info-grid, .info-awards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; margin: 0; }
+.info-grid div, .info-awards div { display: flex; flex-direction: column; gap: 2px; }
+.info-grid dt, .info-awards dt { font-size: 13px; color: var(--text-3); }
+.info-grid dd, .info-awards dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.info-list { list-style: none; margin: 0; padding: 0; }
+.info-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.info-list li:last-child { border-bottom: 0; }
+.info-list a { color: inherit; font-weight: 600; }
+.info-when { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.info-dps { font-size: 14px; white-space: nowrap; }
+.info-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.info-table th { font-weight: 400; font-size: 13px; color: var(--text-3); text-align: right; padding: 0 0 8px; }
+.info-table td { text-align: right; padding: 8px 0; border-top: 1px solid var(--line); }
+.info-table th:first-child, .info-table td:first-child { text-align: left; }
+.info-rules { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.notice-new { margin-bottom: 8px; }
+.notice-item h3 { font-size: 15px; font-weight: 700; margin: 0; }
+.notice-body { white-space: pre-wrap; }
+.notice-form { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.notice-form input:not([type]), .notice-form textarea { padding: 10px 12px; border-radius: 10px; border: 0; background: var(--surface-2); color: var(--text); font: inherit; outline: none; resize: vertical; }
+.danger-text { color: var(--red); }
+.news-list { list-style: none; margin: 0; padding: 0; }
+.news-list li { border-bottom: 1px solid var(--line); }
+.news-list li:last-child { border-bottom: 0; }
+.news-list a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; color: inherit; text-decoration: none; }
+.news-list b { font-size: 15px; line-height: 1.4; }
+.news-summary { font-size: 14px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

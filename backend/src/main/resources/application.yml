@@ -34,6 +34,10 @@ fanchart:
   # KBO는 API-Sports 유료로 데이터를 받게 되면 HIDDEN_LEAGUES에서 빼서 다시 연다(예: HIDDEN_LEAGUES=K_LEAGUE)
   leagues:
     hidden: ${HIDDEN_LEAGUES:KBO,K_LEAGUE}
+  # 구단 화면 뉴스(네이버 검색 API 뉴스, docs/adr/0035). 키를 비우면 뉴스 탭이 준비 중으로 보인다
+  news:
+    naver-client-id: ${NAVER_CLIENT_ID:}
+    naver-client-secret: ${NAVER_CLIENT_SECRET:}
   match-feed:
     keys:
       api-sports: ${API_SPORTS_KEY:}

@@ -247,6 +247,9 @@
 .dt-tabs button:hover { background: var(--hover); color: var(--text-2); }
 .dt-tabs button.on { background: var(--surface); color: var(--text); }
 .dt-talk { max-width: 760px; }
+.dt-info .team-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.dt-info .info-win { grid-column: 1 / -1; }
+.dt-talk .news-sub { padding: 0; max-width: 240px; }
 .dt-grid {
   display: grid; gap: 14px; align-items: stretch;
   grid-template-columns: minmax(0, 1fr) 320px 330px;

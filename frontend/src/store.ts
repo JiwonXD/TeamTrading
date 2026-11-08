@@ -12,7 +12,7 @@ export { ME, START_POINTS } from './storeTypes'
 export { getToast, showToast } from './storeCore'
 
 export type { ReportReason } from './store.server'
-export type { AdStatusDto, Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, OfferingDto, SubscriptionDto } from './store.server'
+export type { AdStatusDto, Connection, LeaderboardDto, LeaderboardPeriod, LeaderboardSort, LoginOptions, MatchDto, NewsDto, NoticeDto, OfferingDto, OverviewDto, SubscriptionDto } from './store.server'
 
 export const mode: 'server' | 'sim' = import.meta.env.VITE_BACKEND === 'server' ? 'server' : 'sim'
 const impl = mode === 'server' ? server : sim
@@ -54,6 +54,16 @@ export const getMatches = (): server.MatchDto[] | null => (mode === 'server' ? s
 
 export const fetchLeaderboard = server.fetchLeaderboard
 export const fetchSchedule = impl.fetchSchedule
+
+/** 구단정보 탭(배당 조건·다가오는 경기)과 뉴스·공시 탭 */
+export const fetchOverview = impl.fetchOverview
+export const fetchNews = impl.fetchNews
+export const fetchNotices = impl.fetchNotices
+/** 공시를 쓰고 고치고 지울 수 있는지. 서버 모드는 운영자만, 시뮬레이션 미리보기는 운영자 화면 예시로 보여준다 */
+export const canWriteNotices = (): boolean => (mode === 'server' ? server.isAdmin() : true)
+export const writeNotice = (teamId: string | null, title: string, body: string): Promise<OrderResult> => Promise.resolve(impl.writeNotice(teamId, title, body))
+export const editNotice = (id: number, title: string, body: string): Promise<OrderResult> => Promise.resolve(impl.editNotice(id, title, body))
+export const deleteNotice = (id: number): Promise<OrderResult> => Promise.resolve(impl.deleteNotice(id))
 
 /** 서버 모드의 공모 목록과 내 청약. 시뮬레이션 모드는 null */
 export const getOfferings = (): server.OfferingDto[] | null => (mode === 'server' ? server.getOfferings() : null)
