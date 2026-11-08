@@ -40,7 +40,7 @@ public class PasswordLogin {
     static final Duration RESET_INTERVAL = Duration.ofMinutes(1);
     static final String WRONG = "아이디 또는 비밀번호가 맞지 않아요";
 
-    private static final Pattern LOGIN_ID = Pattern.compile("[a-z][a-z0-9]{3,19}");
+    private static final Pattern LOGIN_ID = Pattern.compile("[a-z0-9]{4,20}");
     private static final Pattern PASSWORD_CHARS = Pattern.compile("[\\x21-\\x7E]+");
     private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Seoul"));
@@ -74,7 +74,7 @@ public class PasswordLogin {
     }
 
     static Optional<String> loginIdProblem(String loginId) {
-        if (!LOGIN_ID.matcher(loginId).matches()) return Optional.of("아이디는 영문 소문자로 시작하는 영문·숫자 4~20자예요");
+        if (!LOGIN_ID.matcher(loginId).matches()) return Optional.of("아이디는 영문 소문자·숫자 4~20자예요");
         return Optional.empty();
     }
 

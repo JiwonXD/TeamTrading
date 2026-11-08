@@ -110,9 +110,12 @@ class PasswordLoginTest {
         postJson("/api/auth/signup", "{\"loginId\":\"" + id + "\",\"password\":\"other456x\"}", new MockHttpSession())
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.message").value("이미 쓰고 있는 아이디예요"));
-        for (String bad : List.of("ab", "1abc", "한글아이디", "abc_def", "a".repeat(21))) {
+        for (String bad : List.of("ab", "abc", "한글아이디", "abc_def", "a".repeat(21))) {
             mvc.perform(get("/api/auth/login-ids/check").param("loginId", bad)).andExpect(jsonPath("$.available").value(false));
         }
+        // 숫자로 시작하거나 숫자만 있어도 된다
+        for (String ok : List.of("2026" + id, "1" + id.substring(1)))
+            mvc.perform(get("/api/auth/login-ids/check").param("loginId", ok)).andExpect(jsonPath("$.available").value(true));
     }
 
     @Test
