@@ -188,7 +188,7 @@
 .dh-preview { position: sticky; top: calc(var(--header-h) + 24px); display: flex; flex-direction: column; gap: 4px; animation: desk-in 0.18s var(--ease); }
 .dh-preview-head { margin-bottom: 8px; }
 .dh-preview-price { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.dh-preview .pchart { margin: 12px 0 8px; }
+.dh-preview .pchart { margin-top: 12px; margin-bottom: 8px; }
 .dh-preview-talk { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .dh-preview-talk p { line-height: 1.45; color: var(--text-2); }
 .dh-preview-go { flex: none; height: 46px; font-size: 15px; margin-top: 14px; }
