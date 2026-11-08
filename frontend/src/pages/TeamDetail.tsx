@@ -5,6 +5,7 @@ import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode,
 import { OfferingCard } from '../components/Offering'
 import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
+import { MAINTENANCE_MESSAGE, useMaintenance } from '../maintenance'
 import { Chart, Header, Logo, Segmented, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
 
 type Period = '1d' | '1w' | '1m' | '3m'
@@ -17,6 +18,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
   const [period, setPeriod] = useState<Period>('1d')
   const [tab, setTab] = useState<Tab>('book')
   const [sheet, setSheet] = useState<{ side: Side; price: number } | null>(null)
+  const maintenance = useMaintenance()
   useEffect(() => watchTeam(teamId), [teamId])
 
   const diff = m.last - m.base
@@ -50,6 +52,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
               : '상장 전이에요. 공모 청약과 상장 동시호가를 거쳐 거래가 시작돼요'}
           </div>
         )}
+        {maintenance && <p className="notice" aria-live="polite">{MAINTENANCE_MESSAGE}</p>}
         {m.listed && m.viUntil && (
           <p className="notice vi-notice" aria-live="polite">
             가격이 크게 움직여 변동성 완화장치(VI)가 발동했어요.{' '}
@@ -113,7 +116,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
         ))}
       </div>
 
-      {tab === 'book' && <OrderBookView teamId={teamId} onPick={(price, side) => setSheet({ side, price })} />}
+      {tab === 'book' && <OrderBookView teamId={teamId} onPick={(price, side) => !maintenance && setSheet({ side, price })} />}
       {tab === 'trades' && <TradesView teamId={teamId} />}
       {tab === 'orders' && (
         <section className="card">
@@ -132,8 +135,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
       {tab === 'talk' && <TalkView teamId={teamId} />}
 
       <div className="cta">
-        <button className="btn sell" onClick={() => setSheet({ side: 'sell', price: m.last })}>판매하기</button>
-        <button className="btn buy" onClick={() => setSheet({ side: 'buy', price: m.last })}>구매하기</button>
+        <button className="btn sell" disabled={maintenance} onClick={() => setSheet({ side: 'sell', price: m.last })}>판매하기</button>
+        <button className="btn buy" disabled={maintenance} onClick={() => setSheet({ side: 'buy', price: m.last })}>구매하기</button>
       </div>
 
       {sheet && <OrderSheet teamId={teamId} side={sheet.side} initialPrice={sheet.price} onClose={() => setSheet(null)} />}
@@ -287,6 +290,7 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
   const unitPrice = type === 'limit' ? price : side === 'buy' ? upper : s.markets[teamId].last
   const maxQty = side === 'buy' ? Math.floor(me.points / (type === 'limit' ? price : upper)) : me.holdings[teamId]?.qty ?? 0
   const label = side === 'buy' ? '구매' : '판매'
+  const maintenance = useMaintenance()
 
   const [busy, setBusy] = useState(false)
   const submit = async () => {
@@ -345,7 +349,8 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
           <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>
           <span className="strong">{fmt(unitPrice * qty)}P</span>
         </div>
-        <button className={`btn wide ${side}`} disabled={qty <= 0 || busy} onClick={submit}>{label}하기</button>
+        {maintenance && <p className="notice">{MAINTENANCE_MESSAGE}</p>}
+        <button className={`btn wide ${side}`} disabled={qty <= 0 || busy || maintenance} onClick={submit}>{label}하기</button>
       </div>
     </div>
   )

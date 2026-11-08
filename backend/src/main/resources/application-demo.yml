@@ -18,3 +18,6 @@ fanchart:
   # 시연용 가상 경기가 모든 리그에 잡히므로 닫아 둘 리그가 없다(ADR 0033)
   leagues:
     hidden: ""
+  # 시연·CI 서버는 아무 때나 주문해 볼 수 있게 매일 점검시간(00:00~00:30)을 끈다
+  trading:
+    maintenance: false

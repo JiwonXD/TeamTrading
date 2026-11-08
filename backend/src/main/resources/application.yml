@@ -30,6 +30,9 @@ management:
 # 경기 일정·결과 수집(docs/adr/0027, 0028). 키는 제공처마다 하나, 대회는 "어느 제공처의 몇 번 대회인지"만 둔다.
 # 키가 없는 제공처의 대회와 enabled: false인 대회만 수집하지 않는다. 대회 번호 확인은 docs/operations.md "경기 데이터 수집"
 fanchart:
+  # 매일 00:00~00:30(한국 시간)은 점검시간이라 매수·매도 주문을 받지 않는다(ADR 0036)
+  trading:
+    maintenance: true
   # 닫아 둔 리그(ADR 0033). 받을 경기 데이터가 없는 리그는 정규 시즌을 수집하지 않고 화면의 리그 탭·구단 목록에서 뺀다.
   # KBO는 API-Sports 유료로 데이터를 받게 되면 HIDDEN_LEAGUES에서 빼서 다시 연다(예: HIDDEN_LEAGUES=K_LEAGUE)
   leagues:
