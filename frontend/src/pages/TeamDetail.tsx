@@ -335,7 +335,7 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
         </label>
         <label className="field">
           <span className="muted">수량</span>
-          <input className="qty-input" inputMode="numeric" placeholder={`최대 ${fmt(maxQty)}주 가능`} value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
+          <input className="qty-input" inputMode="numeric" placeholder="몇 주를 주문할까요?" value={qtyText} onChange={(e) => setQtyText(e.target.value.replace(/\D/g, ''))} />
           <div className="chips">
             {[0.1, 0.25, 0.5, 1].map((r) => (
               <button key={r} className="chip" onClick={() => setQtyText(String(Math.floor(maxQty * r)))}>
@@ -343,6 +343,9 @@ function OrderSheet({ teamId, side, initialPrice, onClose }: { teamId: string; s
               </button>
             ))}
           </div>
+          <span className="muted xs">
+            {side === 'buy' ? `주문 가능 ${fmt(me.points)}P · 최대 ${fmt(maxQty)}주` : `판매 가능 ${fmt(maxQty)}주`}
+          </span>
         </label>
         <div className="row-between total">
           <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>

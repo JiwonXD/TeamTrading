@@ -306,6 +306,7 @@
 .of-input button:hover { background: var(--hover); color: var(--text); }
 .of-input button:last-child { border-radius: 0 9px 9px 0; }
 .of-input.readonly { color: var(--text-3); background: var(--surface-2); border-color: transparent; font-size: 13px; }
+.of-hint { margin: 6px 0 0 80px; }
 .of-pcts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0 0 80px; }
 .of-pcts button { height: 32px; border-radius: 8px; background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--text-2); }
 .of-pcts button:hover { background: var(--press); color: var(--text); }
