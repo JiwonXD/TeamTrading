@@ -30,6 +30,14 @@ management:
 # 경기 일정·결과 수집(docs/adr/0027, 0028). 키는 제공처마다 하나, 대회는 "어느 제공처의 몇 번 대회인지"만 둔다.
 # 키가 없는 제공처의 대회와 enabled: false인 대회만 수집하지 않는다. 대회 번호 확인은 docs/operations.md "경기 데이터 수집"
 fanchart:
+  # 닫아 둔 리그(ADR 0033). 받을 경기 데이터가 없는 리그는 정규 시즌을 수집하지 않고 화면의 리그 탭·구단 목록에서 뺀다.
+  # KBO는 API-Sports 유료로 데이터를 받게 되면 HIDDEN_LEAGUES에서 빼서 다시 연다(예: HIDDEN_LEAGUES=K_LEAGUE)
+  leagues:
+    hidden: ${HIDDEN_LEAGUES:KBO,K_LEAGUE}
+  # 구단 화면 뉴스(네이버 검색 API 뉴스, docs/adr/0035). 키를 비우면 뉴스 탭이 준비 중으로 보인다
+  news:
+    naver-client-id: ${NAVER_CLIENT_ID:}
+    naver-client-secret: ${NAVER_CLIENT_SECRET:}
   match-feed:
     keys:
       api-sports: ${API_SPORTS_KEY:}
@@ -94,9 +102,8 @@ fanchart:
       - competition: DFB_POKAL
         source: espn
         league-id: soccer/ger.dfb_pokal
+      # ACL은 K리그 구단 대회라 K리그를 닫아 둔 동안 끈다. 코리아컵은 받을 무료 출처가 없어 목록에서 뺐다
       - competition: ACL
         source: espn
         league-id: soccer/afc.champions
-      - competition: KOREA_CUP
-        source: api-football
-        league-id: "294"
+        enabled: false

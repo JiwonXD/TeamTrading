@@ -3,7 +3,7 @@
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
 import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
-import { COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
+import { CLOSED_LEAGUES, COMPETITION_LABEL, LEAGUES as LEAGUE_LIST, type League, type LeagueCode, TEAMS, isCup } from './data/teams'
 import type { Book, Order, OrderType, Side, Trade } from './engine/orderbook'
 import type { Alert } from './engine/fds'
 import { type FeedMessage, type TeamFeed, applyFeed } from './api/feed'
@@ -39,6 +39,23 @@ export interface OfferingDto {
   status: 'SUBSCRIBING' | 'ALLOCATED' | 'CANCELED'; allocatedShares: number; subscribers: number; requested: number
 }
 export interface SubscriptionDto { offeringId: number; quantity: number; deposit: number; allocated: number | null; createdAt: string }
+/** 구단정보 탭. 금액은 모두 1주당 포인트 */
+export interface OverviewDto {
+  teamId: string; league: LeagueCode
+  /** 이용자들이 가진 주식 수와 그 계정 수 */
+  shares: number; holders: number
+  /** 소속 리그 경기 1승 배당 */
+  winDps: number
+  confirmDelayMinutes: number
+  competitions: { competition: string; weight: number; winDps: number; championDps: number }[]
+  /** 소속 리그(대회 배수 1) 성적 수당 */
+  awards: { award: string; dps: number }[]
+  /** 상대가 상장하지 않은 팀이면 opponentId는 null */
+  upcoming: { matchId: number; competition: string; scheduledAt: string; home: boolean; opponentId: string | null; opponentName: string; winDps: number }[]
+}
+export interface NewsDto { available: boolean; articles: { title: string; summary: string; url: string; source: string; publishedAt: string }[] }
+/** teamId가 null이면 전체 공시 */
+export interface NoticeDto { id: number; teamId: string | null; title: string; body: string; createdAt: string; updatedAt: string | null }
 interface PostDto { id: number; teamId: string; nickname: string; body: string; holder: boolean; createdAt: string; mine: boolean; reward: Post['reward'] | null }
 export type ReportReason = 'SPAM' | 'ABUSE' | 'AD' | 'OTHER'
 export type LeaderboardPeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'SEASON'
@@ -311,6 +328,32 @@ export const fetchLeaderboard = (period: LeaderboardPeriod, sort: LeaderboardSor
 export const fetchSchedule = (league: League, from: Date, to: Date) =>
   api<MatchDto[]>('GET', `/api/matches/schedule?league=${LEAGUE_LIST.find((l) => l.id === league)!.code}&from=${from.toISOString()}&to=${to.toISOString()}`)
 
+/** 구단정보 탭: 배당 조건과 다가오는 경기. 서버의 배당 규칙에서 계산한 값이다 */
+export const fetchOverview = (teamId: string) => api<OverviewDto>('GET', `/api/teams/${teamId}/overview`)
+
+/** 뉴스 탭: 서버가 구단별로 모아 둔 네이버 뉴스 검색 결과. 키가 없으면 available false */
+export const fetchNews = (teamId: string) => api<NewsDto>('GET', `/api/teams/${teamId}/news`)
+
+/** 공시 탭: 구단 공시와 전체 공시(teamId null)를 최신부터 */
+export const fetchNotices = (teamId: string) => api<NoticeDto[]>('GET', `/api/teams/${teamId}/notices`)
+
+async function noticeAction(call: () => Promise<unknown>, done: string): Promise<OrderResult> {
+  try {
+    await call()
+    return { ok: true, message: done }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : '처리하지 못했어요' }
+  }
+}
+
+/** 운영자 공시 쓰기. teamId가 null이면 모든 구단에 보이는 전체 공시 */
+export const writeNotice = (teamId: string | null, title: string, body: string) =>
+  noticeAction(() => api('POST', '/api/admin/notices', { teamId, title, body }), '공시를 올렸어요')
+export const editNotice = (id: number, title: string, body: string) =>
+  noticeAction(() => api('PUT', `/api/admin/notices/${id}`, { title, body }), '공시를 고쳤어요')
+export const deleteNotice = (id: number) =>
+  noticeAction(() => api('DELETE', `/api/admin/notices/${id}`), '공시를 지웠어요')
+
 // ---------- 화면에서 부르는 동작 ----------
 
 export function totalShares(userId: string, teamId: string) {
@@ -537,6 +580,12 @@ export function start() {
       // 탭 설정·관심 구단은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
       leagueTabs = DEFAULT_TABS
       api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
+      // 닫아 둔 리그는 운영 설정이라 자주 바뀌지 않는다. 못 받으면 모든 리그를 보인다
+      api<{ hidden: string[] }>('GET', '/api/leagues').then((l) => {
+        CLOSED_LEAGUES.clear()
+        for (const code of l.hidden) if (LEAGUES[code]) CLOSED_LEAGUES.add(LEAGUES[code])
+        update()
+      }).catch(() => {})
       watchlist = []
       api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
       await refresh()

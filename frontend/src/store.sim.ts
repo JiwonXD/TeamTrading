@@ -17,7 +17,7 @@ import {
 import { detect } from './engine/fds'
 import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
 import { DIVIDEND_RATE, LEAGUES, type League, SEED_POSTS, TEAMS, TODAY_MATCHES, teamById } from './data/teams'
-import type { MatchDto } from './store.server'
+import type { MatchDto, NewsDto, NoticeDto, OverviewDto } from './store.server'
 import { ME, START_POINTS, type Holding, type Market, type Post, type OrderResult, type State, type User } from './storeTypes'
 
 interface SimState extends State {
@@ -394,4 +394,52 @@ export function fetchSchedule(league: League, from: Date, to: Date): Promise<Mat
     scheduledAt: at.toISOString(), status: 'FINAL', homeScore: m.homeScore, awayScore: m.awayScore,
     dividendStatus: state.settled.includes(m.id) ? 'PAID' : 'NONE',
   })))
+}
+
+// 미리보기의 구단정보. 금액은 서버 배당 규칙(DividendPolicy)의 리그 승리 배당을 옮겨 적은 예시다
+const SIM_WIN_DPS: Record<League, number> = { KBO: 40, LCK: 160, 프리미어리그: 210, 라리가: 210, 세리에A: 210, 분데스리가: 240, NBA: 70, K리그: 210 }
+const AWARD_MULTIPLES: [string, number][] = [
+  ['CHAMPION', 1], ['RUNNER_UP', 0.6], ['SEMIFINAL', 0.35], ['QUARTERFINAL', 0.25], ['POSTSEASON', 0.15], ['REGULAR_FIRST', 0.3],
+]
+
+export function fetchOverview(teamId: string): Promise<OverviewDto> {
+  const team = teamById(teamId)
+  const code = LEAGUES.find((l) => l.id === team.league)!.code
+  const holders = Object.values(state.users).filter((u) => totalShares(u.id, teamId) > 0)
+  return Promise.resolve({
+    teamId, league: code,
+    shares: holders.reduce((n, u) => n + totalShares(u.id, teamId), 0), holders: holders.length,
+    winDps: SIM_WIN_DPS[team.league], confirmDelayMinutes: 360,
+    competitions: [{ competition: code, weight: 1, winDps: SIM_WIN_DPS[team.league], championDps: 3000 }],
+    awards: AWARD_MULTIPLES.map(([award, m]) => ({ award, dps: 3000 * m })),
+    upcoming: [],
+  })
+}
+
+/** 미리보기는 뉴스 키가 없으므로 준비 중으로 보인다 */
+export const fetchNews = (): Promise<NewsDto> => Promise.resolve({ available: false, articles: [] })
+
+/** 미리보기의 공시는 이 탭에서만 기억한다(새로고침하면 처음 예시로) */
+let simNotices: NoticeDto[] = [{
+  id: 1, teamId: null, title: '팬차트 공시 탭을 열었어요',
+  body: '경기 일정, 배당 지급, 운영 안내처럼 매수 판단에 필요한 소식을 이곳에 올려요.',
+  createdAt: new Date().toISOString(), updatedAt: null,
+}]
+
+export const fetchNotices = (teamId: string): Promise<NoticeDto[]> =>
+  Promise.resolve(simNotices.filter((n) => n.teamId === null || n.teamId === teamId))
+
+export function writeNotice(teamId: string | null, title: string, body: string): OrderResult {
+  simNotices = [{ id: Math.max(0, ...simNotices.map((n) => n.id)) + 1, teamId, title, body, createdAt: new Date().toISOString(), updatedAt: null }, ...simNotices]
+  return { ok: true, message: '공시를 올렸어요' }
+}
+
+export function editNotice(id: number, title: string, body: string): OrderResult {
+  simNotices = simNotices.map((n) => (n.id === id ? { ...n, title, body, updatedAt: new Date().toISOString() } : n))
+  return { ok: true, message: '공시를 고쳤어요' }
+}
+
+export function deleteNotice(id: number): OrderResult {
+  simNotices = simNotices.filter((n) => n.id !== id)
+  return { ok: true, message: '공시를 지웠어요' }
 }
