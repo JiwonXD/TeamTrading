@@ -69,7 +69,7 @@ export interface LeaderboardDto {
 /** @property demo 시연 서버의 가짜 광고를 쓸 수 있는지. 실제 광고는 앱의 광고 SDK로만 본다 */
 export interface AdStatusDto { amount: number; dailyLimit: number; paidToday: number; demo: boolean }
 interface AdSessionDto { id: string; status: 'PENDING' | 'PAID' | 'LIMIT' }
-export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean }
+export interface LoginOptions { providers: { id: string; name: string; loginUrl: string }[]; devLogin: boolean; passwordReset: boolean }
 
 let login: LoginOptions | null = null
 let poller: ReturnType<typeof setInterval> | undefined
@@ -564,6 +564,78 @@ export async function devLogin(nickname: string): Promise<string | null> {
     return null
   } catch (e) {
     return e instanceof Error ? e.message : '로그인하지 못했어요'
+  }
+}
+
+const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
+
+/** 아이디·비밀번호 로그인. 실패하면 그 이유 */
+export async function passwordLogin(loginId: string, password: string): Promise<string | null> {
+  try {
+    await api('POST', '/api/auth/login', { loginId, password })
+    start()
+    return null
+  } catch (e) {
+    return errorMessage(e, '로그인하지 못했어요')
+  }
+}
+
+/** 아이디·비밀번호로 가입하고 바로 로그인한다. 실패하면 그 이유 */
+export async function signUp(loginId: string, password: string, email: string): Promise<string | null> {
+  try {
+    await api('POST', '/api/auth/signup', { loginId, password, email: email || null })
+    start()
+    return null
+  } catch (e) {
+    return errorMessage(e, '가입하지 못했어요')
+  }
+}
+
+export async function checkLoginId(loginId: string): Promise<{ available: boolean; message: string } | null> {
+  try {
+    return await api('GET', `/api/auth/login-ids/check?loginId=${encodeURIComponent(loginId)}`)
+  } catch {
+    return null
+  }
+}
+
+/** 재설정 메일 요청. 맞는 정보인지는 서버가 알려 주지 않는다. 실패하면 그 이유 */
+export async function requestPasswordReset(loginId: string, email: string): Promise<string | null> {
+  try {
+    await api('POST', '/api/auth/password-reset', { loginId, email })
+    return null
+  } catch (e) {
+    return errorMessage(e, '요청하지 못했어요')
+  }
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<string | null> {
+  try {
+    await api('POST', '/api/auth/password-reset/confirm', { token, password })
+    return null
+  } catch (e) {
+    return errorMessage(e, '비밀번호를 바꾸지 못했어요')
+  }
+}
+
+export interface LoginMethodsDto { loginId: string | null; providers: { id: string; name: string; linked: boolean }[] }
+
+export async function loadLoginMethods(): Promise<LoginMethodsDto | null> {
+  try {
+    return await api<LoginMethodsDto>('GET', '/api/accounts/me/logins')
+  } catch {
+    return null
+  }
+}
+
+/** 소셜 연동을 시작한다. 서버가 이 계정에 붙일 것을 기억한 뒤 제공자 로그인으로 넘어간다. 실패하면 그 이유 */
+export async function startSocialLink(provider: string): Promise<string | null> {
+  try {
+    const { url } = await api<{ url: string }>('POST', `/api/accounts/me/logins/${encodeURIComponent(provider)}`)
+    location.href = url
+    return null
+  } catch (e) {
+    return errorMessage(e, '연동하지 못했어요')
   }
 }
 

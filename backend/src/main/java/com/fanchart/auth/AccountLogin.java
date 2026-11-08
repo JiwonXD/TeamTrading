@@ -54,6 +54,26 @@ public class AccountLogin {
         }
     }
 
+    public enum LinkResult { LINKED, ALREADY_MINE, TAKEN, PROVIDER_IN_USE }
+
+    /**
+     * 이미 있는 계정에 소셜 로그인을 더 붙인다(계정 하나에 로그인 수단 여럿). 다른 계정에 연결된 소셜 계정은 붙이지 않고,
+     * 같은 제공자의 다른 계정을 하나 더 붙이지도 않는다. 가입 보상은 주지 않는다.
+     * 같은 소셜 계정을 두 계정이 동시에 붙이려 해도 (provider, subject) 기본키 때문에 한쪽만 붙는다.
+     */
+    public LinkResult link(String provider, String subject, String accountId) {
+        var existing = identities.accountId(provider, subject);
+        if (existing.isPresent()) return existing.get().equals(accountId) ? LinkResult.ALREADY_MINE : LinkResult.TAKEN;
+        if (identities.providersOf(accountId).contains(provider)) return LinkResult.PROVIDER_IN_USE;
+        try {
+            identities.link(provider, subject, accountId, clock.instant());
+            return LinkResult.LINKED;
+        } catch (DuplicateKeyException e) {
+            return identities.accountId(provider, subject).filter(accountId::equals).isPresent()
+                    ? LinkResult.ALREADY_MINE : LinkResult.TAKEN;
+        }
+    }
+
     /** 로그인 전 세션 id를 버리고(세션 고정 공격 방지) 새 세션에 계정을 남긴다 */
     public void signIn(String accountId, HttpServletRequest req, HttpServletResponse res) {
         if (req.getSession(false) != null) req.changeSessionId();

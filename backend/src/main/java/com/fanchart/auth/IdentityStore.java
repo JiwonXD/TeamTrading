@@ -5,6 +5,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -19,6 +20,10 @@ class IdentityStore {
     Optional<String> accountId(String provider, String subject) {
         return jdbc.queryForList("SELECT account_id FROM account_identities WHERE provider = ? AND subject = ?",
                 String.class, provider, subject).stream().findFirst();
+    }
+
+    List<String> providersOf(String accountId) {
+        return jdbc.queryForList("SELECT provider FROM account_identities WHERE account_id = ?", String.class, accountId);
     }
 
     void link(String provider, String subject, String accountId, Instant at) {
