@@ -43,8 +43,17 @@ export const cancel = (userId: string, teamId: string, orderId: string): Promise
 
 export const settleMatches = impl.settleMatches
 
-/** 서버 모드에서 로그인이 필요하면 로그인 방법, 아니면 null */
+/** 서버 모드에서 로그인하지 않았으면 로그인 화면에 보여줄 로그인 방법, 아니면 null */
 export const getLogin = (): server.LoginOptions | null => (mode === 'server' ? server.getLogin() : null)
+/** 로그인했는지. 시뮬레이션 미리보기는 늘 로그인한 것으로 본다 */
+export const isLoggedIn = (): boolean => (mode === 'server' ? server.isLoggedIn() : true)
+/** 계정이 필요한 행동 앞에서 부른다. 로그인하지 않았으면 로그인 화면으로 보내고 false */
+export function requireLogin(): boolean {
+  if (isLoggedIn()) return true
+  server.goLogin()
+  return false
+}
+export const { isLoginHash, leaveLogin } = server
 export const devLogin = server.devLogin
 export const { passwordLogin, signUp, checkLoginId, requestPasswordReset, confirmPasswordReset, loadLoginMethods, startSocialLink } = server
 

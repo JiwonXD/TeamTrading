@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { COMPETITION_LABEL, type League, TEAMS, TODAY_MATCHES, isOpen, teamById } from '../data/teams'
-import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, settleMatches, showToast, totalValue, useStore } from '../store'
+import { ME, type MatchDto, START_POINTS, getMatches, getOfferings, getWatchlist, isLoggedIn, settleMatches, showToast, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { Header, Logo, Segmented, fmt, go, pct, signed, tone } from '../components/ui'
 import { LeagueStats, LeagueTabs } from '../components/League'
@@ -29,7 +29,12 @@ export default function Home({ league }: { league: League | null }) {
     <>
       <Header />
       <LeagueTabs current={league} />
-      {league ? <LeagueSchedule league={league} /> : (
+      {league ? <LeagueSchedule league={league} /> : !isLoggedIn() ? (
+        <section className="card asset-card" onClick={() => go('portfolio')}>
+          <div className="muted">내 자산</div>
+          <div className="strong top-gap">로그인하고 확인하기</div>
+        </section>
+      ) : (
         <section className="card asset-card" onClick={() => go('portfolio')}>
           <div className="muted">내 자산</div>
           <div className="big">{fmt(value)}P</div>

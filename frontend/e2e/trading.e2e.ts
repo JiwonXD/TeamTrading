@@ -5,9 +5,11 @@ import { type APIRequestContext, type Page, expect, test } from '@playwright/tes
 // 데모 서버는 개발용 닉네임 로그인을 연다. 테스트마다 새 닉네임으로 새 계정을 만든다.
 
 async function signIn(page: Page, hash = '#home') {
-  await page.goto(`/${hash}`)
+  await page.goto('/#login')
   await page.getByPlaceholder('닉네임').fill(`e2e${Date.now() % 1_000_000}${Math.floor(Math.random() * 100)}`)
   await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page.locator('.tabbar')).toBeVisible()
+  await page.goto(`/${hash}`)
   await expect(page.locator('.tabbar, .cta').first()).toBeVisible()
 }
 
@@ -33,7 +35,7 @@ async function teamWithAsk(request: APIRequestContext) {
 }
 
 test('login page has no accessibility violations and logging out returns to it', async ({ page }) => {
-  await page.goto('/#home')
+  await page.goto('/#login')
   await expect(page.getByPlaceholder('닉네임')).toBeVisible()
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations).toEqual([])
@@ -46,7 +48,7 @@ test('login page has no accessibility violations and logging out returns to it',
 
 test('signing up with an id and password, then logging back in with it', async ({ page }) => {
   const id = `e2e${Date.now() % 100_000_000}${Math.floor(Math.random() * 100)}`
-  await page.goto('/#home')
+  await page.goto('/#login')
   await page.getByRole('button', { name: '회원가입' }).click()
   await page.getByLabel('아이디').fill(id)
   await page.getByLabel('비밀번호', { exact: true }).fill('e2epass123')
@@ -303,7 +305,7 @@ test('changing my nickname follows the server rules and locks it for a week', as
 })
 
 test('terms and privacy are readable before logging in and from my page', async ({ page }) => {
-  await page.goto('/#home')
+  await page.goto('/#login')
   await page.getByRole('link', { name: '개인정보처리방침' }).click()
   await expect(page.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible()
   await expect(page.locator('.legal')).toContainText('이름, 이메일, 전화번호, 프로필 사진은 받지 않아요')
@@ -355,8 +357,6 @@ test('never shows default numbers without the server and marks values as stale w
 
   // 다시 닿으면 스스로 연결한다
   await page.unroute(serverApi)
-  await page.getByPlaceholder('닉네임').fill(`e2e${Date.now() % 1_000_000}`)
-  await page.getByRole('button', { name: '들어가기' }).click()
   await expect(page.locator('.asset-card')).toBeVisible()
 
   // 받은 뒤 끊기면 화면 값이 언제 기준인지 알린다
@@ -414,4 +414,28 @@ test('정보 tab shows the dividend terms from the server and 뉴스·공시 is 
   await page.locator('.news-sub').getByRole('button', { name: '공시' }).click()
   await expect(page.getByRole('region', { name: '공시' })).toBeVisible()
   await expect(page.getByRole('button', { name: '공시 쓰기' })).toHaveCount(0)
+})
+
+test('anyone can look around without logging in, and an order asks to log in first then comes back', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByPlaceholder('닉네임')).toHaveCount(0)
+  await expect(page.locator('.asset-card')).toContainText('로그인하고 확인하기')
+  await expect(page.locator('.list-card .stock-list li').first()).toBeVisible()
+
+  await page.goto('/#team-t1')
+  await page.locator('.tabs').getByRole('button', { name: '토론' }).click()
+  await expect(page.getByLabel('토론 글')).toBeVisible()
+  // 관심 구단 담기는 계정이 필요하다
+  await page.getByRole('button', { name: 'T1 관심 구단' }).click()
+  await expect(page).toHaveURL(/#login$/)
+  await page.getByRole('button', { name: '뒤로' }).click()
+  await expect(page).toHaveURL(/#team-t1$/)
+
+  await page.getByRole('button', { name: '구매하기' }).click()
+  await expect(page).toHaveURL(/#login$/)
+  await page.getByPlaceholder('닉네임').fill(`e2e${Date.now() % 1_000_000}`)
+  await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page).toHaveURL(/#team-t1$/)
+  await page.getByRole('button', { name: '구매하기' }).click()
+  await expect(page.locator('.sheet')).toBeVisible()
 })

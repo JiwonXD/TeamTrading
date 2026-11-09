@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DEFAULT_TABS, type LeagueTabPrefs, arrangeLeagues } from '../data/leagueTabs'
 import { type League, TEAMS } from '../data/teams'
-import { getLeagueTabs, saveLeagueTabs, showToast, useStore } from '../store'
+import { getLeagueTabs, requireLogin, saveLeagueTabs, showToast, useStore } from '../store'
 import type { State } from '../storeTypes'
 import { pct, tone } from './ui'
 
@@ -28,7 +28,7 @@ export function LeagueTabs({ current }: { current: League | null }) {
           <a key={i.href} href={i.href} className={i.on ? 'on' : ''} aria-current={i.on ? 'page' : undefined}>{i.label}</a>
         ))}
       </nav>
-      <button className="league-edit" onClick={() => setEditing(true)} aria-label="리그 탭 편집" title="리그 탭 편집">
+      <button className="league-edit" onClick={() => requireLogin() && setEditing(true)} aria-label="리그 탭 편집" title="리그 탭 편집">
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="16" cy="7" r="2" stroke="currentColor" strokeWidth="2" fill="none" /><circle cx="10" cy="17" r="2" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
       </button>
       {editing && <LeagueTabsEditor prefs={prefs} onClose={() => setEditing(false)} />}

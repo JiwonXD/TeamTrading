@@ -1,5 +1,5 @@
 import type { Team } from '../data/teams'
-import { getWatchlist, showToast, toggleWatch, useStore } from '../store'
+import { getWatchlist, requireLogin, showToast, toggleWatch, useStore } from '../store'
 
 /**
  * 관심 구단 별. 눌린 상태를 aria-pressed로 알리고, 줄 전체가 링크·버튼인 목록 안에서도
@@ -18,7 +18,7 @@ export function WatchStar({ team, size = 22 }: { team: Team; size?: number }) {
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        toggleWatch(team.id).then((r) => showToast(r.message))
+        if (requireLogin()) toggleWatch(team.id).then((r) => showToast(r.message))
       }}
     >
       <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

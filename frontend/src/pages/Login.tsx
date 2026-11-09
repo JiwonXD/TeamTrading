@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { checkLoginId, confirmPasswordReset, devLogin, passwordLogin, requestPasswordReset, signUp, type LoginOptions } from '../store'
+import { checkLoginId, confirmPasswordReset, devLogin, leaveLogin, passwordLogin, requestPasswordReset, signUp, type LoginOptions } from '../store'
 import { Header } from '../components/ui'
 import { HelpTip } from '../components/HelpTip'
 import { ProviderIcon } from '../components/ProviderIcon'
@@ -15,7 +15,7 @@ const FEATURES = [
   { label: '수익률 랭킹', icon: 'M4 20V10M10 20V4M16 20v-7M2 20h20' },
 ]
 
-// 서버 모드에서 로그인하지 않았을 때 보이는 화면. 아이디·비밀번호 로그인과 가입, 비밀번호 찾기(메일 발송이 설정된 서버만),
+// 서버 모드에서 로그인하지 않고 계정이 필요한 행동을 하거나 내 투자를 열면 보이는 화면. 뒤로 가면 보던 화면으로 돌아간다. 아이디·비밀번호 로그인과 가입, 비밀번호 찾기(메일 발송이 설정된 서버만),
 // 소셜 로그인(서버의 /oauth2/authorization/{id}로 넘어간다)이 있다. 메일의 재설정 링크는 #reset-{토큰}으로 들어온다
 export default function Login({ options }: { options: LoginOptions }) {
   const resetToken = location.hash.startsWith('#reset-') ? location.hash.slice('#reset-'.length) : ''
@@ -130,9 +130,9 @@ export default function Login({ options }: { options: LoginOptions }) {
 
   return (
     <div className="login-page">
-      <Header />
+      <Header onBack={leaveLogin} />
       <section className="login">
-        <h2 className="login-title">팬차트</h2>
+        <h1 className="login-title">팬차트</h1>
         <p className="login-sub">스포츠 구단을 사고파는 모의 거래소</p>
 
         {failed && <p className="login-error" role="alert">로그인하지 못했어요. 다시 시도해 주세요.</p>}
