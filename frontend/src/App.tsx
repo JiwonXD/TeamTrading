@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { canWatch, getConnection, getLogin, getToast, useStore } from './store'
+import { canWatch, getConnection, getLogin, getToast, isLoginHash, useStore } from './store'
 import Home from './pages/Home'
 import TeamDetail from './pages/TeamDetail'
 import Portfolio from './pages/Portfolio'
@@ -68,6 +68,7 @@ export default function App() {
   const teamMatch = hash.match(/^team-([a-z0-9-]+)$/)
   // 리그 카테고리 화면: #league-kbo 처럼 홈을 한 리그로 좁혀 보여준다
   const league = LEAGUES.find((l) => hash === `league-${l.slug}`)?.id ?? null
+  // 보는 것은 로그인 없이 된다. 로그인 화면은 계정이 필요한 행동을 했거나 내 투자를 열었을 때만 보인다
   const login = getLogin()
   const conn = getConnection()
 
@@ -80,7 +81,7 @@ export default function App() {
   )
 
   // 서버 값을 한 번도 받지 못했으면 기본값을 보여주지 않고 연결 상태만 보여준다
-  if (!login && (conn.status === 'connecting' || conn.status === 'unreachable')) return (
+  if (conn.status === 'connecting' || conn.status === 'unreachable') return (
     <div className="app">
       <StatusBanner />
       <main className="connecting" aria-busy="true">
@@ -90,7 +91,7 @@ export default function App() {
     </div>
   )
 
-  if (login) return (
+  if (login && (isLoginHash(hash) || hash === 'portfolio')) return (
     <div className="app">
       <StatusBanner />
       <main><Login options={login} /></main>

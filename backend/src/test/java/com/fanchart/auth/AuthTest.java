@@ -90,8 +90,19 @@ class AuthTest {
 
     @Test
     void publicMarketDataNeedsNoLogin() throws Exception {
-        mvc.perform(get("/api/teams")).andExpect(status().isOk());
-        mvc.perform(get("/api/rankings")).andExpect(status().isOk());
+        // 로그인하지 않은 사람도 둘러볼 수 있도록 화면이 받는 것은 모두 열려 있다
+        for (String path : List.of("/api/teams", "/api/rankings", "/api/matches?limit=9", "/api/offerings?limit=10",
+                "/api/leagues", "/api/market-hours", "/api/leaderboard", "/api/teams/t1/orderbook",
+                "/api/teams/t1/candles?unit=day", "/api/teams/t1/overview", "/api/teams/t1/notices", "/api/teams/t1/posts?limit=30")) {
+            mvc.perform(get(path)).andExpect(status().isOk());
+        }
+        // 계정이 필요한 것은 로그인해야 한다
+        mvc.perform(get("/api/accounts/me")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/teams/t1/posts").with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"hi\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/orders").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientOrderId\":\"c-anon\",\"teamId\":\"t1\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":10000,\"quantity\":1}"))
+                .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/auth/options"))
                 .andExpect(jsonPath("$.devLogin").value(true))
                 .andExpect(jsonPath("$.providers.length()").value(0));

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, tickSize, type OrderType, type Side } from '../engine/orderbook'
 import { MAINTENANCE_MESSAGE, useMaintenance } from '../maintenance'
-import { ME, cancel, getOfferings, openOrders, placeOrder, showToast, totalShares, useStore, watchTeam } from '../store'
+import { ME, cancel, getOfferings, isLoggedIn, openOrders, placeOrder, requireLogin, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
 import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
@@ -202,7 +202,10 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
   const label = side === 'buy' ? '구매' : '판매'
   const maintenance = useMaintenance()
 
+  const loggedIn = isLoggedIn()
+
   const submit = async () => {
+    if (!requireLogin()) return
     setBusy(true)
     const r = await placeOrder(ME, teamId, side, type, price, qty)
     setBusy(false)
@@ -251,14 +254,16 @@ function OrderPanel({ teamId, side, setSide, price, setPrice }: {
           <button key={r} onClick={() => setQtyText(String(Math.floor(maxQty * r)))}>{r === 1 ? '최대' : `${r * 100}%`}</button>
         ))}
       </div>
-      <p className="of-hint muted xs">{side === 'buy' ? `주문 가능 ${fmt(me.points)}P · 최대 ${fmt(maxQty)}주` : `판매 가능 ${fmt(maxQty)}주`}</p>
+      {loggedIn && <p className="of-hint muted xs">{side === 'buy' ? `주문 가능 ${fmt(me.points)}P · 최대 ${fmt(maxQty)}주` : `판매 가능 ${fmt(maxQty)}주`}</p>}
 
       <div className="of-total">
         <span className="muted">{type === 'market' && side === 'buy' ? '최대 예상 금액' : '예상 금액'}</span>
         <b>{fmt(unitPrice * qty)}P</b>
       </div>
       {maintenance && <p className="notice" aria-live="polite">{MAINTENANCE_MESSAGE}</p>}
-      <button className={`btn wide ${side}`} disabled={qty <= 0 || busy || maintenance} onClick={submit}>{qty > 0 ? `${fmt(qty)}주 ${label}하기` : `${label}하기`}</button>
+      {loggedIn
+        ? <button className={`btn wide ${side}`} disabled={qty <= 0 || busy || maintenance} onClick={submit}>{qty > 0 ? `${fmt(qty)}주 ${label}하기` : `${label}하기`}</button>
+        : <button className={`btn wide ${side}`} disabled={maintenance} onClick={submit}>로그인하고 {label}하기</button>}
     </section>
   )
 }

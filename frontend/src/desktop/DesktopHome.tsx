@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type League, TEAMS, type Team, isOpen } from '../data/teams'
-import { ME, START_POINTS, getMatches, getOfferings, lockedPoints, totalValue, useStore } from '../store'
+import { ME, START_POINTS, getMatches, getOfferings, isLoggedIn, lockedPoints, totalValue, useStore } from '../store'
 import { OfferingList } from '../components/Offering'
 import { WatchStar } from '../components/WatchStar'
 import { Logo, fmt, go, pct, signed, timeAgo, tone } from '../components/ui'
@@ -96,6 +96,12 @@ function AssetCard() {
   const s = useStore()
   const value = totalValue(ME)
   const profit = value - START_POINTS
+  if (!isLoggedIn()) return (
+    <a href="#portfolio" className="panel dh-asset">
+      <span className="muted">내 자산</span>
+      <b>로그인하고 확인하기</b>
+    </a>
+  )
   return (
     <a href="#portfolio" className="panel dh-asset">
       <span className="muted">내 자산</span>
