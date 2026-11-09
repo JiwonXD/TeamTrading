@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { type OfferingDto, cancelSubscription, getMySubscriptions, showToast, subscribeOffering, useStore } from '../store'
+import { type OfferingDto, cancelSubscription, getMySubscriptions, requireLogin, showToast, subscribeOffering, useStore } from '../store'
 import { fmt, go } from './ui'
 
 const time = (iso: string) =>
@@ -101,7 +101,7 @@ export function OfferingCard({ offering: o }: { offering: OfferingDto }) {
             value={qty}
             onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))}
           />
-          <button className="btn primary" disabled={!valid || busy} onClick={() => run(() => subscribeOffering(o.id, n))}>
+          <button className="btn primary" disabled={!valid || busy} onClick={() => requireLogin() && run(() => subscribeOffering(o.id, n))}>
             {valid ? `${fmt(n * o.price)}P 청약` : '청약하기'}
           </button>
         </div>

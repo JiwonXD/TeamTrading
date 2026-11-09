@@ -1,5 +1,6 @@
 // 서버에 붙는 저장소. 시세 목록·내 계좌·랭킹·감시 기록은 주기적으로 받아오고,
 // 보고 있는 구단의 호가와 체결은 WebSocket 실시간 시세로 받는다.
+// 시세·호가·토론·랭킹처럼 보는 것은 로그인 없이 받고, 계좌·주문처럼 계정이 필요한 것은 로그인했을 때만 받는다.
 // 로그인은 세션 쿠키로 유지한다. 상태를 바꾸는 요청에는 서버가 준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다.
 // 화면에서 내 계정은 ME로만 보인다.
 import { DEFAULT_TABS, type LeagueTabPrefs } from './data/leagueTabs'
@@ -126,7 +127,7 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.status === 204 ? (undefined as T) : res.json()
 }
 
-/** 로그인돼 있으면 true. 아니면 로그인 화면에 보여줄 방법을 받아 둔다 */
+/** 로그인돼 있으면 true. 아니면 내 계정 값을 비우고 로그인 화면에 보여줄 방법을 받아 둔다 */
 async function ensureLogin(): Promise<boolean> {
   try {
     account = await api<AccountDto>('GET', '/api/accounts/me')
@@ -134,11 +135,53 @@ async function ensureLogin(): Promise<boolean> {
     return true
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 401)) throw e
-    account = null
     login = await api<LoginOptions>('GET', '/api/auth/options')
+    account = null
+    orders = []
+    myTrades = []
+    myDividends = []
+    mySubscriptions = []
+    adStatus = null
     update()
     return false
   }
+}
+
+export const isLoggedIn = () => account !== null
+
+const LOGIN_RETURN = 'fanchart.loginReturn'
+
+/** 로그인 화면 주소. 소셜 로그인 실패(#login-failed, #signup-blocked)와 비밀번호 재설정 메일 링크(#reset-토큰)도 로그인 화면이다 */
+export const isLoginHash = (hash: string) =>
+  hash === 'login' || hash === 'login-failed' || hash === 'signup-blocked' || hash.startsWith('reset-')
+
+/** 로그인이 필요한 행동을 하면 지금 화면을 기억해 두고 로그인 화면으로 보낸다 */
+export function goLogin() {
+  const here = location.hash.slice(1)
+  if (!isLoginHash(here)) try { sessionStorage.setItem(LOGIN_RETURN, here || 'home') } catch { /* 로그인 뒤 홈으로 */ }
+  location.hash = 'login'
+}
+
+/** 로그인 화면에서 나간다. 기억해 둔 화면이 있으면 그리로, 없으면 홈으로 */
+export function leaveLogin() {
+  location.replace(`#${takeLoginReturn() ?? 'home'}`)
+}
+
+function takeLoginReturn(): string | null {
+  try {
+    const back = sessionStorage.getItem(LOGIN_RETURN)
+    sessionStorage.removeItem(LOGIN_RETURN)
+    return back
+  } catch {
+    return null
+  }
+}
+
+/** 로그인하면 로그인을 시작한 화면으로 돌아간다. 소셜 로그인은 서버가 첫 화면(/)으로 돌려보내므로 그때도 돌아간다 */
+function returnAfterLogin() {
+  const here = location.hash.slice(1)
+  const back = takeLoginReturn()
+  if (here === '' ? back : isLoginHash(here)) location.replace(`#${back ?? 'home'}`)
 }
 
 const LEAGUES: Record<string, League> = Object.fromEntries(LEAGUE_LIST.map((l) => [l.code, l.id]))
@@ -153,34 +196,44 @@ function syncTeams(list: QuoteDto[]) {
   TEAMS.splice(0, TEAMS.length, ...next)
 }
 
-async function refresh() {
-  const [q, a, o, t, r, m, d, of, sub, ad] = await Promise.all([
-    api<QuoteDto[]>('GET', '/api/teams'),
+/** 내 계정 값. 로그인하지 않았으면 받지 않는다 */
+async function fetchMine() {
+  const [a, o, t, d, sub, ad] = await Promise.all([
     api<AccountDto>('GET', '/api/accounts/me'),
     api<OrderDto[]>('GET', '/api/accounts/me/orders'),
     api<MyTradeDto[]>('GET', '/api/accounts/me/trades?limit=50'),
-    api<RankingDto[]>('GET', '/api/rankings'),
-    api<MatchDto[]>('GET', '/api/matches?limit=9'),
     api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
-    api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
     api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
     api<AdStatusDto>('GET', '/api/accounts/me/ads'),
   ])
   // 이상거래 탐지 기록은 운영자만 받을 수 있다
   const al = a.admin ? await api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50') : []
+  return { a, o, t, d, sub, ad, al }
+}
+
+async function refresh() {
+  const [q, r, m, of, mine] = await Promise.all([
+    api<QuoteDto[]>('GET', '/api/teams'),
+    api<RankingDto[]>('GET', '/api/rankings'),
+    api<MatchDto[]>('GET', '/api/matches?limit=9'),
+    api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
+    account ? fetchMine() : null,
+  ])
   await Promise.all(Object.keys(sockets).map(loadPosts))
   syncTeams(q)
   quotes = Object.fromEntries(q.map((x) => [x.id, x]))
-  account = a
-  orders = o
-  myTrades = t
   rankings = r
-  alerts = al
   matches = m
-  myDividends = d
   offerings = of
-  mySubscriptions = sub
-  adStatus = ad
+  if (mine) {
+    account = mine.a
+    orders = mine.o
+    myTrades = mine.t
+    alerts = mine.al
+    myDividends = mine.d
+    mySubscriptions = mine.sub
+    adStatus = mine.ad
+  }
   connection = { status: 'live', lastSync: Date.now() }
   update()
 }
@@ -552,7 +605,7 @@ export function toggleWatch(teamId: string): Promise<OrderResult> {
   return done
 }
 
-/** 탈퇴. 서버가 세션을 끝내므로 다시 로그인 화면으로 돌아간다 */
+/** 탈퇴. 서버가 세션을 끝내므로 로그인하지 않은 상태로 돌아간다 */
 export async function withdraw(): Promise<OrderResult> {
   try {
     await api('DELETE', '/api/accounts/me')
@@ -650,16 +703,21 @@ export function reset() {
   api('POST', '/api/auth/logout').catch(() => {}).finally(start)
 }
 
-/** 로그인을 확인하고 주기 갱신을 건다. 서버에 닿지 않으면 닿을 때까지 다시 시도한다 */
+/** 로그인을 확인하고 주기 갱신을 건다. 로그인하지 않아도 시세는 받는다. 서버에 닿지 않으면 닿을 때까지 다시 시도한다 */
 export function start() {
   clearInterval(poller)
   clearTimeout(retry)
   ensureLogin()
     .then(async (ok) => {
-      if (!ok) return
       // 탭 설정·관심 구단은 자주 바뀌지 않으므로 주기 갱신에 넣지 않는다. 못 받으면 기본 순서로 둔다
       leagueTabs = DEFAULT_TABS
-      api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
+      watchlist = []
+      alerts = []
+      if (ok) {
+        returnAfterLogin()
+        api<LeagueTabPrefs>('GET', '/api/accounts/me/league-tabs').then((p) => { leagueTabs = p; update() }).catch(() => {})
+        api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
+      }
       // 닫아 둔 리그는 운영 설정이라 자주 바뀌지 않는다. 못 받으면 모든 리그를 보인다
       api<{ hidden: string[] }>('GET', '/api/leagues').then((l) => {
         CLOSED_LEAGUES.clear()
@@ -668,8 +726,6 @@ export function start() {
       }).catch(() => {})
       // 매일 점검시간은 운영 설정이라 한 번만 받는다. 못 받으면 막지 않는다(주문은 서버가 거절한다)
       api<{ maintenance: MaintenanceWindow | null }>('GET', '/api/market-hours').then((h) => { MAINTENANCE.window = h.maintenance; update() }).catch(() => {})
-      watchlist = []
-      api<{ teamIds: string[] }>('GET', '/api/accounts/me/watchlist').then((w) => { if (watchPending === 0) { watchlist = w.teamIds; update() } }).catch(() => {})
       await refresh()
       poller = setInterval(() => refresh().catch(onPollError), POLL_MS)
     })
@@ -681,6 +737,6 @@ export function start() {
 
 function onPollError(e: unknown) {
   markFailed()
-  // 서버가 다시 떠서 세션이 사라졌으면 로그인부터 다시 한다
+  // 서버가 다시 떠서 세션이 사라졌으면 로그인부터 다시 확인한다(로그인하지 않은 상태로 계속 볼 수 있다)
   if (e instanceof ApiError && e.status === 401) start()
 }

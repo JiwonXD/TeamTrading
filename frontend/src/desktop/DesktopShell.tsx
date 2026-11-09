@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { type League, TEAMS, type Team, isOpen, leaguesWithTeams } from '../data/teams'
 import { visibleLeagues } from '../data/leagueTabs'
-import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, getWatchlist, mode, totalShares, totalValue, useStore } from '../store'
+import { ME, START_POINTS, canWatch, getConnection, getLeagueTabs, getProfile, getWatchlist, isLoggedIn, mode, requireLogin, totalShares, totalValue, useStore } from '../store'
 import { Logo, fmt, pct, signed, tone } from '../components/ui'
 import { leagueAvg } from '../components/League'
 import { SearchPalette } from './SearchPalette'
@@ -72,10 +72,12 @@ export default function DesktopShell({ hash, teamId, banner, toast, children }: 
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           <kbd>/</kbd>를 눌러 구단을 검색하세요
         </button>
-        <a href="#portfolio" className="desk-me">
-          <span className="muted xs">{nickname ?? (mode === 'server' ? '내 계정' : '미리보기')}</span>
-          <b>{fmt(totalValue(ME))}P</b>
-        </a>
+        {isLoggedIn() ? (
+          <a href="#portfolio" className="desk-me">
+            <span className="muted xs">{nickname ?? (mode === 'server' ? '내 계정' : '미리보기')}</span>
+            <b>{fmt(totalValue(ME))}P</b>
+          </a>
+        ) : <button className="btn primary desk-login" onClick={() => requireLogin()}>로그인</button>}
       </header>
 
       {banner}
@@ -184,7 +186,7 @@ function Ticker() {
       {leaguesWithTeams().map((l) => (
         <a key={l.slug} href={`#league-${l.slug}`}>{l.id} 평균 <b className={tone(leagueAvg(s, l.id))}>{pct(leagueAvg(s, l.id))}</b></a>
       ))}
-      <span>내 자산 <b>{fmt(value)}P</b> <span className={tone(value - START_POINTS)}>{signed(value - START_POINTS)}P</span></span>
+      {isLoggedIn() && <span>내 자산 <b>{fmt(value)}P</b> <span className={tone(value - START_POINTS)}>{signed(value - START_POINTS)}P</span></span>}
       <span className="ticker-right muted">포인트는 현금으로 바꾸거나 보낼 수 없어요 · <a href="#terms">이용약관</a> · <a href="#privacy">개인정보처리방침</a></span>
     </footer>
   )

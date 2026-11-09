@@ -4,9 +4,11 @@ import { type APIRequestContext, type Page, expect, test } from '@playwright/tes
 // PC 폭(1440px)에서 서버 모드 화면을 확인한다. 모바일 흐름은 trading.e2e.ts가 맡는다.
 
 async function signIn(page: Page, hash = '#home') {
-  await page.goto(`/${hash}`)
+  await page.goto('/#login')
   await page.getByPlaceholder('닉네임').fill(`pc${Date.now() % 1_000_000}${Math.floor(Math.random() * 100)}`)
   await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page.locator('.desk-me')).toBeVisible()
+  await page.goto(`/${hash}`)
   await expect(page.locator('.desk-header')).toBeVisible()
 }
 
@@ -252,4 +254,24 @@ test('the team chart draws candles from stored trades, opens on 5분 and keeps a
   await page.reload()
   await expect(page.locator('.unit-picker .up-minute > button')).toHaveText('15분')
   await expect(page.locator('.unit-picker .up-minute > button')).toHaveClass(/on/)
+})
+
+test('anyone can look around without logging in, and the order button asks to log in first then comes back', async ({ page, request }) => {
+  const team = await teamWithAsk(request)
+  await page.goto('/')
+  await expect(page.locator('.dtable tbody tr').first()).toBeVisible()
+  await expect(page.locator('.dh-asset')).toContainText('로그인하고 확인하기')
+  await expect(page.locator('.desk-ticker')).not.toContainText('내 자산')
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations).toEqual([])
+
+  await page.goto(`/#team-${team.id}`)
+  const order = page.getByRole('region', { name: '주문' })
+  await order.getByRole('button', { name: '로그인하고 구매하기' }).click()
+  await expect(page).toHaveURL(/#login$/)
+  await page.getByPlaceholder('닉네임').fill(`pc${Date.now() % 1_000_000}`)
+  await page.getByRole('button', { name: '들어가기' }).click()
+  await expect(page).toHaveURL(new RegExp(`#team-${team.id}$`))
+  await expect(order.getByRole('button', { name: '구매하기' })).toBeVisible()
+  await expect(page.locator('.desk-me')).toBeVisible()
 })

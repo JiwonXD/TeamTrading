@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { teamById } from '../data/teams'
 import { levels, priceBand, stepPrice, type OrderType, type Side } from '../engine/orderbook'
-import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, showToast, totalShares, useStore, watchTeam } from '../store'
+import { ME, type ReportReason, addPost, cancel, deletePost, getOfferings, mode, openOrders, placeOrder, reportPost, requireLogin, showToast, totalShares, useStore, watchTeam } from '../store'
 import { OfferingCard } from '../components/Offering'
 import { NewsNoticesView, TeamInfoView } from '../components/TeamInfo'
 import { WatchStar } from '../components/WatchStar'
@@ -24,6 +24,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
   const [sheet, setSheet] = useState<{ side: Side; price: number } | null>(null)
   const maintenance = useMaintenance()
   useEffect(() => watchTeam(teamId), [teamId])
+  const order = (side: Side, price: number) => requireLogin() && setSheet({ side, price })
 
   const diff = m.last - m.base
   const myQty = totalShares(ME, teamId)
@@ -107,7 +108,7 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
         ))}
       </div>
 
-      {tab === 'book' && <OrderBookView teamId={teamId} onPick={(price, side) => !maintenance && setSheet({ side, price })} />}
+      {tab === 'book' && <OrderBookView teamId={teamId} onPick={(price, side) => !maintenance && order(side, price)} />}
       {tab === 'trades' && <TradesView teamId={teamId} />}
       {tab === 'orders' && (
         <section className="card">
@@ -126,8 +127,8 @@ export default function TeamDetail({ teamId }: { teamId: string }) {
       {tab === 'talk' && <TalkView teamId={teamId} />}
 
       <div className="cta">
-        <button className="btn sell" disabled={maintenance} onClick={() => setSheet({ side: 'sell', price: m.last })}>판매하기</button>
-        <button className="btn buy" disabled={maintenance} onClick={() => setSheet({ side: 'buy', price: m.last })}>구매하기</button>
+        <button className="btn sell" disabled={maintenance} onClick={() => order('sell', m.last)}>판매하기</button>
+        <button className="btn buy" disabled={maintenance} onClick={() => order('buy', m.last)}>구매하기</button>
       </div>
 
       {sheet && <OrderSheet teamId={teamId} side={sheet.side} initialPrice={sheet.price} onClose={() => setSheet(null)} />}
@@ -213,7 +214,7 @@ export function TalkView({ teamId }: { teamId: string }) {
   const myQty = totalShares(ME, teamId)
   const submit = async () => {
     const text = body.trim()
-    if (!text) return
+    if (!text || !requireLogin()) return
     const r = await addPost(teamId, text)
     if (r) showToast(r.message)
     if (!r || r.ok) setBody('')
@@ -251,7 +252,7 @@ export function TalkView({ teamId }: { teamId: string }) {
                   {p.userId === ME ? (
                     <button className="link-btn" onClick={async () => showToast((await deletePost(teamId, p.id)).message)}>삭제</button>
                   ) : (
-                    <button className="link-btn" aria-expanded={reporting === p.id} onClick={() => setReporting(reporting === p.id ? null : p.id)}>신고</button>
+                    <button className="link-btn" aria-expanded={reporting === p.id} onClick={() => requireLogin() && setReporting(reporting === p.id ? null : p.id)}>신고</button>
                   )}
                 </span>
               )}
