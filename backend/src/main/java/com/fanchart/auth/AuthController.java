@@ -60,13 +60,15 @@ class AuthController {
     private final PasswordLogin passwords;
     private final AuthProperties props;
     private final ObjectProvider<ClientRegistrationRepository> registrations;
+    private final AuthRateLimit rateLimit;
 
     AuthController(AccountLogin login, PasswordLogin passwords, AuthProperties props,
-                   ObjectProvider<ClientRegistrationRepository> registrations) {
+                   ObjectProvider<ClientRegistrationRepository> registrations, AuthRateLimit rateLimit) {
         this.login = login;
         this.passwords = passwords;
         this.props = props;
         this.registrations = registrations;
+        this.rateLimit = rateLimit;
     }
 
     @GetMapping("/api/auth/options")
@@ -93,12 +95,14 @@ class AuthController {
     @PostMapping("/api/auth/signup")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void signUp(@Valid @RequestBody SignupRequest req, HttpServletRequest request, HttpServletResponse response) {
+        rateLimit.check(AuthRateLimit.Action.SIGNUP, request.getRemoteAddr());
         login.signIn(passwords.signUp(req.loginId(), req.password(), req.email()), request, response);
     }
 
     @PostMapping("/api/auth/login")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void passwordLogin(@Valid @RequestBody PasswordLoginRequest req, HttpServletRequest request, HttpServletResponse response) {
+        rateLimit.check(AuthRateLimit.Action.LOGIN, request.getRemoteAddr());
         login.signIn(passwords.authenticate(req.loginId(), req.password()), request, response);
     }
 

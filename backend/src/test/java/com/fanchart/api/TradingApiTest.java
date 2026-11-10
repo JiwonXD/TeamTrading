@@ -77,6 +77,31 @@ class TradingApiTest {
     }
 
     @Test
+    void rejectsHugeQuantityThatWouldOverflowTheReservedPoints() throws Exception {
+        String me = openAccount("huge");
+        // 18,000 × (2^60 + 1)은 long을 넘어 18,000으로 돌아온다. 예전에는 18,000P만 묶고 호가창에 걸렸다
+        mvc.perform(post("/api/orders").with(login(me))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientOrderId\":\"o-huge\",\"teamId\":\"lg\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":18000,\"quantity\":1152921504606846977}"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.message").value("한 번에 1,000,000주까지 주문할 수 있어요"));
+        mvc.perform(get("/api/accounts/me").with(login(me)))
+                .andExpect(jsonPath("$.lockedPoints").value(0));
+    }
+
+    @Test
+    void negativeListSizesAreTreatedAsOne() throws Exception {
+        mvc.perform(get("/api/teams/lg/trades").param("limit", "-1")).andExpect(status().isOk());
+        mvc.perform(get("/api/teams/lg/orderbook").param("depth", "-1")).andExpect(status().isOk());
+        mvc.perform(get("/api/teams/lg/matches").param("limit", "-1")).andExpect(status().isOk());
+        mvc.perform(get("/api/matches").param("limit", "-1")).andExpect(status().isOk());
+        String me = openAccount("negative");
+        mvc.perform(get("/api/accounts/me/trades").param("limit", "-1").with(login(me))).andExpect(status().isOk());
+        mvc.perform(get("/api/accounts/me/dividends").param("limit", "-1").with(login(me))).andExpect(status().isOk());
+        mvc.perform(get("/api/surveillance/alerts").param("limit", "-1").with(admin(me))).andExpect(status().isOk());
+    }
+
+    @Test
     void retriedOrderReturnsSameReceiptAndReusedIdIsConflict() throws Exception {
         String me = openAccount("retry");
         String order = "{\"clientOrderId\":\"r-1\",\"teamId\":\"kt\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"price\":12000,\"quantity\":2}";

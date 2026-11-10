@@ -105,7 +105,7 @@ class AccountController {
     List<MyTradeResponse> myTrades(@AuthenticationPrincipal String accountId,
                                    @RequestParam(defaultValue = "20") int limit) {
         trading.account(accountId);
-        return trading.myTrades(accountId, Math.min(limit, 100)).stream()
+        return trading.myTrades(accountId, Math.min(Math.max(limit, 1), 100)).stream()
                 .map(t -> MyTradeResponse.of(t, accountId)).toList();
     }
 
