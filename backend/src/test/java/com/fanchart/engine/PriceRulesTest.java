@@ -25,6 +25,14 @@ class PriceRulesTest {
     }
 
     @Test
+    void rejectsQuantityAboveTheCapSoPriceTimesQuantityCannotOverflow() {
+        assertThat(PriceRules.validate(OrderType.LIMIT, 10_000, PriceRules.MAX_QUANTITY, 10_000)).isEmpty();
+        assertThat(PriceRules.validate(OrderType.LIMIT, 10_000, PriceRules.MAX_QUANTITY + 1, 10_000)).get().asString()
+                .isEqualTo("한 번에 1,000,000주까지 주문할 수 있어요");
+        assertThat(PriceRules.validate(OrderType.MARKET, 0, (1L << 60) + 1, 10_000)).isPresent();
+    }
+
+    @Test
     void volatilityBandStopsJustBeforeTheThresholdOnATick() {
         // 정확히 6%(10,600)는 발동 가격이라 범위에 넣지 않는다
         assertThat(PriceRules.viUpper(10_000, 6)).isEqualTo(10_590);

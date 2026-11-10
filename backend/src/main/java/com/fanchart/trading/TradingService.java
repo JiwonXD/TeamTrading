@@ -473,7 +473,7 @@ public class TradingService {
 
     private void accept(Order order, String clientOrderId, long reservePerShare) {
         boolean buy = order.side() == Side.BUY;
-        long amount = buy ? reservePerShare * order.quantity() : order.quantity();
+        long amount = buy ? Math.multiplyExact(reservePerShare, order.quantity()) : order.quantity();
         boolean locked = buy
                 ? accounts.lockPoints(order.accountId(), amount)
                 : accounts.lockShares(order.accountId(), order.teamId(), amount);

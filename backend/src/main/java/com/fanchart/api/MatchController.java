@@ -56,12 +56,12 @@ class MatchController {
 
     @GetMapping("/api/teams/{teamId}/matches")
     List<MatchResponse> teamMatches(@PathVariable String teamId, @RequestParam(defaultValue = "10") int limit) {
-        return matches.recent(teamId, Math.min(limit, 50)).stream().map(this::view).toList();
+        return matches.recent(teamId, Math.min(Math.max(limit, 1), 50)).stream().map(this::view).toList();
     }
 
     @GetMapping("/api/matches")
     List<MatchResponse> latest(@RequestParam(defaultValue = "10") int limit) {
-        return matches.latest(Math.min(limit, 50)).stream().map(this::view).toList();
+        return matches.latest(Math.min(Math.max(limit, 1), 50)).stream().map(this::view).toList();
     }
 
     /** 리그 화면의 날짜별 일정. 기간은 화면이 고른 날짜(사용자 시간대)를 시각으로 바꿔 보낸다 */
@@ -80,7 +80,7 @@ class MatchController {
     @GetMapping("/api/accounts/me/dividends")
     List<MyDividend> myDividends(@AuthenticationPrincipal String accountId,
                                            @RequestParam(defaultValue = "20") int limit) {
-        return matches.myDividends(accountId, Math.min(limit, 100));
+        return matches.myDividends(accountId, Math.min(Math.max(limit, 1), 100));
     }
 
     @PostMapping("/api/admin/matches")
