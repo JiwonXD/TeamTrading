@@ -15,6 +15,7 @@ import com.fanchart.trading.TradingService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -40,14 +44,27 @@ class AccountController {
     private final Withdrawal withdrawal;
     private final LeagueTabs leagueTabs;
     private final Watchlist watchlist;
+    private final Clock clock;
+    /** 순위는 모든 사용자에게 같아서 잠깐 만들어 둔 것을 함께 쓴다. 0이면 매번 새로 만든다 */
+    private final Duration rankingsTtl;
+    private volatile Rankings rankings;
+
+    private record RankingRow(String accountId, String nickname, long value, double rate) {
+    }
+
+    private record Rankings(Instant at, List<RankingRow> rows) {
+    }
 
     AccountController(TradingService trading, NicknameService nicknames, Withdrawal withdrawal, LeagueTabs leagueTabs,
-                      Watchlist watchlist) {
+                      Watchlist watchlist, Clock clock,
+                      @Value("${fanchart.rankings.cache-ttl:PT5S}") Duration rankingsTtl) {
         this.trading = trading;
         this.nicknames = nicknames;
         this.withdrawal = withdrawal;
         this.leagueTabs = leagueTabs;
         this.watchlist = watchlist;
+        this.clock = clock;
+        this.rankingsTtl = rankingsTtl;
     }
 
     /** 탈퇴. 대기 주문을 취소하고 로그인 연결을 끊은 뒤 이 세션도 끝낸다 */
@@ -109,25 +126,39 @@ class AccountController {
                 .map(t -> MyTradeResponse.of(t, accountId)).toList();
     }
 
+    /**
+     * 전체 순위. 화면이 3초마다 부르므로 계정 전체를 매번 다시 평가하지 않고 rankingsTtl 동안 만들어 둔 순위를 함께 쓴다
+     * (docs/troubleshooting.md 47). 내 순위 표시(me)만 요청마다 붙인다.
+     */
     @GetMapping("/api/rankings")
     List<RankingEntry> rankings(@AuthenticationPrincipal String accountId) {
-        record Row(Account account, long value, double rate) {
-        }
-        List<Row> rows = new ArrayList<>();
-        for (Account a : trading.allAccounts()) {
-            // 탈퇴한 계정과 운영자(증자 물량을 든 발행자)는 순위에 넣지 않는다
-            if (a.withdrawn() || trading.isIssuer(a.id())) continue;
-            long value = trading.totalValue(a);
-            rows.add(new Row(a, value, (double) value / a.initialValue() - 1));
-        }
-        rows.sort(Comparator.comparingDouble(Row::rate).reversed());
-        List<RankingEntry> out = new ArrayList<>();
+        List<RankingRow> rows = rankingRows();
+        List<RankingEntry> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
-            Row r = rows.get(i);
-            out.add(new RankingEntry(i + 1, r.account().nickname(), r.value(), r.rate(),
-                    r.account().id().equals(accountId)));
+            RankingRow r = rows.get(i);
+            out.add(new RankingEntry(i + 1, r.nickname(), r.value(), r.rate(), r.accountId().equals(accountId)));
         }
         return out;
+    }
+
+    private List<RankingRow> rankingRows() {
+        Instant now = clock.instant();
+        Rankings cached = rankings;
+        if (cached != null && now.isBefore(cached.at().plus(rankingsTtl))) return cached.rows();
+        synchronized (this) {
+            cached = rankings;
+            if (cached != null && now.isBefore(cached.at().plus(rankingsTtl))) return cached.rows();
+            List<RankingRow> rows = new ArrayList<>();
+            for (Account a : trading.allAccounts()) {
+                // 탈퇴한 계정과 운영자(증자 물량을 든 발행자), 자동매매 봇은 순위에 넣지 않는다
+                if (a.withdrawn() || trading.isIssuer(a.id()) || trading.isBot(a.id())) continue;
+                long value = trading.totalValue(a);
+                rows.add(new RankingRow(a.id(), a.nickname(), value, (double) value / a.initialValue() - 1));
+            }
+            rows.sort(Comparator.comparingDouble(RankingRow::rate).reversed());
+            rankings = new Rankings(now, List.copyOf(rows));
+            return rankings.rows();
+        }
     }
 
     private AccountResponse view(Account a) {

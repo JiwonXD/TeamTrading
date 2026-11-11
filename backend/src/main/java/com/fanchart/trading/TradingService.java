@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -101,6 +102,8 @@ public class TradingService {
     private final AtomicLong ids = new AtomicLong();
     /** 매도가 증자로 작동하는 운영자 계정 */
     private final Set<String> issuers;
+    /** 자동매매 봇 계정(docs/bots.md). 봇 로그인과 기동 때 채운다 */
+    private final Set<String> bots = ConcurrentHashMap.newKeySet();
     /** 매일 점검시간({@link MarketHours})에 주문을 막는지. 시연·테스트 서버는 끈다 */
     private volatile boolean maintenance;
 
@@ -471,6 +474,15 @@ public class TradingService {
         return issuers.contains(accountId);
     }
 
+    public void markBot(String accountId) {
+        bots.add(accountId);
+    }
+
+    /** 자동매매 봇 계정인지. 봇은 순위에서 빼고, 봇끼리의 체결은 이상거래 탐지에서 뺀다 */
+    public boolean isBot(String accountId) {
+        return bots.contains(accountId);
+    }
+
     private void accept(Order order, String clientOrderId, long reservePerShare) {
         boolean buy = order.side() == Side.BUY;
         long amount = buy ? Math.multiplyExact(reservePerShare, order.quantity()) : order.quantity();
@@ -725,7 +737,8 @@ public class TradingService {
         long last = market.lastPrice();
         for (Trade t : newTrades) {
             // 운영자 매도(증자)를 사는 것은 포인트를 몰아주는 거래가 아니다
-            if (!isIssuer(t.buyerId()) && !isIssuer(t.sellerId()))
+            // 봇끼리의 체결은 실행기 하나가 돌리는 모의 거래라 포인트 몰아주기가 아니다
+            if (!isIssuer(t.buyerId()) && !isIssuer(t.sellerId()) && !(isBot(t.buyerId()) && isBot(t.sellerId())))
                 found.addAll(FdsDetector.detect(t, reference != null ? reference : last, recent));
             recent.addFirst(t);
             last = t.price();
