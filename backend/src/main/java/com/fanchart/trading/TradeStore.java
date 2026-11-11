@@ -48,14 +48,18 @@ public class TradeStore {
                 ORDER BY executed_at DESC, id DESC LIMIT ?""", TRADE, teamId, ts, ts, id, limit);
     }
 
-    /** 한 계정이 매수자나 매도자로 참여한 체결. 최신이 앞 */
+    /**
+     * 한 계정이 매수자나 매도자로 참여한 체결. 최신이 앞.
+     * 내 체결 id를 먼저 모아 조인한다. WHERE id IN (...)으로 쓰면 MySQL이 체결 표 전체를 거꾸로 훑으며 행마다 하위 쿼리를 다시 돌린다
+     * (체결이 50건 안 되는 계정은 끝까지 훑는다, docs/troubleshooting.md 47)
+     */
     public List<Trade> byAccount(String accountId, int limit) {
         return jdbc.query("""
-                SELECT * FROM trades WHERE id IN (
+                SELECT t.* FROM trades t JOIN (
                     SELECT id FROM (SELECT id FROM trades WHERE buyer_id = ? ORDER BY id DESC LIMIT ?) b
                     UNION
                     SELECT id FROM (SELECT id FROM trades WHERE seller_id = ? ORDER BY id DESC LIMIT ?) s
-                ) ORDER BY id DESC LIMIT ?""", TRADE, accountId, limit, accountId, limit, limit);
+                ) mine ON mine.id = t.id ORDER BY t.id DESC LIMIT ?""", TRADE, accountId, limit, accountId, limit, limit);
     }
 
     public record Stats(long high, long low, long volume) {

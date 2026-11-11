@@ -40,6 +40,8 @@ services:
       # nginx가 넘기는 X-Forwarded-* 를 믿어 소셜 로그인 콜백 주소와 쿠키 Secure를 바깥 주소 기준으로 만든다
       SERVER_FORWARD_HEADERS_STRATEGY: native
       FANCHART_AUTH_ADMINS: ${ADMIN_ACCOUNT_IDS:-}
+      # 자동매매 봇 로그인 비밀 값(docs/bots.md). 비우면 봇 로그인을 끈다
+      FANCHART_AUTH_BOT_TOKEN: ${BOT_TOKEN:-}
       FANCHART_ADS_ADMOB_AD_UNITS: ${ADMOB_AD_UNITS:-}
       API_SPORTS_KEY: ${API_SPORTS_KEY:-}
       FOOTBALL_DATA_KEY: ${FOOTBALL_DATA_KEY:-}
@@ -123,6 +125,26 @@ services:
       timeout: 10s
       start_period: 120s
       start_interval: 5s
+    restart: unless-stopped
+    logging: *logging
+
+  # 자동매매 봇(docs/bots.md). 사용자처럼 화면을 새로 고치고 주문한다. nginx를 거쳐 서버에 붙는다
+  #   docker compose --profile bots up -d   (BOT_TOKEN 필요, 봇 수는 BOTS)
+  #   docker compose logs -f bots           (30초마다 처리량·지연·오류)
+  bots:
+    image: node:22-alpine
+    command: node /bots/bots.mjs
+    volumes:
+      - ../tools/bots:/bots:ro
+    environment:
+      BASE_URL: http://web:80
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      BOTS: ${BOTS:-20}
+      RAMP_SECONDS: ${BOT_RAMP_SECONDS:-60}
+      ORDER_EVERY: ${BOT_ORDER_EVERY:-30}
+    depends_on:
+      - web
+    profiles: [bots]
     restart: unless-stopped
     logging: *logging
 

@@ -40,6 +40,9 @@ fanchart:
       enabled: ${ISSUE_MARKDOWN:true}
       percent: 5
       floor: 5000
+  # 전체 순위는 모든 사용자에게 같아서 이 시간 동안 만들어 둔 것을 함께 쓴다(docs/troubleshooting.md 47)
+  rankings:
+    cache-ttl: PT5S
   # 닫아 둔 리그(ADR 0033). 받을 경기 데이터가 없는 리그는 정규 시즌을 수집하지 않고 화면의 리그 탭·구단 목록에서 뺀다.
   # KBO는 API-Sports 유료로 데이터를 받게 되면 HIDDEN_LEAGUES에서 빼서 다시 연다(예: HIDDEN_LEAGUES=K_LEAGUE)
   leagues:
