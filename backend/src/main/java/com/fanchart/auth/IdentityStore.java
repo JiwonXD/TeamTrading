@@ -26,6 +26,10 @@ class IdentityStore {
         return jdbc.queryForList("SELECT provider FROM account_identities WHERE account_id = ?", String.class, accountId);
     }
 
+    List<String> accountIds(String provider) {
+        return jdbc.queryForList("SELECT account_id FROM account_identities WHERE provider = ?", String.class, provider);
+    }
+
     void link(String provider, String subject, String accountId, Instant at) {
         jdbc.update("INSERT INTO account_identities (provider, subject, account_id, created_at) VALUES (?, ?, ?, ?)",
                 provider, subject, accountId, Timestamp.from(at));

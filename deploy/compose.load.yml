@@ -1,0 +1,59 @@
+# 부하 측정용 분리 스택(docs/bots.md). 운영 스택과 같은 이미지를 다른 이름(fanchart-load)·다른 DB·다른 포트로 띄우고,
+# 운영 DB의 가장 최근 백업을 복사해 넣은 뒤 봇을 붙인다. 운영 장부와 사용자 화면은 건드리지 않는다.
+#   docker compose -f docker-compose.yml -f compose.load.yml up -d --build web bots
+#   docker compose -f docker-compose.yml -f compose.load.yml logs -f bots
+#   docker compose -f docker-compose.yml -f compose.load.yml down -v   (끝나면 측정 DB까지 지운다)
+name: fanchart-load
+
+services:
+  # 비어 있는 측정 DB에 운영 백업(backups/teamtrading-*.sql.gz 중 가장 최근)을 넣는다. 이미 들어 있으면 건너뛴다
+  seed:
+    image: mysql:8.4
+    environment:
+      MYSQL_PWD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - ./backups:/backups:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        # 처음 뜨는 MySQL은 초기화 중에 접속을 받지 않아도 healthcheck를 통과한다. 접속될 때까지 기다린다
+        for i in $$(seq 60); do mysql -h mysql -uroot -e "SELECT 1" >/dev/null 2>&1 && break; sleep 2; done
+        n=$$(mysql -h mysql -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='teamtrading'")
+        if [ "$$n" != 0 ]; then echo "측정 DB에 이미 데이터가 있어요"; exit 0; fi
+        f=$$(ls -t /backups/teamtrading-*.sql.gz 2>/dev/null | head -1)
+        if [ -z "$$f" ]; then echo "백업이 없어 빈 DB로 시작해요"; exit 0; fi
+        echo "복사: $$f"
+        zcat "$$f" | mysql -h mysql -uroot teamtrading
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  backend:
+    environment:
+      # 바깥 API(경기 데이터·뉴스·메일)를 부르지 않는다. 운영과 하루 호출 한도를 나눠 쓰지 않게
+      API_SPORTS_KEY: ""
+      FOOTBALL_DATA_KEY: ""
+      PANDASCORE_KEY: ""
+      NAVER_CLIENT_ID: ""
+      NAVER_CLIENT_SECRET: ""
+      MAIL_HOST: ""
+      ISSUE_MARKDOWN: "false"
+      FANCHART_AUTH_BOT_TOKEN: load-test
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  web:
+    ports: !override
+      - "${LOAD_HTTP_PORT:-8089}:80"
+
+  bots:
+    profiles: !reset []
+    restart: "no"
+    environment:
+      BOT_TOKEN: load-test
+      BOTS: ${LOAD_BOTS:-1000}
+      RAMP_SECONDS: ${LOAD_RAMP_SECONDS:-300}
+      DURATION: ${LOAD_SECONDS:-900}

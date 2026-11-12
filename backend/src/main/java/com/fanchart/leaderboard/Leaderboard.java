@@ -98,6 +98,8 @@ public class Leaderboard {
             if (withdrawn.contains(id)) continue;
             // 운영자 계정은 증자 물량을 들고 있는 발행자라 순위에 넣지 않는다
             if (trading.isIssuer(id)) continue;
+            // 자동매매 봇은 사람이 아니다
+            if (trading.isBot(id)) continue;
             double[] perf = performance(e.getValue(), from);
             Row row = new Row(id, perf[0], (long) perf[1], trades.getOrDefault(id, 0));
             String why = ineligible(row.trades(), created.get(id), flagged.contains(id));

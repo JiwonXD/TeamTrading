@@ -4,6 +4,9 @@ spring:
     username: sa
     password: ""
 fanchart:
+  # 순위 캐시는 RankingsCacheTest에서 켜고 본다. 다른 테스트는 체결 직후 순위를 바로 확인한다
+  rankings:
+    cache-ttl: PT0S
   # 점검시간 확인은 MaintenanceTest에서 켜고 한다. 다른 테스트가 시각에 따라 실패하지 않게 끈다
   trading:
     maintenance: false

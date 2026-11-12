@@ -10,6 +10,8 @@ public final class PriceRules {
     public static final int DYNAMIC_VI_PERCENT = 6;
     /** 정적 VI: 직전 단일가(그날 기준가 또는 마지막 단일가 체결가)에서 이 비율(%) 이상 */
     public static final int STATIC_VI_PERCENT = 10;
+    /** 주문 한 건의 최대 수량. 가격×수량 계산이 long을 넘지 않게 막는다 */
+    public static final long MAX_QUANTITY = 1_000_000;
 
     private PriceRules() {
     }
@@ -50,6 +52,7 @@ public final class PriceRules {
     /** 주문이 규칙에 맞으면 빈 값, 아니면 사용자에게 보여줄 사유 */
     public static Optional<String> validate(OrderType type, long price, long quantity, long basePrice) {
         if (quantity <= 0) return Optional.of("수량은 1주 이상이어야 해요");
+        if (quantity > MAX_QUANTITY) return Optional.of("한 번에 %,d주까지 주문할 수 있어요".formatted(MAX_QUANTITY));
         if (type == OrderType.MARKET) return Optional.empty();
         long upper = upperLimit(basePrice);
         long lower = lowerLimit(basePrice);

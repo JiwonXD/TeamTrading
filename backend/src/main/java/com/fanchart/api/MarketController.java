@@ -39,13 +39,13 @@ class MarketController {
 
     @GetMapping("/{teamId}/orderbook")
     OrderBookResponse orderBook(@PathVariable String teamId, @RequestParam(defaultValue = "10") int depth) {
-        var s = trading.orderBook(teamId, Math.min(depth, 20));
+        var s = trading.orderBook(teamId, Math.min(Math.max(depth, 1), 20));
         return new OrderBookResponse(s.asks(), s.bids(), s.lastPrice(), s.epoch(), s.seq());
     }
 
     @GetMapping("/{teamId}/trades")
     List<TradeResponse> trades(@PathVariable String teamId, @RequestParam(defaultValue = "30") int limit) {
-        return trading.trades(teamId, Math.min(limit, 100)).stream().map(TradeResponse::of).toList();
+        return trading.trades(teamId, Math.min(Math.max(limit, 1), 100)).stream().map(TradeResponse::of).toList();
     }
 
     /** 차트 봉. unit: 1m·3m·5m·10m·15m·30m·60m·120m·240m·day·week·month·year, before: 이 시각(ms) 이전 봉만 */
