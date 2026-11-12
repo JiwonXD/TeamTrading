@@ -60,6 +60,8 @@ export interface NewsDto { available: boolean; articles: { title: string; summar
 /** teamId가 null이면 전체 공시 */
 export interface NoticeDto { id: number; teamId: string | null; title: string; body: string; createdAt: string; updatedAt: string | null }
 interface PostDto { id: number; teamId: string; nickname: string; body: string; holder: boolean; createdAt: string; mine: boolean; reward: Post['reward'] | null }
+interface MineDto { account: AccountDto; orders: OrderDto[]; trades: MyTradeDto[]; dividends: MyDividendDto[]; subscriptions: SubscriptionDto[]; ads: AdStatusDto; alerts: AlertDto[] }
+interface RefreshDto { teams: QuoteDto[]; rankings: RankingDto[]; matches: MatchDto[]; offerings: OfferingDto[]; mine: MineDto | null; posts: Record<string, PostDto[]> }
 export type ReportReason = 'SPAM' | 'ABUSE' | 'AD' | 'OTHER'
 export type LeaderboardPeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'SEASON'
 export type LeaderboardSort = 'RETURN' | 'PNL'
@@ -196,43 +198,29 @@ function syncTeams(list: QuoteDto[]) {
   TEAMS.splice(0, TEAMS.length, ...next)
 }
 
-/** 내 계정 값. 로그인하지 않았으면 받지 않는다 */
-async function fetchMine() {
-  const [a, o, t, d, sub, ad] = await Promise.all([
-    api<AccountDto>('GET', '/api/accounts/me'),
-    api<OrderDto[]>('GET', '/api/accounts/me/orders'),
-    api<MyTradeDto[]>('GET', '/api/accounts/me/trades?limit=50'),
-    api<MyDividendDto[]>('GET', '/api/accounts/me/dividends?limit=30'),
-    api<SubscriptionDto[]>('GET', '/api/accounts/me/subscriptions?limit=20'),
-    api<AdStatusDto>('GET', '/api/accounts/me/ads'),
-  ])
-  // 이상거래 탐지 기록은 운영자만 받을 수 있다
-  const al = a.admin ? await api<AlertDto[]>('GET', '/api/surveillance/alerts?limit=50') : []
-  return { a, o, t, d, sub, ad, al }
-}
-
+/**
+ * 화면 새로 고침. 시세·순위·경기·청약, 로그인했으면 내 계정 값, 보고 있는 구단 토론을 요청 한 번으로 받는다.
+ * 요청마다 드는 서버 비용이 커서 나눠 받지 않는다(docs/troubleshooting.md 49)
+ */
 async function refresh() {
-  const [q, r, m, of, mine] = await Promise.all([
-    api<QuoteDto[]>('GET', '/api/teams'),
-    api<RankingDto[]>('GET', '/api/rankings'),
-    api<MatchDto[]>('GET', '/api/matches?limit=9'),
-    api<OfferingDto[]>('GET', '/api/offerings?limit=10'),
-    account ? fetchMine() : null,
-  ])
-  await Promise.all(Object.keys(sockets).map(loadPosts))
-  syncTeams(q)
-  quotes = Object.fromEntries(q.map((x) => [x.id, x]))
-  rankings = r
-  matches = m
-  offerings = of
-  if (mine) {
-    account = mine.a
-    orders = mine.o
-    myTrades = mine.t
-    alerts = mine.al
-    myDividends = mine.d
-    mySubscriptions = mine.sub
-    adStatus = mine.ad
+  const query = new URLSearchParams({ mine: String(account !== null) })
+  const watching = Object.keys(sockets)
+  if (watching.length) query.set('posts', watching.join(','))
+  const r = await api<RefreshDto>('GET', `/api/refresh?${query}`)
+  syncTeams(r.teams)
+  quotes = Object.fromEntries(r.teams.map((x) => [x.id, x]))
+  rankings = r.rankings
+  matches = r.matches
+  offerings = r.offerings
+  for (const [teamId, list] of Object.entries(r.posts)) setPosts(teamId, list)
+  if (r.mine) {
+    account = r.mine.account
+    orders = r.mine.orders
+    myTrades = r.mine.trades
+    alerts = r.mine.alerts
+    myDividends = r.mine.dividends
+    mySubscriptions = r.mine.subscriptions
+    adStatus = r.mine.ads
   }
   connection = { status: 'live', lastSync: Date.now() }
   update()
@@ -459,7 +447,10 @@ export async function cancel(_userId: string, _teamId: string, orderId: string) 
 }
 
 async function loadPosts(teamId: string) {
-  const list = await api<PostDto[]>('GET', `/api/teams/${teamId}/posts?limit=30`)
+  setPosts(teamId, await api<PostDto[]>('GET', `/api/teams/${teamId}/posts?limit=30`))
+}
+
+function setPosts(teamId: string, list: PostDto[]) {
   postsByTeam[teamId] = list.map((p) => ({
     id: String(p.id), teamId: p.teamId, userId: p.mine ? ME : `n:${p.nickname}`, author: p.nickname, body: p.body,
     ts: Date.parse(p.createdAt), holder: p.holder, reward: p.reward ?? undefined,
