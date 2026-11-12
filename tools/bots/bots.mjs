@@ -52,7 +52,7 @@ class Stat {
   }
 }
 
-const fresh = () => ({ poll: new Stat(), order: new Stat(), wsMsgs: 0 });
+const fresh = () => ({ poll: new Stat(), order: new Stat(), wsMsgs: 0, loginFail: 0 });
 let window_ = fresh();
 const total = fresh();
 let online = 0;
@@ -66,11 +66,12 @@ function report(final) {
   const secs = (now - (final ? started : windowStart)) / 1000;
   const label = final ? '전체' : new Date(now).toISOString().slice(11, 19);
   console.log(`[${label}] 봇 ${online}/${BOTS} WS ${sockets} | 조회 ${w.poll.line(secs)} | 주문 ${w.order.line(secs)}` +
-    ` | 시세 수신 ${(w.wsMsgs / secs).toFixed(0)}/s`);
+    ` | 시세 수신 ${(w.wsMsgs / secs).toFixed(0)}/s | 로그인 실패 ${w.loginFail}`);
   if (!final) {
     total.poll.merge(window_.poll);
     total.order.merge(window_.order);
     total.wsMsgs += window_.wsMsgs;
+    total.loginFail += window_.loginFail;
     window_ = fresh();
     windowStart = now;
   }
@@ -138,6 +139,8 @@ class Bot {
   async login() {
     this.cookies.clear();
     await this.req('GET', '/api/auth/options');
+    // 이 요청이 실패하면 CSRF 쿠키가 없어 로그인이 403으로 막힌다. 보내지 않고 실패로 센다
+    if (!this.cookies.has('XSRF-TOKEN')) throw new Error('CSRF 쿠키를 받지 못함');
     const headers = { 'content-type': 'application/json', 'x-bot-token': TOKEN,
       'x-xsrf-token': this.cookies.get('XSRF-TOKEN') ?? '',
       cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ') };
@@ -147,7 +150,7 @@ class Bot {
       const i = kv.indexOf('=');
       this.cookies.set(kv.slice(0, i), kv.slice(i + 1));
     }
-    if (res.status !== 204) throw new Error(`${this.name} 로그인 실패: ${res.status}`);
+    if (res.status !== 204) throw new Error(`로그인 응답 ${res.status}`);
   }
 
   // 화면 store.server.ts refresh()와 같은 요청
@@ -166,7 +169,8 @@ class Bot {
       this.req('GET', '/api/accounts/me/ads', undefined, s),
     ]);
     if (this.team) await this.req('GET', `/api/teams/${this.team}/posts?limit=30`, undefined, s);
-    if (r[4].status === 401) return this.login(); // 서버가 다시 떠서 세션이 사라졌다
+    // 서버가 다시 떠서 세션이 사라졌다. 다시 로그인하지 못하면 다음 새로 고침 때 다시 해 본다
+    if (r[4].status === 401) return this.login().catch(() => { window_.loginFail++; });
     if (Array.isArray(r[0].json)) for (const q of r[0].json) quotes.set(q.id, q);
     if (r[4].status === 200) this.account = r[4].json;
     if (Array.isArray(r[5].json)) this.open = r[5].json;
@@ -208,7 +212,17 @@ class Bot {
   }
 
   async run() {
-    await this.login();
+    // 서버가 버거워 로그인에 실패해도 봇을 버리지 않고 5~10초 뒤 다시 한다
+    while (!stopping) {
+      try {
+        await this.login();
+        break;
+      } catch {
+        window_.loginFail++;
+        await sleep(5000 + rnd(5000));
+      }
+    }
+    if (stopping) return;
     online++;
     this.watch(pickTeam());
     let nextOrder = Date.now() + exp(ORDER_EVERY) * 1000;
@@ -228,7 +242,7 @@ class Bot {
           nextOrder = Date.now() + exp(ORDER_EVERY) * 1000;
         }
       } catch (e) {
-        console.error(e.message); // 다시 로그인하지 못했다. 다음 새로 고침 때 다시 해 본다
+        console.error(e.message);
       }
       // 응답이 늦으면 다음 새로 고침을 겹쳐 보내지 않는다
       await sleep(Math.max(0, POLL_MS - (Date.now() - t0)));
