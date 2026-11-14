@@ -153,27 +153,17 @@ class Bot {
     if (res.status !== 204) throw new Error(`로그인 응답 ${res.status}`);
   }
 
-  // 화면 store.server.ts refresh()와 같은 요청
+  // 화면 store.server.ts refresh()와 같은 요청. 새로 고침 한 번이 요청 한 번이다
   async poll() {
-    const s = window_.poll;
-    const r = await Promise.all([
-      this.req('GET', '/api/teams', undefined, s),
-      this.req('GET', '/api/rankings', undefined, s),
-      this.req('GET', '/api/matches?limit=9', undefined, s),
-      this.req('GET', '/api/offerings?limit=10', undefined, s),
-      this.req('GET', '/api/accounts/me', undefined, s),
-      this.req('GET', '/api/accounts/me/orders', undefined, s),
-      this.req('GET', '/api/accounts/me/trades?limit=50', undefined, s),
-      this.req('GET', '/api/accounts/me/dividends?limit=30', undefined, s),
-      this.req('GET', '/api/accounts/me/subscriptions?limit=20', undefined, s),
-      this.req('GET', '/api/accounts/me/ads', undefined, s),
-    ]);
-    if (this.team) await this.req('GET', `/api/teams/${this.team}/posts?limit=30`, undefined, s);
+    const q = new URLSearchParams({ mine: 'true' });
+    if (this.team) q.set('posts', this.team);
+    const r = await this.req('GET', `/api/refresh?${q}`, undefined, window_.poll);
     // 서버가 다시 떠서 세션이 사라졌다. 다시 로그인하지 못하면 다음 새로 고침 때 다시 해 본다
-    if (r[4].status === 401) return this.login().catch(() => { window_.loginFail++; });
-    if (Array.isArray(r[0].json)) for (const q of r[0].json) quotes.set(q.id, q);
-    if (r[4].status === 200) this.account = r[4].json;
-    if (Array.isArray(r[5].json)) this.open = r[5].json;
+    if (r.status === 401) return this.login().catch(() => { window_.loginFail++; });
+    if (r.status !== 200) return;
+    for (const t of r.json.teams) quotes.set(t.id, t);
+    this.account = r.json.mine.account;
+    this.open = r.json.mine.orders;
   }
 
   watch(teamId) {
