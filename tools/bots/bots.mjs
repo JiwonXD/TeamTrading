@@ -149,6 +149,9 @@ function pickTeam(hot = 0) {
 
 const clamp1 = x => Math.max(-1, Math.min(1, x));
 
+// 점검시간(한국 시간 00:00~00:30)에는 서버가 주문을 받지 않으므로 주문만 건너뛴다. 새로 고침·시세 수신은 계속한다
+const inMaintenance = () => { const d = new Date(Date.now() + 9 * 3_600_000); return d.getUTCHours() === 0 && d.getUTCMinutes() < 30; };
+
 // ---------- 봇 ----------
 
 class Bot {
@@ -245,6 +248,7 @@ class Bot {
   }
 
   async order() {
+    if (inMaintenance()) return;
     const q = quotes.get(this.team);
     if (!q || !q.listed || !this.account) return;
     if (this.open.length > 5) {
