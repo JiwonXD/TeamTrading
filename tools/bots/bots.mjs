@@ -2,9 +2,11 @@
 //   BASE_URL=http://localhost:8088 BOT_TOKEN=... BOTS=1000 node tools/bots/bots.mjs
 //
 // 봇 하나가 하는 일(화면 store.server.ts와 같은 요청):
-//   - 3초마다 화면 새로 고침 요청 10개 + 보고 있는 구단 토론 글
+//   - 3초마다 화면 새로 고침 요청 하나(/api/refresh, 보고 있는 구단 토론 포함)
 //   - 보고 있는 구단의 실시간 시세 WebSocket 하나. 평균 SWITCH_EVERY초마다 다른 구단으로 옮긴다
 //   - 평균 ORDER_EVERY초마다 지정가 주문 하나: 현재가 ±3호가, 1~3주. 대기 주문이 5개를 넘으면 오래된 것부터 취소
+//   - 사고팔 방향은 구단의 최근 경기 성적과 봇 성향으로 정한다(추세형 60%, 역추세형 20%, 무작위형 20%).
+//     살 확률은 25%~75% 안에서만 기울여 봇이 한 방향으로 몰리지 않게 한다
 // 같은 실행기 안의 봇끼리도 체결된다. 서버는 봇끼리의 체결을 이상거래 탐지에서 빼고, 봇을 순위에서 뺀다.
 // REPORT초마다 처리량·지연·오류를 한 줄로 찍고, 끝날 때(Ctrl+C, DURATION) 전체 요약을 찍는다.
 
@@ -92,6 +94,40 @@ async function loadMarket() {
   tradable = teams.filter(t => t.listed && !hidden.has(t.league)).map(t => t.id);
 }
 
+// ---------- 최근 경기 성적(실행기 전체가 함께 쓴다) ----------
+
+const FORM_TTL_MS = 10 * 60_000;
+const form = new Map(); // 구단 id → { score, at }
+
+/**
+ * 구단의 최근 성적 점수(-1~+1). 끝난 경기 최근 5개의 (승 - 패) / 경기 수에,
+ * 24시간 안에 경기가 있으면 배당을 기대해 0.2를 더한다. 10분 동안 함께 쓴다
+ */
+async function teamForm(teamId) {
+  const cached = form.get(teamId);
+  if (cached && Date.now() - cached.at < FORM_TTL_MS) return cached.score;
+  form.set(teamId, { score: cached?.score ?? 0, at: Date.now() }); // 같은 구단을 여러 봇이 한꺼번에 부르지 않게
+  const res = await fetch(`${BASE}/api/teams/${teamId}/matches?limit=15`);
+  if (!res.ok) return cached?.score ?? 0;
+  const list = await res.json();
+  const now = Date.now();
+  const finals = list.filter(m => m.status === 'FINAL' && m.homeScore != null && m.awayScore != null).slice(0, 5);
+  let net = 0;
+  for (const m of finals) {
+    const mine = m.homeTeamId === teamId ? m.homeScore : m.awayScore;
+    const theirs = m.homeTeamId === teamId ? m.awayScore : m.homeScore;
+    net += Math.sign(mine - theirs);
+  }
+  const soon = list.some(m => m.status === 'SCHEDULED' && Date.parse(m.scheduledAt) - now < 86_400_000
+    && Date.parse(m.scheduledAt) > now);
+  const score = Math.max(-1, Math.min(1, (finals.length ? net / finals.length : 0) + (soon ? 0.2 : 0)));
+  form.set(teamId, { score, at: Date.now() });
+  return score;
+}
+
+// 봇 성향: 1 추세형(잘하는 팀을 산다), -1 역추세형(잘하는 팀을 판다), 0 무작위형. 다섯 중 셋·하나·하나
+const styleOf = i => [1, 1, 1, -1, 0][i % 5];
+
 // 사람은 고르게 보지 않는다. 열 번 중 일곱 번은 앞쪽 20개 구단(인기 구단)을 본다
 function pickTeam() {
   const hot = Math.min(20, tradable.length);
@@ -101,8 +137,9 @@ function pickTeam() {
 // ---------- 봇 ----------
 
 class Bot {
-  constructor(name) {
+  constructor(name, style) {
     this.name = name;
+    this.style = style;
     this.cookies = new Map();
     this.team = null;
     this.ws = null;
@@ -169,6 +206,7 @@ class Bot {
   watch(teamId) {
     this.ws?.close();
     this.team = teamId;
+    teamForm(teamId).catch(() => {});
     const ws = new WebSocket(BASE.replace(/^http/, 'ws') + `/ws/teams/${teamId}`);
     ws.onopen = () => { ws.opened = true; sockets++; };
     ws.onmessage = () => window_.wsMsgs++;
@@ -193,7 +231,12 @@ class Bot {
     const qty = 1 + rnd(3);
     const have = this.account.holdings.find(h => h.teamId === this.team)?.available ?? 0;
     const canBuy = this.account.availablePoints >= price * qty;
-    const side = have > 0 && (!canBuy || Math.random() < 0.5) ? 'SELL' : canBuy ? 'BUY' : null;
+    // 살 확률 = 50% + 25% × 성적 × 성향(25%~75%). 주식이 없으면 사기만, 포인트가 모자라면 팔기만 한다
+    const pBuy = 0.5 + 0.25 * (form.get(this.team)?.score ?? 0) * this.style;
+    const wantBuy = Math.random() < pBuy;
+    const side = have === 0 ? (canBuy ? 'BUY' : null)
+      : !canBuy ? 'SELL'
+      : wantBuy ? 'BUY' : 'SELL';
     if (!side) return;
     await this.req('POST', '/api/orders', {
       clientOrderId: `${this.name}-${Date.now().toString(36)}-${this.n++}`,
@@ -266,7 +309,7 @@ process.on('SIGTERM', stop);
 if (DURATION > 0) setTimeout(stop, DURATION * 1000);
 
 for (let i = 0; i < BOTS && !stopping; i++) {
-  const bot = new Bot(`${PREFIX}-${String(i + 1).padStart(4, '0')}`);
+  const bot = new Bot(`${PREFIX}-${String(i + 1).padStart(4, '0')}`, styleOf(i));
   bot.run().catch(e => console.error(e.message));
   await sleep((RAMP * 1000) / BOTS);
 }
