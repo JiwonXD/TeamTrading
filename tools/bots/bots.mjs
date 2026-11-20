@@ -4,11 +4,13 @@
 // 봇 하나가 하는 일(화면 store.server.ts와 같은 요청):
 //   - 3초마다 화면 새로 고침 요청 하나(/api/refresh, 보고 있는 구단 토론 포함)
 //   - 보고 있는 구단의 실시간 시세 WebSocket 하나. 평균 SWITCH_EVERY초마다 다른 구단으로 옮긴다
-//   - 평균 ORDER_EVERY초마다 지정가 주문 하나: 현재가 ±3호가, 1~3주. 대기 주문이 5개를 넘으면 오래된 것부터 취소
+//   - 평균 ORDER_EVERY초마다 지정가 주문 하나: 1호가 근처, 1~3주가 기본. 대기 주문이 5개를 넘으면 오래된 것부터 취소
 //   - 사고팔 방향은 구단의 최근 경기 성적과 봇 성향으로 정한다(추세형 60%, 역추세형 20%, 무작위형 20%).
 //     살 확률은 25%~75% 안에서만 기울여 봇이 한 방향으로 몰리지 않게 한다
 //   - 봇마다 성격이 다르다: 확신이 클 때 현재가에서 얼마나 쫓아가는지(0~4호가), 익절·손절 기준(평균 단가 대비 5~20%),
 //     확신이 클 때 수량을 얼마나 늘리는지(0~5주), 한 구단에 넣는 상한(총자산의 5~25%)
+//   - 성적 말고도 오늘 등락률(이미 오른 값인지)과 호가 잔량(사려는 쪽·팔려는 쪽 어디가 많은지)을 섞어 판단하고,
+//     얼마나 믿는지는 봇마다 다르다. 주문 가격은 실제 매도·매수 1호가 근처. 거래대금이 큰 구단을 더 자주 보는 정도도 봇마다 다르다
 // 같은 실행기 안의 봇끼리도 체결된다. 서버는 봇끼리의 체결을 이상거래 탐지에서 빼고, 봇을 순위에서 뺀다.
 // REPORT초마다 처리량·지연·오류를 한 줄로 찍고, 끝날 때(Ctrl+C, DURATION) 전체 요약을 찍는다.
 
@@ -130,11 +132,25 @@ async function teamForm(teamId) {
 // 봇 성향: 1 추세형(잘하는 팀을 산다), -1 역추세형(잘하는 팀을 판다), 0 무작위형. 다섯 중 셋·하나·하나
 const styleOf = i => [1, 1, 1, -1, 0][i % 5];
 
-// 사람은 고르게 보지 않는다. 열 번 중 일곱 번은 앞쪽 20개 구단(인기 구단)을 본다
-function pickTeam() {
-  const hot = Math.min(20, tradable.length);
-  return tradable[Math.random() < 0.7 ? rnd(hot) : rnd(tradable.length)];
+// 사람은 고르게 보지 않는다. hot 확률로 오늘 거래대금(거래량 × 현재가)에 비례해 고르고,
+// 아니면 열 번 중 일곱 번은 앞쪽 20개 구단(인기 구단)을 본다
+function pickTeam(hot = 0) {
+  if (Math.random() < hot) {
+    const value = tradable.map(id => { const q = quotes.get(id); return q ? q.volume * q.lastPrice : 0; });
+    const sum = value.reduce((a, b) => a + b, 0);
+    if (sum > 0) {
+      let r = Math.random() * sum;
+      for (let i = 0; i < tradable.length; i++) if ((r -= value[i]) < 0) return tradable[i];
+    }
+  }
+  const top = Math.min(20, tradable.length);
+  return tradable[Math.random() < 0.7 ? rnd(top) : rnd(tradable.length)];
 }
+
+const clamp1 = x => Math.max(-1, Math.min(1, x));
+
+// 점검시간(한국 시간 00:00~00:30)에는 서버가 주문을 받지 않으므로 주문만 건너뛴다. 새로 고침·시세 수신은 계속한다
+const inMaintenance = () => { const d = new Date(Date.now() + 9 * 3_600_000); return d.getUTCHours() === 0 && d.getUTCMinutes() < 30; };
 
 // ---------- 봇 ----------
 
@@ -148,6 +164,11 @@ class Bot {
     this.stopLoss = 0.05 + Math.random() * 0.15;
     this.sizeBoost = Math.random() * 5;        // 확신 1일 때 더 사고파는 주식 수
     this.maxPosition = 0.05 + Math.random() * 0.2; // 한 구단 보유 평가액 상한(총자산 대비)
+    // 판단에 섞는 신호를 얼마나 믿는지
+    this.wForm = 0.3 + Math.random() * 0.7;    // 최근 성적
+    this.wPrice = Math.random() * 2 - 1;       // 오늘 등락률. +면 많이 오른 구단을 비싸다고 보고, -면 오르는 구단을 따라간다
+    this.wBook = Math.random();                // 호가 잔량
+    this.hot = Math.random();                  // 거래대금 큰 구단을 골라 볼 확률
     this.cookies = new Map();
     this.team = null;
     this.ws = null;
@@ -227,6 +248,7 @@ class Bot {
   }
 
   async order() {
+    if (inMaintenance()) return;
     const q = quotes.get(this.team);
     if (!q || !q.listed || !this.account) return;
     if (this.open.length > 5) {
@@ -235,10 +257,21 @@ class Bot {
       return;
     }
     const t = tick(q.lastPrice);
+    const book = (await this.req('GET', `/api/teams/${this.team}/orderbook?depth=5`)).json;
+    const bestAsk = book?.asks?.[0]?.price, bestBid = book?.bids?.[0]?.price;
     const holding = this.account.holdings.find(h => h.teamId === this.team);
     const have = holding?.available ?? 0;
-    // dir: 이 봇이 보기에 오를 쪽(+)인지 내릴 쪽(-)인지. 성적 × 성향, -1~1. 무작위형은 0
-    const dir = (form.get(this.team)?.score ?? 0) * this.style;
+    // dir: 이 봇이 보기에 오를 쪽(+)인지 내릴 쪽(-)인지, -1~1. 무작위형은 0
+    //   성적 × 성향, 등락률(10%면 꽉 참), 호가 잔량 쏠림((매수 잔량 - 매도 잔량) / 합)을 봇의 가중치로 평균한다
+    const sum = levels => (levels ?? []).reduce((a, l) => a + l.quantity, 0);
+    const bids = sum(book?.bids), asks = sum(book?.asks);
+    const signals = [
+      [this.wForm, (form.get(this.team)?.score ?? 0) * this.style],
+      [this.wPrice, -clamp1((q.changeRate ?? 0) / 0.1)],
+      [this.wBook, bids + asks > 0 ? (bids - asks) / (bids + asks) : 0],
+    ];
+    const dir = this.style === 0 ? 0
+      : clamp1(signals.reduce((a, [w, x]) => a + w * x, 0) / signals.reduce((a, [w]) => a + Math.abs(w), 0));
     const conviction = Math.abs(dir);
     let side = null, qty = 1 + rnd(3), shift = 0;
     const gain = have > 0 && holding.averagePrice > 0 ? q.lastPrice / holding.averagePrice - 1 : 0;
@@ -256,7 +289,12 @@ class Bot {
         shift = Math.round(conviction * this.chase);
       }
     }
-    const priceFor = s => Math.min(q.upperLimit, Math.max(q.lowerLimit, q.lastPrice + ((rnd(7) - 3) + (s === 'BUY' ? shift : -shift)) * t));
+    // 사는 쪽은 매도 1호가에서 0~3호가 아래(매도 1호가면 바로 체결), 파는 쪽은 매수 1호가에서 0~3호가 위.
+    // 확신만큼 상대 호가 쪽으로 더 쫓아간다. 상대 호가가 없으면 현재가 기준
+    const priceFor = s => {
+      const p = s === 'BUY' ? (bestAsk ?? q.lastPrice) + (shift - rnd(4)) * t : (bestBid ?? q.lastPrice) + (rnd(4) - shift) * t;
+      return Math.min(q.upperLimit, Math.max(q.lowerLimit, p));
+    };
     let price = priceFor(side);
     if (side === 'BUY') {
       // 한 구단 상한과 주문 가능 포인트 안에서만 산다. 못 사면 가진 주식을 판다
@@ -285,7 +323,7 @@ class Bot {
     }
     if (stopping) return;
     online++;
-    this.watch(pickTeam());
+    this.watch(pickTeam(this.hot));
     let nextOrder = Date.now() + exp(ORDER_EVERY) * 1000;
     let nextSwitch = Date.now() + exp(SWITCH_EVERY) * 1000;
     // 처음 접속한 봇이 한꺼번에 몰리지 않게 새로 고침 시점을 흩는다
@@ -295,7 +333,7 @@ class Bot {
       try {
         await this.poll();
         if (Date.now() >= nextSwitch) {
-          this.watch(pickTeam());
+          this.watch(pickTeam(this.hot));
           nextSwitch = Date.now() + exp(SWITCH_EVERY) * 1000;
         }
         if (Date.now() >= nextOrder) {
