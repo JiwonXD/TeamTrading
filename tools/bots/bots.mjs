@@ -7,6 +7,8 @@
 //   - 평균 ORDER_EVERY초마다 지정가 주문 하나: 현재가 ±3호가, 1~3주. 대기 주문이 5개를 넘으면 오래된 것부터 취소
 //   - 사고팔 방향은 구단의 최근 경기 성적과 봇 성향으로 정한다(추세형 60%, 역추세형 20%, 무작위형 20%).
 //     살 확률은 25%~75% 안에서만 기울여 봇이 한 방향으로 몰리지 않게 한다
+//   - 봇마다 성격이 다르다: 확신이 클 때 현재가에서 얼마나 쫓아가는지(0~4호가), 익절·손절 기준(평균 단가 대비 5~20%),
+//     확신이 클 때 수량을 얼마나 늘리는지(0~5주), 한 구단에 넣는 상한(총자산의 5~25%)
 // 같은 실행기 안의 봇끼리도 체결된다. 서버는 봇끼리의 체결을 이상거래 탐지에서 빼고, 봇을 순위에서 뺀다.
 // REPORT초마다 처리량·지연·오류를 한 줄로 찍고, 끝날 때(Ctrl+C, DURATION) 전체 요약을 찍는다.
 
@@ -140,6 +142,12 @@ class Bot {
   constructor(name, style) {
     this.name = name;
     this.style = style;
+    // 봇마다 다른 성격(생성할 때 한 번 정한다)
+    this.chase = Math.random() * 4;            // 확신 1일 때 현재가에서 쫓아가는 호가 수
+    this.takeProfit = 0.05 + Math.random() * 0.15;
+    this.stopLoss = 0.05 + Math.random() * 0.15;
+    this.sizeBoost = Math.random() * 5;        // 확신 1일 때 더 사고파는 주식 수
+    this.maxPosition = 0.05 + Math.random() * 0.2; // 한 구단 보유 평가액 상한(총자산 대비)
     this.cookies = new Map();
     this.team = null;
     this.ws = null;
@@ -227,20 +235,40 @@ class Bot {
       return;
     }
     const t = tick(q.lastPrice);
-    const price = Math.min(q.upperLimit, Math.max(q.lowerLimit, q.lastPrice + (rnd(7) - 3) * t));
-    const qty = 1 + rnd(3);
-    const have = this.account.holdings.find(h => h.teamId === this.team)?.available ?? 0;
-    const canBuy = this.account.availablePoints >= price * qty;
-    // 살 확률 = 50% + 25% × 성적 × 성향(25%~75%). 주식이 없으면 사기만, 포인트가 모자라면 팔기만 한다
-    const pBuy = 0.5 + 0.25 * (form.get(this.team)?.score ?? 0) * this.style;
-    const wantBuy = Math.random() < pBuy;
-    const side = have === 0 ? (canBuy ? 'BUY' : null)
-      : !canBuy ? 'SELL'
-      : wantBuy ? 'BUY' : 'SELL';
-    if (!side) return;
+    const holding = this.account.holdings.find(h => h.teamId === this.team);
+    const have = holding?.available ?? 0;
+    // dir: 이 봇이 보기에 오를 쪽(+)인지 내릴 쪽(-)인지. 성적 × 성향, -1~1. 무작위형은 0
+    const dir = (form.get(this.team)?.score ?? 0) * this.style;
+    const conviction = Math.abs(dir);
+    let side = null, qty = 1 + rnd(3), shift = 0;
+    const gain = have > 0 && holding.averagePrice > 0 ? q.lastPrice / holding.averagePrice - 1 : 0;
+    if (have > 0 && gain >= this.takeProfit) {
+      side = 'SELL'; qty = Math.ceil(have / 2);          // 익절: 절반
+    } else if (have > 0 && gain <= -this.stopLoss) {
+      side = 'SELL'; qty = have;                          // 손절: 전부
+    } else {
+      // 살 확률 = 50% + 25% × dir(25%~75%)
+      // 주식이 없으면 사기만 한다
+      side = have === 0 || Math.random() < 0.5 + 0.25 * dir ? 'BUY' : 'SELL';
+      // 생각한 방향으로 주문할 때만 확신만큼 수량을 늘리고 가격을 쫓아간다(사면 위로, 팔면 아래로)
+      if ((side === 'BUY' && dir > 0) || (side === 'SELL' && dir < 0)) {
+        qty += Math.round(conviction * this.sizeBoost);
+        shift = Math.round(conviction * this.chase);
+      }
+    }
+    const priceFor = s => Math.min(q.upperLimit, Math.max(q.lowerLimit, q.lastPrice + ((rnd(7) - 3) + (s === 'BUY' ? shift : -shift)) * t));
+    let price = priceFor(side);
+    if (side === 'BUY') {
+      // 한 구단 상한과 주문 가능 포인트 안에서만 산다. 못 사면 가진 주식을 판다
+      const room = Math.floor((this.maxPosition * this.account.totalValue - ((holding?.available ?? 0) + (holding?.locked ?? 0)) * q.lastPrice) / price);
+      qty = Math.min(qty, room, Math.floor(this.account.availablePoints / price));
+      if (qty <= 0) { side = have > 0 ? 'SELL' : null; qty = 1 + rnd(3); shift = 0; price = priceFor(side); }
+    }
+    if (side === 'SELL') qty = Math.min(qty, have);
+    if (!side || qty <= 0) return;
     await this.req('POST', '/api/orders', {
       clientOrderId: `${this.name}-${Date.now().toString(36)}-${this.n++}`,
-      teamId: this.team, side, type: 'LIMIT', price, quantity: side === 'SELL' ? Math.min(qty, have) : qty,
+      teamId: this.team, side, type: 'LIMIT', price, quantity: qty,
     }, window_.order);
   }
 
