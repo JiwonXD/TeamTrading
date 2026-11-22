@@ -34,10 +34,10 @@ fanchart:
   trading:
     maintenance: true
   # 남아 있는 운영자 매도는 매일 00:30에 5%씩 내려 다시 건다. 5,000P와 그날 하한가 아래로는 안 내린다(ADR 0038).
-  # ISSUE_MARKDOWN=false로 끈다
+  # 기본은 꺼짐. ISSUE_MARKDOWN=true로 켠다
   issuance:
     markdown:
-      enabled: ${ISSUE_MARKDOWN:true}
+      enabled: ${ISSUE_MARKDOWN:false}
       percent: 5
       floor: 5000
   # 전체 순위는 모든 사용자에게 같아서 이 시간 동안 만들어 둔 것을 함께 쓴다(docs/troubleshooting.md 47)

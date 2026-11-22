@@ -32,7 +32,7 @@ class IssueMarkdown {
     private final long floor;
 
     IssueMarkdown(TradingService trading, AuthProperties auth, Clock clock,
-                  @Value("${fanchart.issuance.markdown.enabled:true}") boolean enabled,
+                  @Value("${fanchart.issuance.markdown.enabled:false}") boolean enabled,
                   @Value("${fanchart.issuance.markdown.percent:5}") int percent,
                   @Value("${fanchart.issuance.markdown.floor:5000}") long floor) {
         this.trading = trading;
