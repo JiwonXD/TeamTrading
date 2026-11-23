@@ -8,7 +8,8 @@
 //   - 사고팔 방향은 구단의 최근 경기 성적과 봇 성향으로 정한다(추세형 60%, 역추세형 20%, 무작위형 20%).
 //     살 확률은 25%~75% 안에서만 기울여 봇이 한 방향으로 몰리지 않게 한다
 //   - 봇마다 성격이 다르다: 확신이 클 때 현재가에서 얼마나 쫓아가는지(0~4호가), 익절·손절 기준(평균 단가 대비 5~20%),
-//     확신이 클 때 수량을 얼마나 늘리는지(0~5주), 한 구단에 넣는 상한(총자산의 5~25%)
+//     확신이 클 때 수량을 얼마나 늘리는지(0~5주), 한 구단에 넣는 상한(총자산의 5~25%),
+//     늘 현금으로 남기는 몫(총자산의 30~70%). 돈을 다 써 버린 봇은 팔기만 해 사는 쪽이 사라진다
 //   - 성적 말고도 오늘 등락률(이미 오른 값인지)과 호가 잔량(사려는 쪽·팔려는 쪽 어디가 많은지)을 섞어 판단하고,
 //     얼마나 믿는지는 봇마다 다르다. 주문 가격은 실제 매도·매수 1호가 근처. 거래대금이 큰 구단을 더 자주 보는 정도도 봇마다 다르다
 // 같은 실행기 안의 봇끼리도 체결된다. 서버는 봇끼리의 체결을 이상거래 탐지에서 빼고, 봇을 순위에서 뺀다.
@@ -164,6 +165,7 @@ class Bot {
     this.stopLoss = 0.05 + Math.random() * 0.15;
     this.sizeBoost = Math.random() * 5;        // 확신 1일 때 더 사고파는 주식 수
     this.maxPosition = 0.05 + Math.random() * 0.2; // 한 구단 보유 평가액 상한(총자산 대비)
+    this.cashReserve = 0.3 + Math.random() * 0.4;  // 늘 현금으로 남겨 두는 몫(총자산 대비). 이 위로만 산다
     // 판단에 섞는 신호를 얼마나 믿는지
     this.wForm = 0.3 + Math.random() * 0.7;    // 최근 성적
     this.wPrice = Math.random() * 2 - 1;       // 오늘 등락률. +면 많이 오른 구단을 비싸다고 보고, -면 오르는 구단을 따라간다
@@ -297,9 +299,10 @@ class Bot {
     };
     let price = priceFor(side);
     if (side === 'BUY') {
-      // 한 구단 상한과 주문 가능 포인트 안에서만 산다. 못 사면 가진 주식을 판다
+      // 한 구단 상한과, 현금 몫을 남긴 주문 가능 포인트 안에서만 산다. 못 사면 가진 주식을 판다
       const room = Math.floor((this.maxPosition * this.account.totalValue - ((holding?.available ?? 0) + (holding?.locked ?? 0)) * q.lastPrice) / price);
-      qty = Math.min(qty, room, Math.floor(this.account.availablePoints / price));
+      const spendable = this.account.availablePoints - this.cashReserve * this.account.totalValue;
+      qty = Math.min(qty, room, Math.floor(spendable / price));
       if (qty <= 0) { side = have > 0 ? 'SELL' : null; qty = 1 + rnd(3); shift = 0; price = priceFor(side); }
     }
     if (side === 'SELL') qty = Math.min(qty, have);
