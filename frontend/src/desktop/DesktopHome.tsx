@@ -8,6 +8,8 @@ import { ServerMatches, SimMatches } from '../pages/Home'
 import { LeagueStats, LeagueTabs } from '../components/League'
 import { LeagueSchedule } from '../components/Schedule'
 import { PriceChart } from './PriceChart'
+import { bucketStart } from '../chart/candles'
+import { useCandles } from '../chart/useCandles'
 import { useFlash } from './useDesktop'
 
 type SortKey = 'value' | 'chg' | 'last' | 'volume'
@@ -186,6 +188,10 @@ function Preview({ teamId }: { teamId: string }) {
   const m = s.markets[teamId]
   const diff = m.last - m.base
   const posts = s.posts.filter((p) => p.teamId === teamId).slice(0, 2)
+  // 홈은 구단별 체결을 받지 않으므로 오늘 치 10분 봉 종가로 그리고, 끝에 현재가를 붙인다
+  const candles = useCandles(teamId, '10m').candles ?? []
+  const today = bucketStart(Date.now(), 'day')
+  const points = [...candles.filter((c) => c.time >= today).map((c) => ({ ts: c.time, price: c.close })), { price: m.last }]
   return (
     <aside className="panel dh-preview" aria-live="polite">
       <a href={`#team-${teamId}`} className="row-gap dh-preview-head">
@@ -194,7 +200,7 @@ function Preview({ teamId }: { teamId: string }) {
       </a>
       <div className="dh-preview-price">{fmt(m.last)}P</div>
       <div className={`small ${tone(diff)}`}>{m.listed ? `어제보다 ${signed(diff)}P (${pct(diff / m.base)})` : '상장 전'}</div>
-      <PriceChart points={m.intraday} base={m.base} height={180} />
+      <PriceChart points={points} base={m.base} height={180} />
       <dl className="kv">
         <div><dt>고가</dt><dd>{fmt(m.high)}</dd></div>
         <div><dt>저가</dt><dd>{fmt(m.low)}</dd></div>
