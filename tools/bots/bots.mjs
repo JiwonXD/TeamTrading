@@ -5,13 +5,14 @@
 //   - 3초마다 화면 새로 고침 요청 하나(/api/refresh, 보고 있는 구단 토론 포함)
 //   - 보고 있는 구단의 실시간 시세 WebSocket 하나. 평균 SWITCH_EVERY초마다 다른 구단으로 옮긴다
 //   - 평균 ORDER_EVERY초마다 지정가 주문 하나: 1호가 근처, 1~3주가 기본. 대기 주문이 5개를 넘으면 오래된 것부터 취소
-//   - 사고팔 방향은 구단의 최근 경기 성적과 봇 성향으로 정한다(추세형 60%, 역추세형 20%, 무작위형 20%).
-//     살 확률은 25%~75% 안에서만 기울여 봇이 한 방향으로 몰리지 않게 한다
+//   - 봇마다 유형이 있다(docs/bots.md "봇 유형"): 가치투자·배당 캡처·추세 추종·개미·무작위.
+//     판단 재료는 리그 일정(지난·앞으로 30일)으로 낸 Elo 실력 점수, 남은 일정의 상대별 이길 확률 × 승리 배당으로 낸 적정가,
+//     다음 경기 기대 배당(경기 시작이 배당락), 경기 결과의 서프라이즈(결과 − 경기 전 이길 확률), 봇마다 다른 기간의 가격 흐름, 호가 잔량.
+//     차트 모양은 정해 두지 않는다. 생각이 다른 봇들이 부딪혀 저절로 생기게 둔다
 //   - 봇마다 성격이 다르다: 확신이 클 때 현재가에서 얼마나 쫓아가는지(0~4호가), 익절·손절 기준(평균 단가 대비 5~20%),
 //     확신이 클 때 수량을 얼마나 늘리는지(0~5주), 한 구단에 넣는 상한(총자산의 5~25%),
-//     늘 현금으로 남기는 몫(총자산의 30~70%). 돈을 다 써 버린 봇은 팔기만 해 사는 쪽이 사라진다
-//   - 성적 말고도 오늘 등락률(이미 오른 값인지)과 호가 잔량(사려는 쪽·팔려는 쪽 어디가 많은지)을 섞어 판단하고,
-//     얼마나 믿는지는 봇마다 다르다. 주문 가격은 실제 매도·매수 1호가 근처. 거래대금이 큰 구단을 더 자주 보는 정도도 봇마다 다르다
+//     늘 현금으로 남기는 몫(총자산의 30~70%), 적정가를 볼 때의 보유 기간(1~3시즌). 주문 가격은 실제 매도·매수 1호가 근처.
+//     거래대금이 큰 구단을 더 자주 보는 정도도 봇마다 다르다
 // 같은 실행기 안의 봇끼리도 체결된다. 서버는 봇끼리의 체결을 이상거래 탐지에서 빼고, 봇을 순위에서 뺀다.
 // REPORT초마다 처리량·지연·오류를 한 줄로 찍고, 끝날 때(Ctrl+C, DURATION) 전체 요약을 찍는다.
 
@@ -99,39 +100,124 @@ async function loadMarket() {
   tradable = teams.filter(t => t.listed && !hidden.has(t.league)).map(t => t.id);
 }
 
-// ---------- 최근 경기 성적(실행기 전체가 함께 쓴다) ----------
+// ---------- 구단 가치 판단 재료(실행기 전체가 함께 쓴다) ----------
 
-const FORM_TTL_MS = 10 * 60_000;
-const form = new Map(); // 구단 id → { score, at }
+const DAY = 86_400_000;
+const iso = t => new Date(t).toISOString();
+// 리그별 한 시즌 경기 수(컵대회·포스트시즌을 대략 포함). 적정가 = 경기당 기대 배당 × 이 수 × 봇의 보유 기간
+const SEASON_GAMES = { EPL: 38, LA_LIGA: 38, SERIE_A: 38, BUNDESLIGA: 34, NBA: 82, LCK: 30, KBO: 144, K_LEAGUE: 38 };
+// Elo: 결과가 나오면 (실제 결과 - 이길 확률) × K만큼 고친다. 약팀을 이겨도 조금, 강팀을 이기면 많이 오른다
+const ELO_K = 30, HOME_ELO = 50;
+const pWin = (ra, rb, home) => 1 / (1 + 10 ** ((rb - ra - (home ? HOME_ELO : -HOME_ELO)) / 400));
+const teamKey = (id, name) => id ?? `ext:${name}`;
 
-/**
- * 구단의 최근 성적 점수(-1~+1). 끝난 경기 최근 5개의 (승 - 패) / 경기 수에,
- * 24시간 안에 경기가 있으면 배당을 기대해 0.2를 더한다. 10분 동안 함께 쓴다
- */
-async function teamForm(teamId) {
-  const cached = form.get(teamId);
-  if (cached && Date.now() - cached.at < FORM_TTL_MS) return cached.score;
-  form.set(teamId, { score: cached?.score ?? 0, at: Date.now() }); // 같은 구단을 여러 봇이 한꺼번에 부르지 않게
-  const res = await fetch(`${BASE}/api/teams/${teamId}/matches?limit=15`);
-  if (!res.ok) return cached?.score ?? 0;
-  const list = await res.json();
+const leagues = new Map(); // 리그 → { at, elo, last, upcoming, started }
+
+/** 리그의 지난·앞으로 30일 일정으로 Elo, 구단별 마지막 결과의 서프라이즈, 남은 경기, 막 시작한 경기를 낸다. 10분 동안 함께 쓴다 */
+async function league(name) {
+  const cached = leagues.get(name);
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached;
+  const d = cached ?? { elo: new Map(), last: new Map(), upcoming: new Map(), started: new Map() };
+  d.at = Date.now(); // 같은 리그를 여러 봇이 한꺼번에 부르지 않게(그동안은 예전 값)
+  leagues.set(name, d);
   const now = Date.now();
-  const finals = list.filter(m => m.status === 'FINAL' && m.homeScore != null && m.awayScore != null).slice(0, 5);
-  let net = 0;
-  for (const m of finals) {
-    const mine = m.homeTeamId === teamId ? m.homeScore : m.awayScore;
-    const theirs = m.homeTeamId === teamId ? m.awayScore : m.homeScore;
-    net += Math.sign(mine - theirs);
+  const get = (from, to) => fetch(`${BASE}/api/matches/schedule?league=${name}&from=${iso(from)}&to=${iso(to)}`)
+    .then(r => (r.ok ? r.json() : []));
+  const [past, future] = await Promise.all([get(now - 30 * DAY, now), get(now, now + 30 * DAY)]);
+  const elo = new Map(), last = new Map(), upcoming = new Map(), started = new Map();
+  for (const m of [...past].sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt))) {
+    const at = Date.parse(m.scheduledAt);
+    // 경기 시작이 배당 기준 시각(배당락). 시작한 지 6시간 안이면 배당만 노린 봇이 판다
+    if (now - at < 6 * 3_600_000) for (const id of [m.homeTeamId, m.awayTeamId]) if (id) started.set(id, at);
+    if (m.status !== 'FINAL' || m.homeScore == null || m.awayScore == null) continue;
+    const h = teamKey(m.homeTeamId, m.homeName), a = teamKey(m.awayTeamId, m.awayName);
+    const rh = elo.get(h) ?? 1500, ra = elo.get(a) ?? 1500;
+    const e = pWin(rh, ra, true);
+    const result = m.homeScore > m.awayScore ? 1 : m.homeScore < m.awayScore ? 0 : 0.5;
+    elo.set(h, rh + ELO_K * (result - e));
+    elo.set(a, ra - ELO_K * (result - e));
+    if (m.homeTeamId) last.set(m.homeTeamId, { at, surprise: result - e });
+    if (m.awayTeamId) last.set(m.awayTeamId, { at, surprise: e - result });
   }
-  const soon = list.some(m => m.status === 'SCHEDULED' && Date.parse(m.scheduledAt) - now < 86_400_000
-    && Date.parse(m.scheduledAt) > now);
-  const score = Math.max(-1, Math.min(1, (finals.length ? net / finals.length : 0) + (soon ? 0.2 : 0)));
-  form.set(teamId, { score, at: Date.now() });
-  return score;
+  for (const m of future) {
+    if (m.status !== 'SCHEDULED') continue;
+    const at = Date.parse(m.scheduledAt);
+    const add = (id, opp, home) => { if (id) (upcoming.get(id) ?? upcoming.set(id, []).get(id)).push({ at, opp, home, competition: m.competition }); };
+    add(m.homeTeamId, teamKey(m.awayTeamId, m.awayName), true);
+    add(m.awayTeamId, teamKey(m.homeTeamId, m.homeName), false);
+  }
+  for (const list of upcoming.values()) list.sort((x, y) => x.at - y.at);
+  Object.assign(d, { elo, last, upcoming, started });
+  return d;
 }
 
-// 봇 성향: 1 추세형(잘하는 팀을 산다), -1 역추세형(잘하는 팀을 판다), 0 무작위형. 다섯 중 셋·하나·하나
-const styleOf = i => [1, 1, 1, -1, 0][i % 5];
+const infos = new Map(); // 구단 → { at, winDps, byCompetition }
+/** 구단 정보 API의 대회별 승리 배당(주당). 1시간 동안 함께 쓴다 */
+async function teamInfo(teamId) {
+  const cached = infos.get(teamId);
+  if (cached && Date.now() - cached.at < 3_600_000) return cached;
+  const res = await fetch(`${BASE}/api/teams/${teamId}/overview`);
+  if (!res.ok) return cached ?? { winDps: 0, byCompetition: new Map() };
+  const o = await res.json();
+  const info = { at: Date.now(), winDps: o.winDps ?? 0, byCompetition: new Map((o.competitions ?? []).map(c => [c.competition, c.winDps])) };
+  infos.set(teamId, info);
+  return info;
+}
+
+/**
+ * 구단 전망. perSeason: 남은 일정(앞으로 30일, 없으면 평균 상대)의 상대별 이길 확률 × 승리 배당을 경기당으로 평균해 시즌 경기 수를 곱한 값.
+ * next: 48시간 안 다음 경기의 기대 배당. started: 막 시작한 경기 시각. last: 마지막 결과의 서프라이즈
+ */
+async function outlook(teamId) {
+  const q = quotes.get(teamId);
+  const [lg, info] = await Promise.all([league(q.league), teamInfo(teamId)]);
+  const r = lg.elo.get(teamId) ?? 1500;
+  const ups = lg.upcoming.get(teamId) ?? [];
+  const expect = m => pWin(r, lg.elo.get(m.opp) ?? 1500, m.home) * (info.byCompetition.get(m.competition) ?? info.winDps);
+  const perMatch = ups.length ? ups.reduce((a, m) => a + expect(m), 0) / ups.length
+    : (pWin(r, 1500, true) + pWin(r, 1500, false)) / 2 * info.winDps;
+  const soon = ups.find(m => m.at - Date.now() < 2 * DAY);
+  return {
+    perSeason: perMatch * (SEASON_GAMES[q.league] ?? 38),
+    next: soon ? expect(soon) : 0,
+    started: lg.started.get(teamId),
+    last: lg.last.get(teamId),
+  };
+}
+
+const charts = new Map(); // 구단 → { at, candles }
+/** 15분 봉 최근 48개(체결이 있던 구간만). 1분 동안 함께 쓴다 */
+async function chart(teamId) {
+  const cached = charts.get(teamId);
+  if (cached && Date.now() - cached.at < 60_000) return cached.candles;
+  charts.set(teamId, { at: Date.now(), candles: cached?.candles ?? [] });
+  const res = await fetch(`${BASE}/api/teams/${teamId}/candles?unit=15m&limit=48`);
+  const candles = res.ok ? (await res.json()).candles ?? [] : cached?.candles ?? [];
+  charts.set(teamId, { at: Date.now(), candles });
+  return candles;
+}
+
+/** 최근 lookback 시간 동안의 가격 흐름(-1~1). 그 사이 5% 오르면 +1. 사람이 차트를 보고 "오르는 중"·"빠지는 중"이라고 느끼는 정도 */
+function trendOver(candles, lookbackMs, lastPrice) {
+  const from = Date.now() - lookbackMs;
+  const base = candles.find(k => Date.parse(k.time) >= from);
+  return base ? clamp1((lastPrice / base.open - 1) / 0.05) : 0;
+}
+
+// 봇 유형. 20개마다 가치투자 6·배당 캡처 3·추세 추종 4·개미 5·무작위 2. 가중치는 봇마다 0.6~1.4배로 흔든다.
+// 차트 모양(반등·돌파 등)을 정해 두지 않는다. 생각이 다른 봇들이 부딪혀 저절로 생기게 둔다
+const TYPES = {
+  가치투자: { value: 1, book: 0.2 },
+  배당캡처: { capture: 1, value: 0.3 },
+  추세추종: { trend: 1, book: 0.3 },
+  개미: { surprise: 1, trend: 0.6, momentum: 0.5, book: 0.5 },
+  무작위: {},
+};
+const TYPE_CYCLE = [
+  ...Array(6).fill('가치투자'), ...Array(3).fill('배당캡처'), ...Array(4).fill('추세추종'),
+  ...Array(5).fill('개미'), ...Array(2).fill('무작위'),
+];
+const typeOf = i => TYPE_CYCLE[i % TYPE_CYCLE.length];
 
 // 사람은 고르게 보지 않는다. hot 확률로 오늘 거래대금(거래량 × 현재가)에 비례해 고르고,
 // 아니면 열 번 중 일곱 번은 앞쪽 20개 구단(인기 구단)을 본다
@@ -156,20 +242,19 @@ const inMaintenance = () => { const d = new Date(Date.now() + 9 * 3_600_000); re
 // ---------- 봇 ----------
 
 class Bot {
-  constructor(name, style) {
+  constructor(name, type) {
     this.name = name;
-    this.style = style;
+    this.type = type;
+    this.weights = Object.fromEntries(Object.entries(TYPES[type]).map(([k, w]) => [k, w * (0.6 + Math.random() * 0.8)]));
+    this.horizon = 1 + Math.random() * 2;      // 적정가를 볼 때 몇 시즌치 배당을 치는지
+    this.lookback = (type === '개미' ? 0.5 + Math.random() * 2.5 : 2 + Math.random() * 10) * 3_600_000; // 흐름을 보는 기간(개미는 짧다)
     // 봇마다 다른 성격(생성할 때 한 번 정한다)
-    this.chase = Math.random() * 4;            // 확신 1일 때 현재가에서 쫓아가는 호가 수
+    this.chase = type === '개미' ? 2 + Math.random() * 3 : Math.random() * 4; // 확신 1일 때 쫓아가는 호가 수(개미는 성급하다)
     this.takeProfit = 0.05 + Math.random() * 0.15;
     this.stopLoss = 0.05 + Math.random() * 0.15;
     this.sizeBoost = Math.random() * 5;        // 확신 1일 때 더 사고파는 주식 수
     this.maxPosition = 0.05 + Math.random() * 0.2; // 한 구단 보유 평가액 상한(총자산 대비)
     this.cashReserve = 0.3 + Math.random() * 0.4;  // 늘 현금으로 남겨 두는 몫(총자산 대비). 이 위로만 산다
-    // 판단에 섞는 신호를 얼마나 믿는지
-    this.wForm = 0.3 + Math.random() * 0.7;    // 최근 성적
-    this.wPrice = Math.random() * 2 - 1;       // 오늘 등락률. +면 많이 오른 구단을 비싸다고 보고, -면 오르는 구단을 따라간다
-    this.wBook = Math.random();                // 호가 잔량
     this.hot = Math.random();                  // 거래대금 큰 구단을 골라 볼 확률
     this.cookies = new Map();
     this.team = null;
@@ -237,7 +322,8 @@ class Bot {
   watch(teamId) {
     this.ws?.close();
     this.team = teamId;
-    teamForm(teamId).catch(() => {});
+    outlook(teamId).catch(() => {});
+    chart(teamId).catch(() => {});
     const ws = new WebSocket(BASE.replace(/^http/, 'ws') + `/ws/teams/${teamId}`);
     ws.onopen = () => { ws.opened = true; sockets++; };
     ws.onmessage = () => window_.wsMsgs++;
@@ -247,6 +333,31 @@ class Bot {
       if (this.ws === ws && !stopping) setTimeout(() => this.ws === ws && this.watch(teamId), 1000);
     };
     this.ws = ws;
+  }
+
+  /** 이 봇이 보기에 오를 쪽(+)인지 내릴 쪽(-)인지, -1~1. 유형별 가중치로 신호를 평균한다. 무작위형은 0 */
+  async direction(q, book) {
+    const w = this.weights;
+    if (!Object.keys(w).length) return 0;
+    const [o, candles] = await Promise.all([outlook(this.team), chart(this.team)]);
+    const now = Date.now();
+    const sum = levels => (levels ?? []).reduce((a, l) => a + l.quantity, 0);
+    const bids = sum(book?.bids), asks = sum(book?.asks);
+    const age = o.last ? (now - o.last.at) / 3_600_000 : Infinity; // 마지막 경기 뒤 몇 시간
+    const signals = {
+      // 적정가 대비 싸면 +. 적정가의 절반만큼 차이 나면 꽉 찬다
+      value: o.perSeason > 0 ? clamp1((o.perSeason * this.horizon / q.lastPrice - 1) / 0.5) : 0,
+      // 경기 전에는 기대 배당이 가격의 2%면 꽉 찬 매수, 시작하고 6시간 동안은 배당락이라 판다
+      capture: o.started ? -0.8 : clamp1(o.next / q.lastPrice / 0.02),
+      // 결과가 예상 밖이면 그쪽으로 몰린다. 시간이 지날수록 약해져 12시간 뒤에는 안 본다
+      surprise: age < 12 ? clamp1(o.last.surprise * 2) * Math.exp(-age / 6) : 0,
+      momentum: clamp1((q.changeRate ?? 0) / 0.1),
+      book: bids + asks > 0 ? (bids - asks) / (bids + asks) : 0,
+      trend: trendOver(candles, this.lookback, q.lastPrice),
+    };
+    let num = 0, den = 0;
+    for (const [k, wk] of Object.entries(w)) { num += wk * (signals[k] ?? 0); den += wk; }
+    return clamp1(num / den);
   }
 
   async order() {
@@ -263,17 +374,7 @@ class Bot {
     const bestAsk = book?.asks?.[0]?.price, bestBid = book?.bids?.[0]?.price;
     const holding = this.account.holdings.find(h => h.teamId === this.team);
     const have = holding?.available ?? 0;
-    // dir: 이 봇이 보기에 오를 쪽(+)인지 내릴 쪽(-)인지, -1~1. 무작위형은 0
-    //   성적 × 성향, 등락률(10%면 꽉 참), 호가 잔량 쏠림((매수 잔량 - 매도 잔량) / 합)을 봇의 가중치로 평균한다
-    const sum = levels => (levels ?? []).reduce((a, l) => a + l.quantity, 0);
-    const bids = sum(book?.bids), asks = sum(book?.asks);
-    const signals = [
-      [this.wForm, (form.get(this.team)?.score ?? 0) * this.style],
-      [this.wPrice, -clamp1((q.changeRate ?? 0) / 0.1)],
-      [this.wBook, bids + asks > 0 ? (bids - asks) / (bids + asks) : 0],
-    ];
-    const dir = this.style === 0 ? 0
-      : clamp1(signals.reduce((a, [w, x]) => a + w * x, 0) / signals.reduce((a, [w]) => a + Math.abs(w), 0));
+    const dir = await this.direction(q, book).catch(() => 0);
     const conviction = Math.abs(dir);
     let side = null, qty = 1 + rnd(3), shift = 0;
     const gain = have > 0 && holding.averagePrice > 0 ? q.lastPrice / holding.averagePrice - 1 : 0;
@@ -282,9 +383,8 @@ class Bot {
     } else if (have > 0 && gain <= -this.stopLoss) {
       side = 'SELL'; qty = have;                          // 손절: 전부
     } else {
-      // 살 확률 = 50% + 25% × dir(25%~75%)
-      // 주식이 없으면 사기만 한다
-      side = have === 0 || Math.random() < 0.5 + 0.25 * dir ? 'BUY' : 'SELL';
+      // 살 확률 25%~75%. 주식이 없는데 팔 차례면 주문하지 않는다
+      side = Math.random() < 0.5 + 0.25 * dir ? 'BUY' : have > 0 ? 'SELL' : null;
       // 생각한 방향으로 주문할 때만 확신만큼 수량을 늘리고 가격을 쫓아간다(사면 위로, 팔면 아래로)
       if ((side === 'BUY' && dir > 0) || (side === 'SELL' && dir < 0)) {
         qty += Math.round(conviction * this.sizeBoost);
@@ -297,13 +397,14 @@ class Bot {
       const p = s === 'BUY' ? (bestAsk ?? q.lastPrice) + (shift - rnd(4)) * t : (bestBid ?? q.lastPrice) + (rnd(4) - shift) * t;
       return Math.min(q.upperLimit, Math.max(q.lowerLimit, p));
     };
-    let price = priceFor(side);
+    const price = priceFor(side);
     if (side === 'BUY') {
-      // 한 구단 상한과, 현금 몫을 남긴 주문 가능 포인트 안에서만 산다. 못 사면 가진 주식을 판다
+      // 한 구단 상한과, 현금 몫을 남긴 주문 가능 포인트 안에서만 산다. 못 사면 이번에는 주문하지 않는다
+      // (예전에는 대신 팔았는데, 돈이 떨어진 봇이 팔기만 해 가격을 끌어내렸다)
       const room = Math.floor((this.maxPosition * this.account.totalValue - ((holding?.available ?? 0) + (holding?.locked ?? 0)) * q.lastPrice) / price);
       const spendable = this.account.availablePoints - this.cashReserve * this.account.totalValue;
       qty = Math.min(qty, room, Math.floor(spendable / price));
-      if (qty <= 0) { side = have > 0 ? 'SELL' : null; qty = 1 + rnd(3); shift = 0; price = priceFor(side); }
+      if (qty <= 0) return;
     }
     if (side === 'SELL') qty = Math.min(qty, have);
     if (!side || qty <= 0) return;
@@ -378,7 +479,7 @@ process.on('SIGTERM', stop);
 if (DURATION > 0) setTimeout(stop, DURATION * 1000);
 
 for (let i = 0; i < BOTS && !stopping; i++) {
-  const bot = new Bot(`${PREFIX}-${String(i + 1).padStart(4, '0')}`, styleOf(i));
+  const bot = new Bot(`${PREFIX}-${String(i + 1).padStart(4, '0')}`, typeOf(i));
   bot.run().catch(e => console.error(e.message));
   await sleep((RAMP * 1000) / BOTS);
 }
