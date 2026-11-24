@@ -220,18 +220,30 @@ const TYPE_CYCLE = [
 const typeOf = i => TYPE_CYCLE[i % TYPE_CYCLE.length];
 
 // 사람은 고르게 보지 않는다. hot 확률로 오늘 거래대금(거래량 × 현재가)에 비례해 고르고,
-// 아니면 열 번 중 일곱 번은 앞쪽 20개 구단(인기 구단)을 본다
+// 아니면 경기가 가까운 구단(24시간 안 경기, 시작한 지 6시간 안, 끝난 지 12시간 안)을 4배 자주 본다
 function pickTeam(hot = 0) {
-  if (Math.random() < hot) {
-    const value = tradable.map(id => { const q = quotes.get(id); return q ? q.volume * q.lastPrice : 0; });
+  const pick = value => {
     const sum = value.reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      let r = Math.random() * sum;
-      for (let i = 0; i < tradable.length; i++) if ((r -= value[i]) < 0) return tradable[i];
-    }
+    if (sum <= 0) return null;
+    let r = Math.random() * sum;
+    for (let i = 0; i < tradable.length; i++) if ((r -= value[i]) < 0) return tradable[i];
+    return null;
+  };
+  if (Math.random() < hot) {
+    const id = pick(tradable.map(id => { const q = quotes.get(id); return q ? q.volume * q.lastPrice : 0; }));
+    if (id) return id;
   }
-  const top = Math.min(20, tradable.length);
-  return tradable[Math.random() < 0.7 ? rnd(top) : rnd(tradable.length)];
+  return pick(tradable.map(id => (inPlay(id) ? 4 : 1))) ?? tradable[rnd(tradable.length)];
+}
+
+/** 경기가 가까운 구단인지. 리그 일정은 10분마다 새로 받아 둔 것을 쓴다 */
+function inPlay(teamId) {
+  const lg = leagues.get(quotes.get(teamId)?.league);
+  if (!lg) return false;
+  const now = Date.now();
+  const next = lg.upcoming.get(teamId)?.[0];
+  const last = lg.last.get(teamId);
+  return (next && next.at - now < DAY) || lg.started.has(teamId) || (last && now - last.at < 12 * 3_600_000);
 }
 
 const clamp1 = x => Math.max(-1, Math.min(1, x));
@@ -464,6 +476,10 @@ if (!tradable.length) {
 }
 console.log(`${BASE}에 봇 ${BOTS}개를 ${RAMP}초에 걸쳐 띄웁니다. 거래 대상 구단 ${tradable.length}개`);
 setInterval(() => loadMarket().catch(() => {}), 60_000).unref();
+// 경기가 가까운 구단을 고르려고 거래 대상 리그 일정을 미리 받아 두고 10분마다 새로 받는다
+const loadLeagues = () => new Set(tradable.map(id => quotes.get(id).league)).forEach(n => league(n).catch(() => {}));
+loadLeagues();
+setInterval(loadLeagues, 10 * 60_000).unref();
 const reporter = setInterval(() => report(false), REPORT * 1000);
 
 const stop = () => {
