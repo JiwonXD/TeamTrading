@@ -169,16 +169,18 @@ test("another user's trade reaches a watcher through the live feed", async ({ pa
   const rows = page.locator('.trade-row')
   const before = (await rows.count()) > 0 ? await rows.first().textContent() : null
 
-  // 다른 사용자: 별도 브라우저 세션으로 로그인해 가장 낮은 판매 호가에 1주를 산다
+  // 다른 사용자: 별도 브라우저 세션으로 로그인해 시장가로 1주를 산다.
+  // 지정가로 가장 낮은 판매 호가를 누르면 주문하는 사이 데모 계정이 그 호가를 가져가 대기로 남을 수 있다
   const other = await browser.newContext({ ...test.info().project.use, baseURL: test.info().project.use.baseURL })
   const trader = await other.newPage()
   await signIn(trader, `#team-${team.id}`)
   const asks = trader.locator('.ob-row.ask')
   await expect(asks.first()).toBeVisible({ timeout: 20_000 })
   await asks.last().click()
+  await trader.locator('.sheet').getByRole('button', { name: '시장가' }).click()
   await trader.locator('.sheet .qty-input').fill('1')
   await trader.locator('.sheet button.btn.wide').click()
-  await expect(trader.locator('.toast')).toContainText('체결')
+  await expect(trader.locator('.toast')).toContainText('모두 체결')
   await other.close()
 
   await expect.poll(async () => ((await rows.count()) > 0 ? rows.first().textContent() : null), { timeout: 10_000 })
